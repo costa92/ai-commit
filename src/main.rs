@@ -24,6 +24,10 @@ struct Args {
     /// 不自动执行 git add .
     #[arg(long, default_value_t = false)]
     no_add: bool,
+
+    /// commit 后是否自动 push
+    #[arg(long, default_value_t = false)]
+    push: bool,
 }
 
 #[derive(Serialize)]
@@ -88,6 +92,13 @@ fn git_add_all() {
         .args(["add", "."])
         .status()
         .expect("Git add failed");
+}
+
+fn git_push() {
+    Command::new("git")
+        .args(["push"])
+        .status()
+        .expect("Git push failed");
 }
 
 async fn generate_commit_message(
@@ -184,6 +195,9 @@ async fn main() -> anyhow::Result<()> {
     println!("Suggested commit message:\n\n{}\n", message);
 
     run_git_commit(&message);
+    if args.push {
+        git_push();
+    }
 
     Ok(())
 }
