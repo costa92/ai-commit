@@ -7,12 +7,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # 需要此权限来创建 releases 和上传文件
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
-  # OPENSSL_VERSION_MUSL: 1.1.1w # 使用 OpenSSL 1.1.1w 以兼容 musl 交叉编译
-  # OPENSSL_BUILD_DIR_MUSL: ${{ github.workspace }}/openssl-musl-build # OpenSSL 安装目录
 
 jobs:
   release:
@@ -37,17 +35,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Cache Cargo dependencies
-        uses: actions/cache@v4 
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/ 
+            target/
           key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}-nocache
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
@@ -62,10 +60,32 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: cargo install cross --force
 
+      - name: Set up OpenSSL for musl
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: |
+          OPENSSL_VERSION="1.1.1w"
+          OPENSSL_PREFIX="${{ github.workspace }}/openssl-musl"
+
+          mkdir -p $OPENSSL_PREFIX
+          curl -LO "https://musl.cc/x86_64-linux-musl-cross.tgz"
+          tar -xzf x86_64-linux-musl-cross.tgz
+
+          curl -LO https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+          tar -xzf openssl-${OPENSSL_VERSION}.tar.gz
+          cd openssl-${OPENSSL_VERSION}
+          CC=${{ github.workspace }}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc \
+          ./Configure linux-x86_64 no-shared no-tests --prefix=$OPENSSL_PREFIX
+          make -j$(nproc)
+          make install_sw
+        env:
+          OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
+
       - name: Build with cross (musl)
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: cross build --release --target x86_64-unknown-linux-musl
+        run: |
+          cross build --release --target x86_64-unknown-linux-musl
         env:
+          OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
           OPENSSL_STATIC: "1"
 
       - name: Archive Linux musl binary
@@ -75,53 +95,39 @@ jobs:
           tar -czf ${{ github.workspace }}/ai-commit-${{ github.ref_name }}-x86_64-unknown-linux-musl.tar.gz -C ${{ github.workspace }} ai-commit-${{ github.ref_name }}-x86_64-unknown-linux-musl
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1 # Reverted to @v1 for stability
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-          profile: minimal 
+          profile: minimal
 
       - name: Build release binary
         run: |
           cargo build --release --target ${{ matrix.target }}
         env:
-          # For openssl-sys crate to find the custom OpenSSL
-          ${{ matrix.target }}_OPENSSL_DIR: ${{ env.OPENSSL_DIR }}
-          ${{ matrix.target }}_OPENSSL_STATIC: "1"
+          OPENSSL_STATIC: "1"
+          OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
 
       - name: Prepare artifact name and path
         id: prep_artifact
         run: |
           ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
           RELEASE_DIR="target/${{ matrix.target }}/release"
-          EXECUTABLE_NAME="ai-commit" # Default executable name
+          EXECUTABLE_NAME="ai-commit"
           if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
             EXECUTABLE_NAME="ai-commit.exe"
           fi
-          
-          # Construct full path to executable for checking
           FULL_EXECUTABLE_PATH="${RELEASE_DIR}/${EXECUTABLE_NAME}"
 
           echo "artifact_base_name=${ARTIFACT_BASE_NAME}" >> $GITHUB_OUTPUT
           echo "release_dir=${RELEASE_DIR}" >> $GITHUB_OUTPUT
-          echo "executable_name=${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT # Store just the name for archiving
-          
-          # Ensure the executable exists
+          echo "executable_name=${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT
+
           if [ ! -f "${FULL_EXECUTABLE_PATH}" ]; then
-             echo "Error: Expected executable '${FULL_EXECUTABLE_PATH}' not found!"
-             echo "Listing contents of '${RELEASE_DIR}':"
-             ls -la ${RELEASE_DIR}/
-             # Attempt to find 'ai-commit' if platform specific one (like .exe) wasn't found
-             if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]] && [ ! -f "${RELEASE_DIR}/ai-commit.exe" ] && [ -f "${RELEASE_DIR}/ai-commit" ]; then
-                echo "Warning: Found 'ai-commit' instead of 'ai-commit.exe' for Windows. Using 'ai-commit'."
-                echo "executable_name=ai-commit" >> $GITHUB_OUTPUT # Overwrite executable_name
-             elif [ ! -f "${FULL_EXECUTABLE_PATH}" ] && [ -f "${RELEASE_DIR}/ai-commit" ]; then # Generic fallback if primary check failed
-                echo "Warning: Main executable check failed but found '${RELEASE_DIR}/ai-commit'. Using it."
-                echo "executable_name=ai-commit" >> $GITHUB_OUTPUT # Overwrite executable_name
-             elif [ ! -f "${FULL_EXECUTABLE_PATH}" ]; then
-                exit 1
-             fi
+            echo "Error: ${FULL_EXECUTABLE_PATH} not found!"
+            ls -la ${RELEASE_DIR}/
+            exit 1
           fi
         shell: bash
 
@@ -129,8 +135,8 @@ jobs:
         id: create_archive
         run: |
           cd ${{ steps.prep_artifact.outputs.release_dir }}
-          ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
-          FILES_TO_ARCHIVE="ai-commit*"
+          ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
+          FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }}"
           CREATED_FILES_LIST=""
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
             zip -r "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
@@ -159,6 +165,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ steps.create_archive.outputs.paths }}
-          fail_on_unmatched_files: true 
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
