@@ -22,4 +22,8 @@ pub struct Args {
     /// commit 后是否自动 push
     #[arg(long, default_value_t = false)]
     pub push: bool,
+
+    /// 是否显示最新的 tag 信息
+    #[arg(long, default_value_t = false)]
+    pub show_tag: bool,
 }

@@ -23,6 +23,17 @@ async fn main() -> anyhow::Result<()> {
     load_env();
     let args = Args::parse();
 
+    // 如果指定了显示 tag，则显示并退出
+    if args.show_tag {
+        if let Some((tag, note)) = git::get_latest_tag() {
+            println!("Latest tag: {}", tag);
+            println!("Tag note: {}", note);
+        } else {
+            println!("No tags found in the repository");
+        }
+        return Ok(());
+    }
+
     // provider 优先级：命令行 > 环境变量 > 默认值 ollama
     let provider = if !args.provider.is_empty() {
         args.provider.clone()
