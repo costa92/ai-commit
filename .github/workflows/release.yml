@@ -58,68 +58,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
-      - name: Install musl-tools and build dependencies
+      - name: Install cross
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: cargo install cross --force
+
+      - name: Build with cross (musl)
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: cross build --release --target x86_64-unknown-linux-musl
+
+      - name: Archive Linux musl binary
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools perl wget build-essential linux-libc-dev
-
-      - name: Symlink linux/mman.h for OpenSSL build
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: |
-          sudo mkdir -p /usr/include/linux
-          echo "Checking for mman.h in common locations:"
-          ls -l /usr/include/linux/mman.h || true
-          ls -l /usr/include/x86_64-linux-gnu/linux/mman.h || true
-          ls -l /usr/include/asm-generic/mman.h || true
-          # Try to link from the most likely locations
-          if [ ! -f /usr/include/linux/mman.h ]; then
-            if [ -f /usr/include/x86_64-linux-gnu/linux/mman.h ]; then
-              sudo ln -s /usr/include/x86_64-linux-gnu/linux/mman.h /usr/include/linux/mman.h
-            elif [ -f /usr/include/asm-generic/mman.h ]; then
-              sudo ln -s /usr/include/asm-generic/mman.h /usr/include/linux/mman.h
-            else
-              echo "mman.h not found in any known location!" >&2
-              exit 1
-            fi
-          fi
-          ls -l /usr/include/linux/mman.h
-
-      - name: Cache OpenSSL for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        id: cache_openssl_musl
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.OPENSSL_BUILD_DIR_MUSL }}
-            ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
-          key: ${{ runner.os }}-openssl-${{ env.OPENSSL_VERSION_MUSL }}-musl-${{ matrix.target }}
-
-      - name: Build OpenSSL for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: |
-          OPENSSL_SRC_DIR=${{ github.workspace }}/openssl_src
-          mkdir -p $OPENSSL_SRC_DIR
-          cd $OPENSSL_SRC_DIR
-          # Check if tarball exists from cache before downloading
-          if [ ! -f "${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz" ]; then
-            wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz -O ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
-          fi
-          tar xzf ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
-          cd openssl-${{ env.OPENSSL_VERSION_MUSL }}
-          CC=musl-gcc ./Configure no-shared no-tests linux-x86_64 --prefix=${{ env.OPENSSL_BUILD_DIR_MUSL }} --openssldir=${{ env.OPENSSL_BUILD_DIR_MUSL }}/ssl
-          make -j$(nproc)
-          make install_sw
-        shell: bash
-
-      - name: Set OpenSSL env for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: |
-          echo "OPENSSL_DIR=${{ env.OPENSSL_BUILD_DIR_MUSL }}" >> $GITHUB_ENV
-          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-          # For Rust versions that use pkg-config for openssl-sys by default on musl
-          echo "PKG_CONFIG_PATH=${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib64/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          export PKG_CONFIG_PATH="${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib64/pkgconfig:$PKG_CONFIG_PATH"
+          cp target/x86_64-unknown-linux-musl/release/ai-commit ${{ github.workspace }}/ai-commit-${{ github.ref_name }}-x86_64-unknown-linux-musl
+          tar -czf ${{ github.workspace }}/ai-commit-${{ github.ref_name }}-x86_64-unknown-linux-musl.tar.gz -C ${{ github.workspace }} ai-commit-${{ github.ref_name }}-x86_64-unknown-linux-musl
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1 # Reverted to @v1 for stability
