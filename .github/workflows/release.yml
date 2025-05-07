@@ -11,8 +11,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  OPENSSL_VERSION_MUSL: 1.1.1w # 使用 OpenSSL 1.1.1w 以兼容 musl 交叉编译
-  OPENSSL_BUILD_DIR_MUSL: ${{ github.workspace }}/openssl-musl-build # OpenSSL 安装目录
+  # OPENSSL_VERSION_MUSL: 1.1.1w # 使用 OpenSSL 1.1.1w 以兼容 musl 交叉编译
+  # OPENSSL_BUILD_DIR_MUSL: ${{ github.workspace }}/openssl-musl-build # OpenSSL 安装目录
 
 jobs:
   release:
