@@ -11,7 +11,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  OPENSSL_VERSION_MUSL: 3.3.0 # 定义 OpenSSL 版本以便缓存和脚本中使用
+  OPENSSL_VERSION_MUSL: 1.1.1w # 使用 OpenSSL 1.1.1w 以兼容 musl 交叉编译
   OPENSSL_BUILD_DIR_MUSL: ${{ github.workspace }}/openssl-musl-build # OpenSSL 安装目录
 
 jobs:
@@ -156,14 +156,8 @@ jobs:
         run: |
           cd ${{ steps.prep_artifact.outputs.release_dir }}
           ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
-          # Use the determined executable name from the previous step for more specific archiving if needed.
-          # For now, ai-commit* is kept for simplicity if it includes other desired files like debug symbols.
-          # If you ONLY want the executable, change FILES_TO_ARCHIVE to:
-          # FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }}"
-          FILES_TO_ARCHIVE="ai-commit*" 
-
+          FILES_TO_ARCHIVE="ai-commit*"
           CREATED_FILES_LIST=""
-
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
             zip -r "../../../../${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
             CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
@@ -183,6 +177,9 @@ jobs:
           cd ../../../../
           echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
         shell: bash
+
+      - name: List workspace files for debug
+        run: ls -lh ${{ github.workspace }}
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
