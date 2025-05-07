@@ -75,7 +75,7 @@ jobs:
           key: ${{ runner.os }}-openssl-${{ env.OPENSSL_VERSION_MUSL }}-musl-${{ matrix.target }}
 
       - name: Build OpenSSL for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux' && steps.cache_openssl_musl.outputs.cache-hit != 'true'
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
           OPENSSL_SRC_DIR=${{ github.workspace }}/openssl_src
           mkdir -p $OPENSSL_SRC_DIR
@@ -86,7 +86,7 @@ jobs:
           fi
           tar xzf ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
           cd openssl-${{ env.OPENSSL_VERSION_MUSL }}
-          CC=musl-gcc ./Configure no-shared no-legacy no-tests linux-x86_64 --prefix=${{ env.OPENSSL_BUILD_DIR_MUSL }} --openssldir=${{ env.OPENSSL_BUILD_DIR_MUSL }}/ssl
+          CC=musl-gcc ./Configure no-shared no-tests linux-x86_64 --prefix=${{ env.OPENSSL_BUILD_DIR_MUSL }} --openssldir=${{ env.OPENSSL_BUILD_DIR_MUSL }}/ssl
           make -j$(nproc)
           make install_sw
         shell: bash
@@ -155,26 +155,25 @@ jobs:
         id: create_archive
         run: |
           cd ${{ steps.prep_artifact.outputs.release_dir }}
-          ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
+          ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
           FILES_TO_ARCHIVE="ai-commit*"
           CREATED_FILES_LIST=""
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
-            zip -r "../../../../${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
+            zip -r "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
             CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf "../../../../${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
+            tar -czf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
             CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.gz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf "../../../../${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
+            tar -cJf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
             CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.xz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf "../../../../${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
+            tar --zstd -cf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
             CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.zst"
           fi
-          cd ../../../../
           echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
         shell: bash
 
