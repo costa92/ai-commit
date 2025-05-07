@@ -40,14 +40,14 @@ jobs:
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.7
 
       - name: Cache Cargo dependencies
-        uses: actions/cache@v4 # Use latest v4 or specific SHA
+        uses: actions/cache@v4 
         with:
           path: |
             ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/ # Cache target directory to speed up incremental builds
+            target/ 
           key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
@@ -80,7 +80,10 @@ jobs:
           OPENSSL_SRC_DIR=${{ github.workspace }}/openssl_src
           mkdir -p $OPENSSL_SRC_DIR
           cd $OPENSSL_SRC_DIR
-          wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz -O ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
+          # Check if tarball exists from cache before downloading
+          if [ ! -f "${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz" ]; then
+            wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz -O ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
+          fi
           tar xzf ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
           cd openssl-${{ env.OPENSSL_VERSION_MUSL }}
           CC=musl-gcc ./Configure no-shared no-legacy no-tests linux-x86_64 --prefix=${{ env.OPENSSL_BUILD_DIR_MUSL }} --openssldir=${{ env.OPENSSL_BUILD_DIR_MUSL }}/ssl
@@ -93,18 +96,17 @@ jobs:
         run: |
           echo "OPENSSL_DIR=${{ env.OPENSSL_BUILD_DIR_MUSL }}" >> $GITHUB_ENV
           echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-          echo "${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib" >> $GITHUB_LD_LIBRARY_PATH # For Rust bindgen if needed at build time
           # For Rust versions that use pkg-config for openssl-sys by default on musl
-          echo "PKG_CONFIG_PATH=${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          export PKG_CONFIG_PATH="${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:$PKG_CONFIG_PATH"
+          echo "PKG_CONFIG_PATH=${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib64/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          export PKG_CONFIG_PATH="${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib64/pkgconfig:$PKG_CONFIG_PATH"
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7eebb5fa5 # v1.0.11
+        uses: actions-rs/toolchain@v1 # Reverted to @v1 for stability
         with:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-          profile: minimal # Install a minimal toolchain
+          profile: minimal 
 
       - name: Build release binary
         run: |
@@ -114,30 +116,36 @@ jobs:
           ${{ matrix.target }}_OPENSSL_DIR: ${{ env.OPENSSL_DIR }}
           ${{ matrix.target }}_OPENSSL_STATIC: "1"
 
-
       - name: Prepare artifact name and path
         id: prep_artifact
         run: |
           ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
           RELEASE_DIR="target/${{ matrix.target }}/release"
-          # Handle .exe for windows
-          EXECUTABLE_NAME="ai-commit"
+          EXECUTABLE_NAME="ai-commit" # Default executable name
           if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
             EXECUTABLE_NAME="ai-commit.exe"
           fi
+          
+          # Construct full path to executable for checking
+          FULL_EXECUTABLE_PATH="${RELEASE_DIR}/${EXECUTABLE_NAME}"
+
           echo "artifact_base_name=${ARTIFACT_BASE_NAME}" >> $GITHUB_OUTPUT
           echo "release_dir=${RELEASE_DIR}" >> $GITHUB_OUTPUT
-          echo "executable_path=${RELEASE_DIR}/${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT
-          # Ensure the executable exists (basic check)
-          if [ ! -f "${RELEASE_DIR}/${EXECUTABLE_NAME}" ]; then
-             echo "Error: Executable ${RELEASE_DIR}/${EXECUTABLE_NAME} not found!"
-             # List files for debugging
+          echo "executable_name=${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT # Store just the name for archiving
+          
+          # Ensure the executable exists
+          if [ ! -f "${FULL_EXECUTABLE_PATH}" ]; then
+             echo "Error: Expected executable '${FULL_EXECUTABLE_PATH}' not found!"
+             echo "Listing contents of '${RELEASE_DIR}':"
              ls -la ${RELEASE_DIR}/
-             # Check if the name is simply ai-commit without extension
-             if [ -f "${RELEASE_DIR}/ai-commit" ]; then
-                echo "Found 'ai-commit' instead. Adjusting executable_path."
-                echo "executable_path=${RELEASE_DIR}/ai-commit" >> $GITHUB_OUTPUT # Overwrite previous
-             else
+             # Attempt to find 'ai-commit' if platform specific one (like .exe) wasn't found
+             if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]] && [ ! -f "${RELEASE_DIR}/ai-commit.exe" ] && [ -f "${RELEASE_DIR}/ai-commit" ]; then
+                echo "Warning: Found 'ai-commit' instead of 'ai-commit.exe' for Windows. Using 'ai-commit'."
+                echo "executable_name=ai-commit" >> $GITHUB_OUTPUT # Overwrite executable_name
+             elif [ ! -f "${FULL_EXECUTABLE_PATH}" ] && [ -f "${RELEASE_DIR}/ai-commit" ]; then # Generic fallback if primary check failed
+                echo "Warning: Main executable check failed but found '${RELEASE_DIR}/ai-commit'. Using it."
+                echo "executable_name=ai-commit" >> $GITHUB_OUTPUT # Overwrite executable_name
+             elif [ ! -f "${FULL_EXECUTABLE_PATH}" ]; then
                 exit 1
              fi
           fi
@@ -148,8 +156,10 @@ jobs:
         run: |
           cd ${{ steps.prep_artifact.outputs.release_dir }}
           ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
-          # Include all files starting with ai-commit (binary, debug symbols if any)
-          # Ensure this globbing is what you intend. If you only want the executable, be more specific.
+          # Use the determined executable name from the previous step for more specific archiving if needed.
+          # For now, ai-commit* is kept for simplicity if it includes other desired files like debug symbols.
+          # If you ONLY want the executable, change FILES_TO_ARCHIVE to:
+          # FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }}"
           FILES_TO_ARCHIVE="ai-commit*" 
 
           CREATED_FILES_LIST=""
@@ -179,6 +189,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ steps.create_archive.outputs.paths }}
-          fail_on_unmatched_files: true # Fail if any specified file is not found
+          fail_on_unmatched_files: true 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
