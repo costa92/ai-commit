@@ -64,6 +64,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools perl wget build-essential linux-libc-dev
 
+      - name: Symlink linux/mman.h for OpenSSL build
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: |
+          sudo mkdir -p /usr/include/linux
+          if [ ! -f /usr/include/linux/mman.h ]; then
+            sudo ln -s /usr/include/x86_64-linux-gnu/linux/mman.h /usr/include/linux/mman.h
+          fi
+
       - name: Cache OpenSSL for musl
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         id: cache_openssl_musl
