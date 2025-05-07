@@ -1,0 +1,32 @@
+请严格按照如下 Conventional Commits 规范生成中文 commit message，要求只输出一条规范的 commit message，且主题内容不要超过50个字：
+
+提交格式：
+<type>(<scope>): <subject>
+
+<body>
+
+- type：提交类型（必填），如：
+  - feat：新功能
+  - fix：修复 bug
+  - docs：文档变更
+  - style：代码格式（不影响功能，例如空格、分号等）
+  - refactor：重构（即不是新增功能，也不是修复 bug）
+  - test：增加测试
+  - chore：构建过程或辅助工具的变动
+- scope：影响范围（可选），如模块名、文件名等
+- subject：简要描述（必填），**必须为中文，且不超过50个字**
+- body：详细描述（可选）
+
+示例：
+feat(parser): 支持数组解析
+
+在新解析模块中增加了对数组的解析能力。
+
+fix(login): 修正密码校验逻辑
+
+docs(readme): 更新使用说明
+
+---
+
+以下是 git diff：
+{{git_diff}} 
