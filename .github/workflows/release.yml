@@ -30,8 +30,11 @@ jobs:
       - name: Build release binary
         run: |
           cargo build --release --target ${{ matrix.target }}
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Rename binary for release
+        run: |
+          cp target/${{ matrix.target }}/release/ai-commit ai-commit-${{ matrix.target }}
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: ai-commit-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/ai-commit
+          files: ai-commit-${{ matrix.target }}
