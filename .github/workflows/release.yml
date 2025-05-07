@@ -28,6 +28,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - name: Install MinGW for Windows cross-compilation
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Install musl-tools for Linux cross-compilation
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -43,16 +55,16 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
-            zip -r ../../../../ai-commit-${{ matrix.target }}.zip ai-commit
+            zip -r ../../../../ai-commit-${{ matrix.target }}.zip ai-commit*
           fi
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf ../../../../ai-commit-${{ matrix.target }}.tar.gz ai-commit
+            tar -czf ../../../../ai-commit-${{ matrix.target }}.tar.gz ai-commit*
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf ../../../../ai-commit-${{ matrix.target }}.tar.xz ai-commit
+            tar -cJf ../../../../ai-commit-${{ matrix.target }}.tar.xz ai-commit*
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf ../../../../ai-commit-${{ matrix.target }}.tar.zst ai-commit
+            tar --zstd -cf ../../../../ai-commit-${{ matrix.target }}.tar.zst ai-commit*
           fi
       
       - name: Upload Release Asset
