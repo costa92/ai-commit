@@ -65,6 +65,8 @@ jobs:
       - name: Build with cross (musl)
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: cross build --release --target x86_64-unknown-linux-musl
+        env:
+          OPENSSL_STATIC: "1"
 
       - name: Archive Linux musl binary
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
