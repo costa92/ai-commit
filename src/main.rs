@@ -5,11 +5,22 @@ mod prompt;
 
 use args::Args;
 use clap::Parser;
-use dotenv::dotenv;
+use dotenvy;
+use std::path::PathBuf;
+
+fn load_env() {
+    let home_env = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+    let user_env_path = PathBuf::from(format!("{}/.ai-commit/.env", home_env));
+    if user_env_path.exists() {
+        dotenvy::from_path(user_env_path).ok();
+    } else {
+        dotenvy::dotenv().ok();
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    load_env();
     let args = Args::parse();
 
     // provider 优先级：命令行 > 环境变量 > 默认值 ollama
