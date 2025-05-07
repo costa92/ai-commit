@@ -23,6 +23,19 @@ async fn main() -> anyhow::Result<()> {
     load_env();
     let args = Args::parse();
 
+    // 如果需要创建新的 tag
+    if args.new_tag {
+        let new_tag = git::create_new_tag()?;
+        println!("Created new tag: {}", new_tag);
+
+        // 如果设置了 push，则推送 tag
+        if args.push {
+            git::push_tag(&new_tag)?;
+            println!("Pushed tag {} to remote", new_tag);
+        }
+        return Ok(());
+    }
+
     // 如果指定了显示 tag，则显示并退出
     if args.show_tag {
         if let Some((tag, note)) = git::get_latest_tag() {

@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::str::FromStr;
 
 pub fn git_add_all() {
     Command::new("git")
@@ -30,6 +31,7 @@ pub fn get_git_diff() -> String {
     String::from_utf8_lossy(&output.stdout).to_string()
 }
 
+/// 获取最新的 tag 和备注
 pub fn get_latest_tag() -> Option<(String, String)> {
     // 获取最新的 tag
     let tag_output = Command::new("git")
@@ -41,7 +43,8 @@ pub fn get_latest_tag() -> Option<(String, String)> {
         return None;
     }
 
-    let tag = String::from_utf8_lossy(&tag_output.stdout)
+    let tag = String::from_utf8(tag_output.stdout)
+        .ok()?
         .trim()
         .to_string();
 
@@ -51,9 +54,61 @@ pub fn get_latest_tag() -> Option<(String, String)> {
         .output()
         .ok()?;
 
-    let note = String::from_utf8_lossy(&note_output.stdout)
+    let note = String::from_utf8(note_output.stdout)
+        .ok()?
         .trim()
         .to_string();
 
     Some((tag, note))
+}
+
+/// 获取最新的 tag（仅版本号）
+pub fn get_latest_tag_version() -> Option<String> {
+    get_latest_tag().map(|(tag, _)| tag)
+}
+
+/// 创建新的 tag
+pub fn create_new_tag() -> anyhow::Result<String> {
+    let latest_tag = get_latest_tag_version();
+
+    // 如果没有 tag，从 v0.0.1 开始
+    let new_tag = if let Some(tag) = latest_tag {
+        // 移除 'v' 前缀
+        let version = tag.trim_start_matches('v');
+
+        // 解析版本号
+        let mut parts: Vec<u32> = version
+            .split('.')
+            .filter_map(|s| u32::from_str(s).ok())
+            .collect();
+
+        if parts.len() != 3 {
+            anyhow::bail!("Invalid version format: {}", version);
+        }
+
+        // 增加补丁版本号
+        parts[2] += 1;
+
+        // 重新组合版本号
+        format!("v{}.{}.{}", parts[0], parts[1], parts[2])
+    } else {
+        "v0.0.1".to_string()
+    };
+
+    // 创建新的 tag
+    Command::new("git")
+        .args(["tag", &new_tag])
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
+
+    Ok(new_tag)
+}
+
+/// 推送 tag 到远程
+pub fn push_tag(tag: &str) -> anyhow::Result<()> {
+    Command::new("git")
+        .args(["push", "origin", tag])
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to push tag: {}", e))?;
+    Ok(())
 }
