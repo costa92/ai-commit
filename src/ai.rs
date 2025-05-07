@@ -25,6 +25,7 @@ pub struct DeepseekMessage<'a> {
 #[derive(Deserialize)]
 pub struct OllamaResponse {
     pub response: String,
+    #[allow(dead_code)]
     pub done: bool,
 }
 
@@ -44,7 +45,7 @@ pub struct DeepseekChoiceMessage {
 }
 
 pub async fn generate_commit_message(
-    diff: &str,
+    _diff: &str,
     provider: &str,
     model: &str,
     prompt: &str,
