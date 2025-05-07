@@ -7,7 +7,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # 需要这个权限来创建 releases 和上传文件
+  contents: write # 需要此权限来创建 releases 和上传文件
+
+env:
+  CARGO_TERM_COLOR: always
+  OPENSSL_VERSION_MUSL: 3.3.0 # 定义 OpenSSL 版本以便缓存和脚本中使用
+  OPENSSL_BUILD_DIR_MUSL: ${{ github.workspace }}/openssl-musl-build # OpenSSL 安装目录
 
 jobs:
   release:
@@ -29,74 +34,151 @@ jobs:
             archive: zip
             os: macos-latest
     runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v3
-      
+      - name: Checkout code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.7
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4 # Use latest v4 or specific SHA
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/ # Cache target directory to speed up incremental builds
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
       - name: Install MinGW for Windows cross-compilation
         if: matrix.target == 'x86_64-pc-windows-gnu' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
-      - name: Install musl-tools and build deps
+      - name: Install musl-tools and build dependencies
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools perl wget build-essential
 
-      - name: Build OpenSSL for musl
+      - name: Cache OpenSSL for musl
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        id: cache_openssl_musl
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.OPENSSL_BUILD_DIR_MUSL }}
+            ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
+          key: ${{ runner.os }}-openssl-${{ env.OPENSSL_VERSION_MUSL }}-musl-${{ matrix.target }}
+
+      - name: Build OpenSSL for musl
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux' && steps.cache_openssl_musl.outputs.cache-hit != 'true'
         run: |
-          export OPENSSL_VERSION=1.1.1w
-          export OPENSSL_BUILD_DIR=$HOME/openssl-musl
-          wget https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz
-          tar xzf openssl-$OPENSSL_VERSION.tar.gz
-          cd openssl-$OPENSSL_VERSION
-          CC=musl-gcc ./Configure no-shared no-dso no-hw no-engine linux-x86_64 --prefix=$OPENSSL_BUILD_DIR
+          OPENSSL_SRC_DIR=${{ github.workspace }}/openssl_src
+          mkdir -p $OPENSSL_SRC_DIR
+          cd $OPENSSL_SRC_DIR
+          wget https://www.openssl.org/source/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz -O ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
+          tar xzf ${{ github.workspace }}/openssl-${{ env.OPENSSL_VERSION_MUSL }}.tar.gz
+          cd openssl-${{ env.OPENSSL_VERSION_MUSL }}
+          CC=musl-gcc ./Configure no-shared no-legacy no-tests linux-x86_64 --prefix=${{ env.OPENSSL_BUILD_DIR_MUSL }} --openssldir=${{ env.OPENSSL_BUILD_DIR_MUSL }}/ssl
           make -j$(nproc)
           make install_sw
+        shell: bash
 
       - name: Set OpenSSL env for musl
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
-          echo "OPENSSL_DIR=$HOME/openssl-musl" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=${{ env.OPENSSL_BUILD_DIR_MUSL }}" >> $GITHUB_ENV
           echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+          echo "${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib" >> $GITHUB_LD_LIBRARY_PATH # For Rust bindgen if needed at build time
+          # For Rust versions that use pkg-config for openssl-sys by default on musl
+          echo "PKG_CONFIG_PATH=${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          export PKG_CONFIG_PATH="${{ env.OPENSSL_BUILD_DIR_MUSL }}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7eebb5fa5 # v1.0.11
         with:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-      
+          profile: minimal # Install a minimal toolchain
+
       - name: Build release binary
         run: |
           cargo build --release --target ${{ matrix.target }}
-      
-      - name: Create release archive
+        env:
+          # For openssl-sys crate to find the custom OpenSSL
+          ${{ matrix.target }}_OPENSSL_DIR: ${{ env.OPENSSL_DIR }}
+          ${{ matrix.target }}_OPENSSL_STATIC: "1"
+
+
+      - name: Prepare artifact name and path
+        id: prep_artifact
         run: |
-          cd target/${{ matrix.target }}/release
+          ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
+          RELEASE_DIR="target/${{ matrix.target }}/release"
+          # Handle .exe for windows
+          EXECUTABLE_NAME="ai-commit"
+          if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
+            EXECUTABLE_NAME="ai-commit.exe"
+          fi
+          echo "artifact_base_name=${ARTIFACT_BASE_NAME}" >> $GITHUB_OUTPUT
+          echo "release_dir=${RELEASE_DIR}" >> $GITHUB_OUTPUT
+          echo "executable_path=${RELEASE_DIR}/${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT
+          # Ensure the executable exists (basic check)
+          if [ ! -f "${RELEASE_DIR}/${EXECUTABLE_NAME}" ]; then
+             echo "Error: Executable ${RELEASE_DIR}/${EXECUTABLE_NAME} not found!"
+             # List files for debugging
+             ls -la ${RELEASE_DIR}/
+             # Check if the name is simply ai-commit without extension
+             if [ -f "${RELEASE_DIR}/ai-commit" ]; then
+                echo "Found 'ai-commit' instead. Adjusting executable_path."
+                echo "executable_path=${RELEASE_DIR}/ai-commit" >> $GITHUB_OUTPUT # Overwrite previous
+             else
+                exit 1
+             fi
+          fi
+        shell: bash
+
+      - name: Create release archive
+        id: create_archive
+        run: |
+          cd ${{ steps.prep_artifact.outputs.release_dir }}
+          ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
+          # Include all files starting with ai-commit (binary, debug symbols if any)
+          # Ensure this globbing is what you intend. If you only want the executable, be more specific.
+          FILES_TO_ARCHIVE="ai-commit*" 
+
+          CREATED_FILES_LIST=""
+
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
-            zip -r ../../../../ai-commit-${{ matrix.target }}.zip ai-commit*
+            zip -r "../../../../${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf ../../../../ai-commit-${{ matrix.target }}.tar.gz ai-commit*
+            tar -czf "../../../../${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.gz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf ../../../../ai-commit-${{ matrix.target }}.tar.xz ai-commit*
+            tar -cJf "../../../../${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.xz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf ../../../../ai-commit-${{ matrix.target }}.tar.zst ai-commit*
+            tar --zstd -cf "../../../../${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.zst"
           fi
-      
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+          cd ../../../../
+          echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@c0ab850433628ad8c100774803ac0817deade830 # v2.0.6
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            ai-commit-${{ matrix.target }}.zip
-            ai-commit-${{ matrix.target }}.tar.gz
-            ai-commit-${{ matrix.target }}.tar.xz
-            ai-commit-${{ matrix.target }}.tar.zst
+          files: ${{ steps.create_archive.outputs.paths }}
+          fail_on_unmatched_files: true # Fail if any specified file is not found
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
