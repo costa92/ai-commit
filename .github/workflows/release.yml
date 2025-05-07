@@ -38,11 +38,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
-      - name: Install musl-tools for Linux cross-compilation
+      - name: Install musl-tools and build deps
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools perl wget build-essential
+
+      - name: Build OpenSSL for musl
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: |
+          export OPENSSL_VERSION=1.1.1w
+          export OPENSSL_BUILD_DIR=$HOME/openssl-musl
+          wget https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz
+          tar xzf openssl-$OPENSSL_VERSION.tar.gz
+          cd openssl-$OPENSSL_VERSION
+          CC=musl-gcc ./Configure no-shared no-dso no-hw no-engine linux-x86_64 --prefix=$OPENSSL_BUILD_DIR
+          make -j$(nproc)
+          make install_sw
+
+      - name: Set OpenSSL env for musl
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: |
+          echo "OPENSSL_DIR=$HOME/openssl-musl" >> $GITHUB_ENV
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
