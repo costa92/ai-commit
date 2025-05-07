@@ -185,7 +185,7 @@ jobs:
         shell: bash
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@c0ab850433628ad8c100774803ac0817deade830 # v2.0.6
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ steps.create_archive.outputs.paths }}
