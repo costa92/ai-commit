@@ -6,6 +6,9 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
+permissions:
+  contents: write  # 需要这个权限来创建 releases 和上传文件
+
 jobs:
   release:
     name: release ${{ matrix.target }}
@@ -24,12 +27,42 @@ jobs:
             archive: zip
     steps:
       - uses: actions/checkout@v3
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      
+      - name: Build release binary
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      
+      - name: Create release archive
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
+            zip -r ../../../../ai-commit-${{ matrix.target }}.zip ai-commit
+          fi
+          if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
+            tar -czf ../../../../ai-commit-${{ matrix.target }}.tar.gz ai-commit
+          fi
+          if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
+            tar -cJf ../../../../ai-commit-${{ matrix.target }}.tar.xz ai-commit
+          fi
+          if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
+            tar --zstd -cf ../../../../ai-commit-${{ matrix.target }}.tar.zst ai-commit
+          fi
+      
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ai-commit-${{ matrix.target }}.zip
+            ai-commit-${{ matrix.target }}.tar.gz
+            ai-commit-${{ matrix.target }}.tar.xz
+            ai-commit-${{ matrix.target }}.tar.zst
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
-          ARCHIVE_TYPES: ${{ matrix.archive }}
-          EXTRA_FILES: "README.md LICENSE commit-prompt.txt"
-          MINIFY: "true"
