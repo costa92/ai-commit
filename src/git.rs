@@ -95,13 +95,45 @@ pub fn create_new_tag() -> anyhow::Result<String> {
         "v0.0.1".to_string()
     };
 
+    // 检查 tag 是否已存在，如果存在则继续递增版本号
+    let mut final_tag = new_tag.clone();
+    let mut counter = 1;
+
+    while {
+        let tag_exists = Command::new("git")
+            .args(["tag", "-l", &final_tag])
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
+        !tag_exists.stdout.is_empty()
+    } {
+        // 如果 tag 存在，继续递增补丁版本号
+        let version = final_tag.trim_start_matches('v');
+        let mut parts: Vec<u32> = version
+            .split('.')
+            .filter_map(|s| u32::from_str(s).ok())
+            .collect();
+
+        if parts.len() != 3 {
+            anyhow::bail!("Invalid version format: {}", version);
+        }
+
+        parts[2] += 1;
+        final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
+
+        // 防止无限循环
+        counter += 1;
+        if counter > 1000 {
+            anyhow::bail!("Too many tag increments, please check your tags");
+        }
+    }
+
     // 创建新的 tag
     Command::new("git")
-        .args(["tag", &new_tag])
+        .args(["tag", &final_tag])
         .status()
         .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
 
-    Ok(new_tag)
+    Ok(final_tag)
 }
 
 /// 推送 tag 到远程
