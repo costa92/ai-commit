@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### ⚙️ Miscellaneous Tasks
+
+- *(Makefile)* 在构建目标中添加 changelog 依赖
+
+## [0.1.1] - 2025-05-08
+
+### 🚀 Features
+
+- *(prompt)* 优化提示词文件读取逻辑
+- *(main)* 添加调试信息打印
+
+### 🐛 Bug Fixes
+
+- *(prompt)* 移除调试用的打印语句
+- *(args)* 修正 new-tag 参数的行为
+- *(main)* 修正新标签创建逻辑的参数判断
+
+### 🚜 Refactor
+
+- *(prompt)* 优化提示词文件加载逻辑
+- *(main)* 移除调试用的打印语句
+
+### 📚 Documentation
+
+- 更新文档以支持指定版本号创建新 tag
+- *(commit-prompt)* 添加 Conventional Commits 中文生成提示词模板
+
+### ⚙️ Miscellaneous Tasks
+
+- *(Makefile)* 添加构建和安装命令
+- *(Makefile)* 添加 run 目标并设为 build 前置依赖
+
 ## [0.1.0] - 2025-05-08
 
 ### 🚀 Features
