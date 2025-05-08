@@ -94,12 +94,23 @@ jobs:
         run: |
           cp README.md CHANGELOG.md target/${{ matrix.target }}/release/
 
+      - name: List release dir before archive
+        run: ls -lh target/${{ matrix.target }}/release/
+
       - name: Create release archive
         id: create_archive
         run: |
           cd ${{ steps.prep_artifact.outputs.release_dir }}
           ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
           FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }} README.md CHANGELOG.md"
+          # 检查文件是否都存在
+          for f in $FILES_TO_ARCHIVE; do
+            if [[ ! -f "$f" ]]; then
+              echo "$f not found in release dir!"
+              ls -lh
+              exit 1
+            fi
+          done
           CREATED_FILES_LIST=""
           if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
             zip -r "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
