@@ -145,7 +145,12 @@ jobs:
         shell: bash
 
       - name: List workspace files for debug
-        run: ls -lh ${{ github.workspace }}
+        run: |
+          ls -lh ${{ github.workspace }}
+          if [[ "${{ matrix.target }}" != "x86_64-pc-windows-gnu" ]]; then
+            ls -lh ${{ github.workspace }}/target/${{ matrix.target }}/release/
+          fi
+        shell: bash
 
       - name: Upload Release Assets
         uses: ncipollo/release-action@v1
