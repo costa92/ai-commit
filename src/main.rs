@@ -23,14 +23,10 @@ async fn main() -> anyhow::Result<()> {
     load_env();
     let args = Args::parse();
 
-    // 如果需要创建新的 tag
-    if std::env::args().any(|arg| arg == "--new-tag") {
-        let new_tag = if let Some(ref ver) = args.new_tag {
-            if !ver.is_empty() {
-                git::create_new_tag(Some(ver))?
-            } else {
-                git::create_new_tag(None)?
-            }
+    // 支持 -t/--new-tag/--new-tag=xxx/-t xxx 等所有写法
+    if let Some(ref ver) = args.new_tag {
+        let new_tag = if !ver.is_empty() {
+            git::create_new_tag(Some(ver))?
         } else {
             git::create_new_tag(None)?
         };
