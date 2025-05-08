@@ -24,15 +24,17 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // 如果需要创建新的 tag
-    if let Some(tag_version) = &args.new_tag {
-        let new_tag = if !tag_version.is_empty() {
-            git::create_new_tag(Some(tag_version))?
+    if std::env::args().any(|arg| arg == "--new-tag") {
+        let new_tag = if let Some(ref ver) = args.new_tag {
+            if !ver.is_empty() {
+                git::create_new_tag(Some(ver))?
+            } else {
+                git::create_new_tag(None)?
+            }
         } else {
             git::create_new_tag(None)?
         };
         println!("Created new tag: {}", new_tag);
-
-        // 如果设置了 push，则推送 tag
         if args.push {
             git::push_tag(&new_tag, args.push_branches)?;
             println!("Pushed tag {} to remote", new_tag);
