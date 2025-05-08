@@ -38,37 +38,38 @@ pub fn get_latest_tag_version() -> Option<String> {
 }
 
 /// 创建新的 tag
-pub fn create_new_tag() -> anyhow::Result<String> {
-    let latest_tag = get_latest_tag_version();
-
-    // 如果没有 tag，从 v0.0.1 开始
-    let new_tag = if let Some(tag) = latest_tag {
-        // 移除 'v' 前缀
-        let version = tag.trim_start_matches('v');
-
-        // 解析版本号
-        let mut parts: Vec<u32> = version
-            .split('.')
-            .filter_map(|s| u32::from_str(s).ok())
-            .collect();
-
-        if parts.len() != 3 {
-            anyhow::bail!("Invalid version format: {}", version);
-        }
-
-        // 增加补丁版本号
-        parts[2] += 1;
-
-        // 重新组合版本号
-        format!("v{}.{}.{}", parts[0], parts[1], parts[2])
+pub fn create_new_tag(base_version: Option<&str>) -> anyhow::Result<String> {
+    // 1. 选择基础版本号
+    let base_owned;
+    let base: &str = if let Some(ver) = base_version {
+        ver.trim_start_matches('v')
+    } else if let Some(tag) = get_latest_tag_version() {
+        base_owned = tag.trim_start_matches('v').to_string();
+        base_owned.as_str()
     } else {
-        "v0.0.1".to_string()
+        "0.0.0"
     };
 
-    // 检查 tag 是否已存在，如果存在则继续递增版本号
-    let mut final_tag = new_tag.clone();
+    // 2. 解析主次补丁
+    let mut parts: Vec<u32> = base
+        .split('.')
+        .filter_map(|s| u32::from_str(s).ok())
+        .collect();
+    if parts.len() != 3 {
+        anyhow::bail!("Invalid version format: {}", base);
+    }
+
+    // 3. 如果是指定大版本，补丁号归零，否则递增补丁号
+    if base_version.is_some() {
+        parts[2] = 0;
+    } else {
+        parts[2] += 1;
+    }
+
+    let mut final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
     let mut counter = 1;
 
+    // 4. 检查 tag 是否已存在，已存在则递增补丁号
     while {
         let tag_exists = Command::new("git")
             .args(["tag", "-l", &final_tag])
@@ -76,28 +77,15 @@ pub fn create_new_tag() -> anyhow::Result<String> {
             .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
         !tag_exists.stdout.is_empty()
     } {
-        // 如果 tag 存在，继续递增补丁版本号
-        let version = final_tag.trim_start_matches('v');
-        let mut parts: Vec<u32> = version
-            .split('.')
-            .filter_map(|s| u32::from_str(s).ok())
-            .collect();
-
-        if parts.len() != 3 {
-            anyhow::bail!("Invalid version format: {}", version);
-        }
-
         parts[2] += 1;
         final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
-
-        // 防止无限循环
         counter += 1;
         if counter > 1000 {
             anyhow::bail!("Too many tag increments, please check your tags");
         }
     }
 
-    // 创建新的 tag
+    // 5. 创建新的 tag
     Command::new("git")
         .args(["tag", &final_tag])
         .status()
