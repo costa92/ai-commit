@@ -167,19 +167,6 @@ jobs:
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate checksums
-        run: |
-          cd ${{ github.workspace }}
-          FILES="${{ steps.create_archive.outputs.paths }}"
-          if [ -z "$FILES" ]; then
-            echo "No archive files found to checksum!"
-            exit 1
-          fi
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum $FILES > ai-commit-SHA256SUMS.txt
-          else
-            shasum -a 256 $FILES > ai-commit-SHA256SUMS.txt
-          fi
       - name: Upload checksums
         uses: ncipollo/release-action@v1
         with:
