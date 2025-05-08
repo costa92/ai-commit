@@ -37,3 +37,22 @@ tag-changelog:
 	@echo "Getting tag changelog..."
 	@git-cliff --config .git-cliff.toml --tag $(tag)
 	
+
+# 构建项目
+.PHONY: build
+build:
+	@echo "Building project..."
+	@cargo build --release
+	@echo "Build completed successfully"
+
+# 安装到系统
+.PHONY: install
+install: build
+	@echo "Installing to ~/.cargo/bin..."
+	@if [ ! -d ~/.cargo/bin ]; then \
+		mkdir -p ~/.cargo/bin; \
+	fi
+	@cp target/release/ai-commit ~/.cargo/bin/
+	@echo "Installation completed successfully"
+
+
