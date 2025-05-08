@@ -64,11 +64,6 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: cargo install cross --force
 
-      - name: Build with cross (musl)
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: |
-          cross build --release --target x86_64-unknown-linux-musl
-
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -77,10 +72,13 @@ jobs:
           override: true
           profile: minimal
 
-      - name: Build release binary
-        if: matrix.target != 'x86_64-unknown-linux-musl'
+      - name: Build binary with cross or cargo
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-musl" ]]; then
+            cross build --release --target ${{ matrix.target }} --target-dir target
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
         env:
           OPENSSL_STATIC: "1"
           OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
@@ -92,88 +90,66 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
-      - name: Prepare artifact name and path
-        id: prep_artifact
+      - name: Prepare artifact info
+        id: prep
         run: |
           ARTIFACT_BASE_NAME="ai-commit-${{ github.ref_name }}-${{ matrix.target }}"
           RELEASE_DIR="target/${{ matrix.target }}/release"
           EXECUTABLE_NAME="ai-commit"
-          if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
-            EXECUTABLE_NAME="ai-commit.exe"
-          fi
-          FULL_EXECUTABLE_PATH="${RELEASE_DIR}/${EXECUTABLE_NAME}"
-
+          [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]] && EXECUTABLE_NAME="ai-commit.exe"
           echo "artifact_base_name=${ARTIFACT_BASE_NAME}" >> $GITHUB_OUTPUT
           echo "release_dir=${RELEASE_DIR}" >> $GITHUB_OUTPUT
           echo "executable_name=${EXECUTABLE_NAME}" >> $GITHUB_OUTPUT
-
-          if [ ! -f "${FULL_EXECUTABLE_PATH}" ]; then
-            echo "Error: ${FULL_EXECUTABLE_PATH} not found!"
-            ls -la ${RELEASE_DIR}/
-            exit 1
-          fi
         shell: bash
 
       - name: Ensure executable permission
-        run: chmod +x target/${{ matrix.target }}/release/ai-commit
         if: matrix.target != 'x86_64-pc-windows-gnu'
+        run: chmod +x target/${{ matrix.target }}/release/ai-commit
 
-      - name: Copy docs to release dir
+      - name: Copy docs
         run: |
           cp README.md CHANGELOG.md target/${{ matrix.target }}/release/
 
-      - name: Create release archive
-        id: create_archive
+      - name: Create release archives
+        id: archive
         run: |
-          cd ${{ steps.prep_artifact.outputs.release_dir }}
-          ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
-          FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }} README.md CHANGELOG.md"
-          CREATED_FILES_LIST=""
-          if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
-            zip -r "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
-          fi
-          if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.gz"
-          fi
-          if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.xz"
-          fi
-          if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.zst"
-          fi
-          echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
+          cd ${{ steps.prep.outputs.release_dir }}
+          ARTIFACT_BASE_NAME="${{ steps.prep.outputs.artifact_base_name }}"
+          FILES="${{ steps.prep.outputs.executable_name }} README.md CHANGELOG.md"
+          CREATED=""
+          [[ "${{ matrix.archive }}" == *"zip"* ]] && zip -r "$ARTIFACT_BASE_NAME.zip" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.zip"
+          [[ "${{ matrix.archive }}" == *"tar.gz"* ]] && tar -czf "$ARTIFACT_BASE_NAME.tar.gz" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.tar.gz"
+          [[ "${{ matrix.archive }}" == *"tar.xz"* ]] && tar -cJf "$ARTIFACT_BASE_NAME.tar.xz" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.tar.xz"
+          [[ "${{ matrix.archive }}" == *"tar.zst"* ]] && tar --zstd -cf "$ARTIFACT_BASE_NAME.tar.zst" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.tar.zst"
+          for f in $CREATED; do mv "$f" "${{ github.workspace }}/$f"; done
+          echo "paths=$(echo $CREATED | xargs)" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: List workspace files for debug
+      - name: Debug artifact files
         run: |
+          echo "Artifacts: ${{ steps.archive.outputs.paths }}"
           ls -lh ${{ github.workspace }}
-          if [[ "${{ matrix.target }}" != "x86_64-pc-windows-gnu" ]]; then
-            ls -lh ${{ github.workspace }}/target/${{ matrix.target }}/release/
-          fi
-        shell: bash
 
-      - name: Upload Release Assets
+      - name: Upload release artifacts
         uses: ncipollo/release-action@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          artifacts: ${{ steps.create_archive.outputs.paths }}
+          artifacts: ${{ steps.archive.outputs.paths }}
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate checksums
         run: |
           cd ${{ github.workspace }}
-          if command -v sha256sum >/dev/null 2>&1; then
+          if command -v sha256sum >/dev/null; then
             sha256sum ai-commit-*.* > ai-commit-SHA256SUMS.txt
           else
             shasum -a 256 ai-commit-*.* > ai-commit-SHA256SUMS.txt
           fi
+
       - name: Upload checksums
         uses: ncipollo/release-action@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           artifacts: ai-commit-SHA256SUMS.txt
           allowUpdates: true
