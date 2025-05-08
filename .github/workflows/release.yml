@@ -86,16 +86,10 @@ jobs:
           OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
 
       - name: Run tests
-        if: matrix.target != 'x86_64-pc-windows-gnu'
         run: cargo test --release --target ${{ matrix.target }}
 
       - name: Check formatting
         run: cargo fmt -- --check
-
-      - name: Ensure docs exist
-        run: |
-          touch README.md
-          touch CHANGELOG.md
 
       - name: Prepare artifact name and path
         id: prep_artifact
@@ -123,31 +117,29 @@ jobs:
         run: chmod +x target/${{ matrix.target }}/release/ai-commit
         if: matrix.target != 'x86_64-pc-windows-gnu'
 
-      - name: Prepare dist dir for archive
-        run: |
-          mkdir -p dist
-          cp target/${{ matrix.target }}/release/${{ steps.prep_artifact.outputs.executable_name }} dist/
-          cp README.md CHANGELOG.md dist/
-
       - name: Create release archive
         id: create_archive
         run: |
+          cd ${{ steps.prep_artifact.outputs.release_dir }}
           ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
-          cd dist
+          FILES_TO_ARCHIVE="${{ steps.prep_artifact.outputs.executable_name }} README.md CHANGELOG.md"
           CREATED_FILES_LIST=""
+          if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
+            zip -r "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
+          fi
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf "../${ARTIFACT_BASE_NAME}.tar.gz" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.gz)"
+            tar -czf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.gz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf "../${ARTIFACT_BASE_NAME}.tar.xz" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.xz)"
+            tar -cJf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.xz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf "../${ARTIFACT_BASE_NAME}.tar.zst" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.zst)"
+            tar --zstd -cf "${{ github.workspace }}/${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.zst"
           fi
-          cd ..
           echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
         shell: bash
 
@@ -167,6 +159,14 @@ jobs:
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate checksums
+        run: |
+          cd ${{ github.workspace }}
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum ai-commit-*.* > ai-commit-SHA256SUMS.txt
+          else
+            shasum -a 256 ai-commit-*.* > ai-commit-SHA256SUMS.txt
+          fi
       - name: Upload checksums
         uses: ncipollo/release-action@v1
         with:
