@@ -56,6 +56,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
+      - name: Install musl-tools for musl target
+        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       - name: Install cross
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: cargo install cross --force
@@ -153,7 +157,11 @@ jobs:
       - name: Generate checksums
         run: |
           cd ${{ github.workspace }}
-          sha256sum ai-commit-*.* > ai-commit-SHA256SUMS.txt
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum ai-commit-*.* > ai-commit-SHA256SUMS.txt
+          else
+            shasum -a 256 ai-commit-*.* > ai-commit-SHA256SUMS.txt
+          fi
       - name: Upload checksums
         uses: ncipollo/release-action@v1
         with:
