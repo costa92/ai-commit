@@ -24,8 +24,12 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // 如果需要创建新的 tag
-    if args.new_tag {
-        let new_tag = git::create_new_tag(None)?;
+    if let Some(tag_version) = &args.new_tag {
+        let new_tag = if !tag_version.is_empty() {
+            git::create_new_tag(Some(tag_version))?
+        } else {
+            git::create_new_tag(None)?
+        };
         println!("Created new tag: {}", new_tag);
 
         // 如果设置了 push，则推送 tag
