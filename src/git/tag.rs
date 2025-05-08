@@ -1,36 +1,6 @@
 use std::process::Command;
 use std::str::FromStr;
 
-pub fn git_add_all() {
-    Command::new("git")
-        .args(["add", "."])
-        .status()
-        .expect("Git add failed");
-}
-
-pub fn git_commit(message: &str) {
-    Command::new("git")
-        .args(["commit", "-m", message])
-        .status()
-        .expect("Git commit failed");
-}
-
-pub fn git_push() {
-    Command::new("git")
-        .args(["push"])
-        .status()
-        .expect("Git push failed");
-}
-
-pub fn get_git_diff() -> String {
-    let output = Command::new("git")
-        .args(["diff", "--cached"])
-        .output()
-        .expect("Failed to run git diff");
-
-    String::from_utf8_lossy(&output.stdout).to_string()
-}
-
 /// 获取最新的 tag 和备注
 pub fn get_latest_tag() -> Option<(String, String)> {
     // 获取最新的 tag
