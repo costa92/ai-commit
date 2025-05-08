@@ -151,7 +151,7 @@ jobs:
       - name: List workspace files for debug
         run: |
           ls -lh ${{ github.workspace }}
-          if [[ "${{ matrix.target }}" != "x86_64-unknown-linux-musl" ]]; then
+          if [[ "${{ matrix.target }}" != "x86_64-pc-windows-gnu" ]]; then
             ls -lh ${{ github.workspace }}/target/${{ matrix.target }}/release/
           fi
         shell: bash
