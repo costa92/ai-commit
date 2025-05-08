@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
         // 如果设置了 push，则推送 tag
         if args.push {
-            git::push_tag(&new_tag)?;
+            git::push_tag(&new_tag, args.push_branches)?;
             println!("Pushed tag {} to remote", new_tag);
         }
         return Ok(());

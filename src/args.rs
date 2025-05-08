@@ -30,4 +30,8 @@ pub struct Args {
     /// 是否显示最新的 tag 信息
     #[arg(long, default_value_t = false)]
     pub show_tag: bool,
+
+    /// 推送 tag 时是否同时推送 master develop main 分支
+    #[arg(long, default_value_t = false)]
+    pub push_branches: bool,
 }
