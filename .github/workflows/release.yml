@@ -122,7 +122,7 @@ jobs:
           [[ "${{ matrix.archive }}" == *"tar.xz"* ]] && tar -cJf "$ARTIFACT_BASE_NAME.tar.xz" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.tar.xz"
           [[ "${{ matrix.archive }}" == *"tar.zst"* ]] && tar --zstd -cf "$ARTIFACT_BASE_NAME.tar.zst" $FILES && CREATED="$CREATED $ARTIFACT_BASE_NAME.tar.zst"
           for f in $CREATED; do mv "$f" "${{ github.workspace }}/$f"; done
-          echo "paths=$(echo $CREATED | xargs)" >> $GITHUB_OUTPUT
+          echo "paths=$(echo $CREATED_FILES_LIST | xargs | tr ' ' ',')" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Debug artifact files
