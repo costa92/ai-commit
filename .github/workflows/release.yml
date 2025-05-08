@@ -92,6 +92,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
+      - name: Ensure docs exist
+        run: |
+          touch README.md
+          touch CHANGELOG.md
+
       - name: Prepare artifact name and path
         id: prep_artifact
         run: |
@@ -118,29 +123,31 @@ jobs:
         run: chmod +x target/${{ matrix.target }}/release/ai-commit
         if: matrix.target != 'x86_64-pc-windows-gnu'
 
+      - name: Prepare dist dir for archive
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ steps.prep_artifact.outputs.executable_name }} dist/
+          cp README.md CHANGELOG.md dist/
+
       - name: Create release archive
         id: create_archive
         run: |
           ARTIFACT_BASE_NAME="${{ steps.prep_artifact.outputs.artifact_base_name }}"
-          EXECUTABLE_PATH="target/${{ matrix.target }}/release/${{ steps.prep_artifact.outputs.executable_name }}"
-          FILES_TO_ARCHIVE="${EXECUTABLE_PATH} README.md CHANGELOG.md"
+          cd dist
           CREATED_FILES_LIST=""
-          if [[ "${{ matrix.archive }}" == *"zip"* ]]; then
-            zip -j "${ARTIFACT_BASE_NAME}.zip" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.zip"
-          fi
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
-            tar -czf "${ARTIFACT_BASE_NAME}.tar.gz" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.gz"
+            tar -czf "../${ARTIFACT_BASE_NAME}.tar.gz" *
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.gz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
-            tar -cJf "${ARTIFACT_BASE_NAME}.tar.xz" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.xz"
+            tar -cJf "../${ARTIFACT_BASE_NAME}.tar.xz" *
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.xz"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
-            tar --zstd -cf "${ARTIFACT_BASE_NAME}.tar.zst" $FILES_TO_ARCHIVE
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ${ARTIFACT_BASE_NAME}.tar.zst"
+            tar --zstd -cf "../${ARTIFACT_BASE_NAME}.tar.zst" *
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.zst"
           fi
+          cd ..
           echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
         shell: bash
 
