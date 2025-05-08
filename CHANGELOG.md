@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 📚 Documentation
+
+- *(CHANGELOG.md)* 更新变更日志内容
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(Makefile)* 在构建目标中添加 changelog 依赖

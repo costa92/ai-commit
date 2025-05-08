@@ -47,7 +47,7 @@ run:
 
 # 构建项目
 .PHONY: build
-build: run changelog
+build: run
 	@echo "Building project..."
 	@cargo build --release
 	@echo "Build completed successfully"
