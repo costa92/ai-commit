@@ -108,9 +108,46 @@ pub fn create_new_tag() -> anyhow::Result<String> {
 
 /// 推送 tag 到远程
 pub fn push_tag(tag: &str) -> anyhow::Result<()> {
-    Command::new("git")
-        .args(["push", "origin", tag])
-        .status()
-        .map_err(|e| anyhow::anyhow!("Failed to push tag: {}", e))?;
+    // 检查本地是否存在 develop、master、main 分支
+    let branches_output = Command::new("git")
+        .args(["branch", "--list"])
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to list branches: {}", e))?;
+    let branches_vec = String::from_utf8(branches_output.stdout)
+        .map_err(|e| anyhow::anyhow!("Failed to parse branch list: {}", e))?
+        .lines()
+        .map(|s| s.trim_end().to_string())
+        .collect::<Vec<_>>();
+    let mut targets = vec!["origin".to_string()];
+    for b in ["develop", "master", "main"] {
+        if branches_vec.iter().any(|line| line.ends_with(b)) {
+            targets.push(format!("origin/{}", b));
+        }
+    }
+    // 去重
+    targets.sort();
+    targets.dedup();
+    // 推送 tag 到所有目标
+    for remote in targets {
+        let args: Vec<String> = if remote == "origin" {
+            vec!["push".to_string(), "origin".to_string(), tag.to_string()]
+        } else {
+            let tag_ref = format!("refs/tags/{}:refs/tags/{}", tag, tag);
+            vec![
+                "push".to_string(),
+                "origin".to_string(),
+                tag.to_string(),
+                tag_ref,
+            ]
+        };
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let status = Command::new("git")
+            .args(&arg_refs)
+            .status()
+            .map_err(|e| anyhow::anyhow!("Failed to push tag to {}: {}", remote, e))?;
+        if !status.success() {
+            eprintln!("Warning: failed to push tag to {}", remote);
+        }
+    }
     Ok(())
 }
