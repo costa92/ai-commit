@@ -24,7 +24,7 @@ pub struct Args {
     pub push: bool,
 
     /// 创建新的 tag（可指定版本号，如 --new-tag v1.2.0）
-    #[arg(long, value_name = "VERSION", num_args = 0..=1, default_value = None)]
+    #[arg(long, value_name = "VERSION", num_args = 0..=1, action = clap::ArgAction::Set)]
     pub new_tag: Option<String>,
 
     /// 是否显示最新的 tag 信息
