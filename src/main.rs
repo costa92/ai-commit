@@ -81,9 +81,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let prompt = prompt::get_prompt(&diff);
-    println!("prompt: {}", prompt);
+    // println!("prompt: {}", prompt);
     let message = ai::generate_commit_message(&diff, &provider, &model, &prompt).await?;
-    println!("Suggested commit message:\n\n{}\n", message);
+    // println!("Suggested commit message:\n\n{}\n", message);
 
     git::git_commit(&message);
     if args.push {
