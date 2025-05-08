@@ -60,33 +60,10 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: cargo install cross --force
 
-      - name: Set up OpenSSL for musl
-        if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
-        run: |
-          OPENSSL_VERSION="1.1.1w"
-          OPENSSL_PREFIX="${{ github.workspace }}/openssl-musl"
-
-          mkdir -p $OPENSSL_PREFIX
-          curl -LO "https://musl.cc/x86_64-linux-musl-cross.tgz"
-          tar -xzf x86_64-linux-musl-cross.tgz
-
-          curl -LO https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
-          tar -xzf openssl-${OPENSSL_VERSION}.tar.gz
-          cd openssl-${OPENSSL_VERSION}
-          CC=${{ github.workspace }}/x86_64-linux-musl-cross/bin/x86_64-linux-musl-gcc \
-          ./Configure linux-x86_64 no-shared no-tests --prefix=$OPENSSL_PREFIX
-          make -j$(nproc)
-          make install_sw
-        env:
-          OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
-
       - name: Build with cross (musl)
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
         run: |
           cross build --release --target x86_64-unknown-linux-musl
-        env:
-          OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
-          OPENSSL_STATIC: "1"
 
       - name: Archive Linux musl binary
         if: matrix.target == 'x86_64-unknown-linux-musl' && runner.os == 'Linux'
