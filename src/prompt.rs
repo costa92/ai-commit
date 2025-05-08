@@ -12,7 +12,7 @@ pub fn get_prompt(diff: &str) -> String {
     };
 
     // 打印
-    println!("prompt_path: {}", prompt_path);
+    // println!("prompt_path: {}", prompt_path);
 
     // 只要有 commit-prompt.txt 就用，否则用内置模板（编译时 include_str!）
     if std::path::Path::new(&prompt_path).exists() {
