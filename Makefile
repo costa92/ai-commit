@@ -38,9 +38,16 @@ tag-changelog:
 	@git-cliff --config .git-cliff.toml --tag $(tag)
 	
 
+# 运行
+.PHONY: run
+run:
+	@echo "Running..."
+	@cargo run 
+
+
 # 构建项目
 .PHONY: build
-build:
+build: run
 	@echo "Building project..."
 	@cargo build --release
 	@echo "Build completed successfully"
