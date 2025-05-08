@@ -80,6 +80,7 @@ jobs:
           profile: minimal
 
       - name: Build release binary
+        if: matrix.target != 'x86_64-unknown-linux-musl'
         run: |
           cargo build --release --target ${{ matrix.target }}
         env:
@@ -143,5 +144,8 @@ jobs:
         with:
           files: ${{ steps.create_archive.outputs.paths }}
           fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # 允许上传到已存在的 release
+          skip_if_release_exists: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
