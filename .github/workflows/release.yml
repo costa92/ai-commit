@@ -137,15 +137,15 @@ jobs:
           CREATED_FILES_LIST=""
           if [[ "${{ matrix.archive }}" == *"tar.gz"* ]]; then
             tar -czf "../${ARTIFACT_BASE_NAME}.tar.gz" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.gz"
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.gz)"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.xz"* ]]; then
             tar -cJf "../${ARTIFACT_BASE_NAME}.tar.xz" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.xz"
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.xz)"
           fi
           if [[ "${{ matrix.archive }}" == *"tar.zst"* ]]; then
             tar --zstd -cf "../${ARTIFACT_BASE_NAME}.tar.zst" *
-            CREATED_FILES_LIST="${CREATED_FILES_LIST} ../${ARTIFACT_BASE_NAME}.tar.zst"
+            CREATED_FILES_LIST="${CREATED_FILES_LIST} $(realpath ../${ARTIFACT_BASE_NAME}.tar.zst)"
           fi
           cd ..
           echo "paths=$(echo $CREATED_FILES_LIST | xargs)" >> $GITHUB_OUTPUT
