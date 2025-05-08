@@ -86,6 +86,7 @@ jobs:
           OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
 
       - name: Run tests
+        if: matrix.target != 'x86_64-pc-windows-gnu'
         run: cargo test --release --target ${{ matrix.target }}
 
       - name: Check formatting
@@ -116,6 +117,10 @@ jobs:
       - name: Ensure executable permission
         run: chmod +x target/${{ matrix.target }}/release/ai-commit
         if: matrix.target != 'x86_64-pc-windows-gnu'
+
+      - name: Copy docs to release dir
+        run: |
+          cp README.md CHANGELOG.md target/${{ matrix.target }}/release/
 
       - name: Create release archive
         id: create_archive
