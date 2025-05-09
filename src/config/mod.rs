@@ -61,7 +61,7 @@ impl Config {
         }
     }
 
-    pub fn update_from_args(&mut self, args: &crate::args::Args) {
+    pub fn update_from_args(&mut self, args: &crate::cli::args::Args) {
         // 命令行参数优先级最高
         if !args.provider.is_empty() {
             self.provider = args.provider.clone();

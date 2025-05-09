@@ -1,9 +1,9 @@
-use ai_commit::*;
+use ai_commit::cli::args::Args;
 use clap::Parser;
 
 #[test]
 fn test_args_default() {
-    let args = args::Args::parse_from(["ai-commit"]);
+    let args = Args::parse_from(["ai-commit"]);
     assert_eq!(args.provider, "");
     assert_eq!(args.model, "");
     assert!(!args.no_add);
@@ -15,7 +15,7 @@ fn test_args_default() {
 
 #[test]
 fn test_args_with_values() {
-    let args = args::Args::parse_from([
+    let args = Args::parse_from([
         "ai-commit",
         "--provider",
         "deepseek",

@@ -1,8 +1,8 @@
 use ai_commit::ai;
-use ai_commit::args::Args;
+use ai_commit::ai::prompt;
+use ai_commit::cli::args::Args;
 use ai_commit::config::Config;
 use ai_commit::git;
-use ai_commit::prompt;
 use clap::Parser;
 use dotenvy;
 use std::path::PathBuf;

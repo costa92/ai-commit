@@ -20,13 +20,13 @@ pub fn get_prompt(diff: &str) -> String {
             Ok(prompt_template) => prompt_template.replace("{{git_diff}}", diff),
             Err(e) => {
                 eprintln!("无法读取提示词文件 {}: {}", prompt_path, e);
-                let default_prompt = include_str!("../commit-prompt.txt");
+                let default_prompt = include_str!("../../commit-prompt.txt");
                 default_prompt.replace("{{git_diff}}", diff)
             }
         }
     } else {
         // 内置默认模板，编译时读取 commit-prompt.txt
-        let default_prompt = include_str!("../commit-prompt.txt");
+        let default_prompt = include_str!("../../commit-prompt.txt");
         default_prompt.replace("{{git_diff}}", diff)
     }
 }
