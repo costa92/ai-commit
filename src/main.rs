@@ -29,14 +29,21 @@ async fn main() -> anyhow::Result<()> {
     if matches!(args.new_tag, Some(_))
         || std::env::args().any(|arg| arg == "-t" || arg == "--new-tag")
     {
+        // 1. 获取本次 diff
+        let diff = git::get_git_diff();
+        let prompt = prompt::get_prompt(&diff);
+        let summary = ai::generate_commit_message(&diff, &config, &prompt).await?;
+        // 2. 生成并提交 AI 总结 commit
+        git::git_commit(&summary);
+        // 3. 创建 tag，tag note 也用 summary
         let new_tag = if let Some(ref ver) = args.new_tag {
             if !ver.is_empty() {
-                git::create_new_tag(Some(ver))?
+                git::create_new_tag_with_note(Some(ver), &summary)?
             } else {
-                git::create_new_tag(None)?
+                git::create_new_tag_with_note(None, &summary)?
             }
         } else {
-            git::create_new_tag(None)?
+            git::create_new_tag_with_note(None, &summary)?
         };
         println!("Created new tag: {}", new_tag);
         if args.push {

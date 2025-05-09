@@ -94,6 +94,63 @@ pub fn create_new_tag(base_version: Option<&str>) -> anyhow::Result<String> {
     Ok(final_tag)
 }
 
+/// 创建新的带 note 的 tag
+pub fn create_new_tag_with_note(base_version: Option<&str>, note: &str) -> anyhow::Result<String> {
+    // 1. 选择基础版本号
+    let base_owned;
+    let base: &str = if let Some(ver) = base_version {
+        ver.trim_start_matches('v')
+    } else if let Some(tag) = get_latest_tag_version() {
+        base_owned = tag.trim_start_matches('v').to_string();
+        base_owned.as_str()
+    } else {
+        "0.0.0"
+    };
+
+    // 2. 解析主次补丁
+    let mut parts: Vec<u32> = base
+        .split('.')
+        .filter_map(|s| u32::from_str(s).ok())
+        .collect();
+    if parts.len() != 3 {
+        anyhow::bail!("Invalid version format: {}", base);
+    }
+
+    // 3. 如果是指定大版本，补丁号归零，否则递增补丁号
+    if base_version.is_some() {
+        parts[2] = 0;
+    } else {
+        parts[2] += 1;
+    }
+
+    let mut final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
+    let mut counter = 1;
+
+    // 4. 检查 tag 是否已存在，已存在则递增补丁号
+    while {
+        let tag_exists = Command::new("git")
+            .args(["tag", "-l", &final_tag])
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
+        !tag_exists.stdout.is_empty()
+    } {
+        parts[2] += 1;
+        final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
+        counter += 1;
+        if counter > 1000 {
+            anyhow::bail!("Too many tag increments, please check your tags");
+        }
+    }
+
+    // 5. 创建新的带 note 的 tag
+    Command::new("git")
+        .args(["tag", "-a", &final_tag, "-m", note])
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
+
+    Ok(final_tag)
+}
+
 /// 推送 tag 到远程
 pub fn push_tag(tag: &str, allow_push_branches: bool) -> anyhow::Result<()> {
     if allow_push_branches {
