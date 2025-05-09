@@ -1,9 +1,7 @@
-mod ai;
-mod args;
-mod git;
-mod prompt;
-
-use args::Args;
+use ai_commit::ai;
+use ai_commit::args::Args;
+use ai_commit::git;
+use ai_commit::prompt;
 use clap::Parser;
 use dotenvy;
 use std::path::PathBuf;
