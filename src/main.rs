@@ -33,6 +33,11 @@ async fn main() -> anyhow::Result<()> {
         let diff = git::get_git_diff();
         let prompt = prompt::get_prompt(&diff);
         let summary = ai::generate_commit_message(&diff, &config, &prompt).await?;
+        // 校验 summary，防止 prompt 被用作 commit message
+        if summary.contains("{{git_diff}}") || summary.contains("Conventional Commits") {
+            eprintln!("AI 生成 commit message 失败，返回了提示词模板。请检查 AI 服务。");
+            std::process::exit(1);
+        }
         // 2. 生成并提交 AI 总结 commit
         git::git_commit(&summary);
         // 3. 创建 tag，tag note 也用 summary
@@ -77,6 +82,11 @@ async fn main() -> anyhow::Result<()> {
 
     let prompt = prompt::get_prompt(&diff);
     let message = ai::generate_commit_message(&diff, &config, &prompt).await?;
+    // 校验 message，防止 prompt 被用作 commit message
+    if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
+        eprintln!("AI 生成 commit message 失败，返回了提示词模板。请检查 AI 服务。");
+        std::process::exit(1);
+    }
 
     git::git_commit(&message);
     if args.push {

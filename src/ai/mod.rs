@@ -71,6 +71,10 @@ pub async fn generate_commit_message(
                 .get(0)
                 .map(|c| c.message.content.trim())
                 .unwrap_or("");
+            // 校验返回内容，防止 prompt 被当作 commit message 返回
+            if content.contains("{{git_diff}}") || content.contains("Conventional Commits") {
+                anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
+            }
             Ok(content.to_string())
         }
         _ => {
@@ -86,7 +90,12 @@ pub async fn generate_commit_message(
                 .send()
                 .await?;
             let body: OllamaResponse = res.json().await?;
-            Ok(body.response.trim().to_string())
+            let response = body.response.trim();
+            // 校验返回内容，防止 prompt 被当作 commit message 返回
+            if response.contains("{{git_diff}}") || response.contains("Conventional Commits") {
+                anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
+            }
+            Ok(response.to_string())
         }
     }
 }
