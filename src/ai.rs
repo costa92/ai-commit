@@ -1,6 +1,5 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::env;
 
 #[derive(Serialize)]
 pub struct OllamaRequest<'a> {
@@ -46,18 +45,14 @@ pub struct DeepseekChoiceMessage {
 
 pub async fn generate_commit_message(
     _diff: &str,
-    provider: &str,
-    model: &str,
+    config: &crate::config::Config,
     prompt: &str,
 ) -> anyhow::Result<String> {
     let client = Client::new();
-    match provider {
+    match config.provider.as_str() {
         "deepseek" => {
-            let url = env::var("AI_COMMIT_DEEPSEEK_URL")
-                .unwrap_or_else(|_| "https://api.deepseek.com/v1/chat/completions".to_string());
-            let api_key = env::var("AI_COMMIT_DEEPSEEK_API_KEY").unwrap_or_default();
             let request = DeepseekRequest {
-                model,
+                model: &config.model,
                 messages: vec![DeepseekMessage {
                     role: "user",
                     content: prompt,
@@ -65,8 +60,8 @@ pub async fn generate_commit_message(
                 stream: false,
             };
             let res = client
-                .post(url)
-                .bearer_auth(api_key)
+                .post(&config.deepseek_url)
+                .bearer_auth(config.deepseek_api_key.as_ref().unwrap()) // 已经通过 validate 验证
                 .json(&request)
                 .send()
                 .await?;
@@ -80,14 +75,16 @@ pub async fn generate_commit_message(
         }
         _ => {
             // 默认 ollama
-            let url = env::var("AI_COMMIT_OLLAMA_URL")
-                .unwrap_or_else(|_| "http://localhost:11434/api/generate".to_string());
             let request = OllamaRequest {
-                model,
+                model: &config.model,
                 prompt,
                 stream: false,
             };
-            let res = client.post(url).json(&request).send().await?;
+            let res = client
+                .post(&config.ollama_url)
+                .json(&request)
+                .send()
+                .await?;
             let body: OllamaResponse = res.json().await?;
             Ok(body.response.trim().to_string())
         }
