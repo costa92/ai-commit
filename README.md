@@ -1,3 +1,7 @@
+
+# ai-commit
+
+---
 <!-- 徽章区 -->
 <p align="left">
   <img src="https://img.shields.io/github/v/release/costa92/ai-commit?style=flat-square" alt="release"/>
@@ -7,10 +11,6 @@
   <img src="https://img.shields.io/github/stars/costa92/ai-commit?style=flat-square" alt="stars"/>
   <img src="https://img.shields.io/github/issues/costa92/ai-commit?style=flat-square" alt="issues"/>
 </p>
-
----
-
-# ai-commit
 
 ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端大模型（如 Ollama、Deepseek），可自动根据代码变更生成符合 Conventional Commits 规范的中文提交信息，提升团队协作效率和提交规范性。
 
