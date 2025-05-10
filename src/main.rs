@@ -90,17 +90,18 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let diff = git::get_git_diff();
-    if diff.trim().is_empty() {
-        println!("No staged changes.");
-        return Ok(());
-    }
 
     // 处理 tag 或 commit
     if matches!(args.new_tag, Some(_))
         || std::env::args().any(|arg| arg == "-t" || arg == "--new-tag")
     {
+        // tag 流程允许 diff 为空
         handle_tag_creation(&args, &config, &diff).await?;
     } else {
+        if diff.trim().is_empty() {
+            println!("No staged changes.");
+            return Ok(());
+        }
         handle_commit(&args, &config, &diff).await?;
     }
 
