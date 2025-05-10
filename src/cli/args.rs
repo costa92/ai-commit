@@ -27,6 +27,10 @@ pub struct Args {
     #[arg(short = 't', long = "new-tag", value_name = "VERSION", num_args = 0..=1, action = clap::ArgAction::Set)]
     pub new_tag: Option<String>,
 
+    /// tag 备注内容（如 --tag-note "发布说明"），如不指定则用 AI 生成
+    #[arg(long = "tag-note", value_name = "NOTE", default_value = "")]
+    pub tag_note: String,
+
     /// 是否显示最新的 tag 信息
     #[arg(short = 's', long = "show-tag", default_value_t = false)]
     pub show_tag: bool,
