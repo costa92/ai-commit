@@ -45,8 +45,10 @@ async fn main() -> anyhow::Result<()> {
         } else {
             "manual tag".to_string()
         };
-        // 2. 生成并提交 AI 总结 commit（如有 diff 或 tag_note）
-        git::git_commit(&note);
+        // 2. 仅有 diff 时自动 commit
+        if !diff.trim().is_empty() {
+            git::git_commit(&note);
+        }
         // 3. 创建 tag，tag note 用 note
         let new_tag = if let Some(ref ver) = args.new_tag {
             if !ver.is_empty() {

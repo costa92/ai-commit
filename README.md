@@ -1,4 +1,3 @@
-
 # ai-commit
 
 ---
@@ -65,44 +64,37 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 - tag 生成支持自动递增和大版本指定，推送策略安全可控
 - 文档完善，覆盖安装、使用、CI、扩展、常见问题等
 
+## 新建 tag 的行为说明
 
+- 使用 `--new-tag` 或 `-t` 新建 tag 时：
+  - **如果有已暂存（staged）的变更**：
+    - 会自动生成一次 commit（commit message 优先用 `--tag-note`，否则用 AI 生成，有 diff 时用 AI，无 diff 时用默认 `manual tag`）。
+    - 然后自动创建 tag，tag note 内容与 commit message 相同。
+  - **如果没有已暂存变更**：
+    - 只会创建 tag，不会生成新的 commit。
+    - tag note 优先用 `--tag-note`，否则用默认 `manual tag`。
+
+- `--tag-note` 参数优先级最高。
+- 没有 `--tag-note` 且有 diff 时，tag note/commit message 用 AI 生成。
+- 没有 `--tag-note` 且无 diff 时，tag note/commit message 用默认字符串 `manual tag`。
+
+- 支持 `--push` 自动推送新 tag。
+
+## 示例
+
+```sh
+# 有变更时自动 commit 并打 tag
+$ git add .
+$ ai-commit -t -p
+
+# 无变更时只打 tag
+$ ai-commit -t -p
+
+# 指定 tag note
+$ ai-commit -t -p --tag-note "发布 v1.2.3"
+```
 
 ## 配置说明
 
 - 支持通过 `.env` 文件配置：
-  - `AI_COMMIT_PROVIDER`：AI 服务类型（ollama/deepseek）
-  - `AI_COMMIT_MODEL`：模型名称
-  - `AI_COMMIT_OLLAMA_URL`：Ollama API 地址
-  - `AI_COMMIT_DEEPSEEK_URL`：Deepseek API 地址
-  - `AI_COMMIT_DEEPSEEK_API_KEY`：Deepseek API Key
-  - `AI_COMMIT_PROMPT_PATH`：自定义提示词模板路径
-
----
-
-## 提交规范
-
-- 采用 Conventional Commits 规范，示例：
-  
-  ```bash
-  feat(parser): 支持数组解析
-  
-  在新解析模块中增加了对数组的解析能力。
-  ```
-
-- 主题必须为中文，且不超过 50 个字
-- 规范内容可在 `commit-prompt.txt` 配置
-
----
-
-## 文档
-
-- [使用文档](docs/安装与使用.md)
-- [需求文档](docs/需求文档.md)
-- [技术文档](docs/技术文档.md)
-
----
-
-## 贡献
-
-- 欢迎 issue/PR 反馈与贡献
-- 推荐使用 `cargo fmt` 格式化代码
+  - `AI_COMMIT_PROVIDER`
