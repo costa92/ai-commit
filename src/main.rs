@@ -17,7 +17,7 @@ fn load_env() {
     }
 }
 
-async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
+async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
     let tag_name = git::get_next_tag_name(args.new_tag.as_deref())?;
     // note 优先用 tag_note，否则用 tag_name
