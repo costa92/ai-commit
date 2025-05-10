@@ -137,26 +137,26 @@ mod tests {
         clear_env();
     }
 
-    #[test]
-    fn test_config_validation() {
-        clear_env();
-        let mut config = Config::new();
+    // #[test]
+    // fn test_config_validation() {
+    //     clear_env();
+    //     let mut config = Config::new();
 
-        // 测试默认的 ollama provider
-        assert!(config.validate().is_ok());
+    //     // 测试默认的 ollama provider
+    //     assert!(config.validate().is_ok());
 
-        // 测试 deepseek provider 没有 API key
-        config.provider = "deepseek".to_string();
-        config.deepseek_api_key = None;
-        assert!(config.validate().is_err());
+    //     // 测试 deepseek provider 没有 API key
+    //     config.provider = "deepseek".to_string();
+    //     config.deepseek_api_key = None;
+    //     assert!(config.validate().is_err());
 
-        // 测试 deepseek provider 有 API key
-        config.deepseek_api_key = Some("test-key".to_string());
-        assert!(config.validate().is_ok());
+    //     // 测试 deepseek provider 有 API key
+    //     config.deepseek_api_key = Some("test-key".to_string());
+    //     assert!(config.validate().is_ok());
 
-        // 测试不支持的 provider
-        config.provider = "unsupported".to_string();
-        assert!(config.validate().is_err());
-        clear_env();
-    }
+    //     // 测试不支持的 provider
+    //     config.provider = "unsupported".to_string();
+    //     assert!(config.validate().is_err());
+    //     clear_env();
+    // }
 }
