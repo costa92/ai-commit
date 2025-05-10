@@ -189,3 +189,50 @@ pub fn push_tag(tag: &str, allow_push_branches: bool) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// 仅生成下一个 tag 名字，不创建 tag
+pub fn get_next_tag_name(base_version: Option<&str>) -> anyhow::Result<String> {
+    let base_owned;
+    let base: &str = if let Some(ver) = base_version {
+        ver.trim_start_matches('v')
+    } else if let Some(tag) = get_latest_tag_version() {
+        base_owned = tag.trim_start_matches('v').to_string();
+        base_owned.as_str()
+    } else {
+        "0.0.0"
+    };
+
+    let mut parts: Vec<u32> = base
+        .split('.')
+        .filter_map(|s| u32::from_str(s).ok())
+        .collect();
+    if parts.len() != 3 {
+        anyhow::bail!("Invalid version format: {}", base);
+    }
+
+    if base_version.is_some() {
+        parts[2] = 0;
+    } else {
+        parts[2] += 1;
+    }
+
+    let mut final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
+    let mut counter = 1;
+
+    while {
+        let tag_exists = Command::new("git")
+            .args(["tag", "-l", &final_tag])
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
+        !tag_exists.stdout.is_empty()
+    } {
+        parts[2] += 1;
+        final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
+        counter += 1;
+        if counter > 1000 {
+            anyhow::bail!("Too many tag increments, please check your tags");
+        }
+    }
+
+    Ok(final_tag)
+}

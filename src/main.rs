@@ -18,18 +18,13 @@ fn load_env() {
 }
 
 async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
+    // 先生成下一个 tag 名字
+    let tag_name = git::get_next_tag_name(args.new_tag.as_deref())?;
+    // note 优先用 tag_note，否则用 tag_name
     let note = if !args.tag_note.is_empty() {
         args.tag_note.clone()
-    } else if !diff.trim().is_empty() {
-        let prompt = prompt::get_prompt(diff);
-        let summary = ai::generate_commit_message(diff, config, &prompt).await?;
-        if summary.contains("{{git_diff}}") || summary.contains("Conventional Commits") {
-            eprintln!("AI 生成 commit message 失败，返回了提示词模板。请检查 AI 服务。");
-            std::process::exit(1);
-        }
-        summary
     } else {
-        git::create_new_tag_with_note(None, "")?
+        tag_name.clone()
     };
 
     if !diff.trim().is_empty() {
@@ -38,10 +33,8 @@ async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow
         git::git_commit_allow_empty(&note);
     }
 
-    let new_tag = match &args.new_tag {
-        Some(ver) if !ver.is_empty() => git::create_new_tag_with_note(Some(ver), &note)?,
-        _ => git::create_new_tag_with_note(None, &note)?,
-    };
+    // 创建 tag，tag 名和 note 都用上面生成的
+    let new_tag = git::create_new_tag_with_note(Some(&tag_name), &note)?;
 
     println!("Created new tag: {}", new_tag);
     if args.push {
