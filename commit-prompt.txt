@@ -15,7 +15,7 @@
 
 ---
 
-## ✅ 使用提示词模板（复制粘贴到 ChatGPT）
+## ✅ 使用提示词模板 
 
 ```
 请严格按照如下 Conventional Commits 规范生成中文 commit message，要求只输出一条规范的 commit message，且主题内容不要超过50个字：
