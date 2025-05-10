@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         let diff = git::get_git_diff();
         let note = if !args.tag_note.is_empty() {
             args.tag_note.clone()
-        } else {
+        } else if !diff.trim().is_empty() {
             let prompt = prompt::get_prompt(&diff);
             let summary = ai::generate_commit_message(&diff, &config, &prompt).await?;
             // 校验 summary，防止 prompt 被用作 commit message
@@ -42,8 +42,10 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
             summary
+        } else {
+            "manual tag".to_string()
         };
-        // 2. 生成并提交 AI 总结 commit
+        // 2. 生成并提交 AI 总结 commit（如有 diff 或 tag_note）
         git::git_commit(&note);
         // 3. 创建 tag，tag note 用 note
         let new_tag = if let Some(ref ver) = args.new_tag {
