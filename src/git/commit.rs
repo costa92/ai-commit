@@ -29,3 +29,10 @@ pub fn get_git_diff() -> String {
 
     String::from_utf8_lossy(&output.stdout).to_string()
 }
+
+pub fn git_commit_allow_empty(message: &str) {
+    Command::new("git")
+        .args(["commit", "--allow-empty", "-m", message])
+        .status()
+        .expect("Git commit (allow-empty) failed");
+}

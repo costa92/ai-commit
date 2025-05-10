@@ -34,6 +34,8 @@ async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow
 
     if !diff.trim().is_empty() {
         git::git_commit(&note);
+    } else {
+        git::git_commit_allow_empty(&note);
     }
 
     let new_tag = match &args.new_tag {
