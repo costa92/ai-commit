@@ -65,9 +65,10 @@ async fn main() -> anyhow::Result<()> {
     load_env();
     let args = Args::parse();
     let mut config = Config::new();
+
     config.update_from_args(&args);
     config.validate()?;
-
+    print!("Loading config: {}", config.model);
     // 显示最新 tag
     if args.show_tag {
         if let Some((tag, note)) = git::get_latest_tag() {
