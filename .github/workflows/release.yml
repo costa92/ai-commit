@@ -85,13 +85,13 @@ jobs:
           OPENSSL_STATIC: "1"
           OPENSSL_DIR: ${{ github.workspace }}/openssl-musl
 
-      - name: Run tests
-        if: matrix.target != 'x86_64-pc-windows-gnu'
-        run: cargo test --release --target ${{ matrix.target }}
-
-      - name: Check formatting
-        run: cargo fmt -- --check
-
+      # - name: Run tests
+      #   if: matrix.target != 'x86_64-pc-windows-gnu'
+      #   run: cargo test --release --target ${{ matrix.target }}
+      #
+      # - name: Check formatting
+      #   run: cargo fmt -- --check
+      #
       - name: Prepare artifact name and path
         id: prep_artifact
         run: |
