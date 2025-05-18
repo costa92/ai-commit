@@ -9,7 +9,6 @@ use std::path::PathBuf;
 
 fn load_env() {
     let home_env = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-    print!("home_env: {}", home_env);
     let user_env_path = PathBuf::from(format!("{}/.ai-commit/.env", home_env));
     if user_env_path.exists() {
         dotenvy::from_path(user_env_path).ok();
