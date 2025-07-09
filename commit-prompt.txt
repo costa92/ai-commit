@@ -37,6 +37,9 @@
 - subject：简要描述（必填），**必须为中文，且不超过50个字**
 - body：详细描述（可选）
 
+**特殊情况处理**:
+- 如果 git diff 显示文件被删除 (e.g., `deleted file mode`)，请使用 `refactor` 或 `chore` 类型，并在主题中明确说明删除了文件或模块。
+
 示例：
 feat(parser): 支持数组解析
 
@@ -45,6 +48,8 @@ feat(parser): 支持数组解析
 fix(login): 修正密码校验逻辑
 
 docs(readme): 更新使用说明
+
+chore(cleanup): 删除无用的配置文件
 
 ---
 
