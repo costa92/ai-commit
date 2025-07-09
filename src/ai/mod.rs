@@ -44,10 +44,14 @@ pub struct DeepseekChoiceMessage {
 }
 
 pub async fn generate_commit_message(
-    _diff: &str,
+    diff: &str,
     config: &crate::config::Config,
     prompt: &str,
 ) -> anyhow::Result<String> {
+    if diff.trim().is_empty() {
+        println!("No staged changes.");
+        std::process::exit(0);
+    }
     let client = Client::new();
     match config.provider.as_str() {
         "deepseek" => {
