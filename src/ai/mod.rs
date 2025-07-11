@@ -1,5 +1,7 @@
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 
 #[derive(Serialize)]
 pub struct OllamaRequest<'a> {
@@ -35,11 +37,11 @@ pub struct DeepseekResponse {
 
 #[derive(Deserialize)]
 pub struct DeepseekChoice {
-    pub message: DeepseekChoiceMessage,
+    pub delta: DeepseekChoiceDelta,
 }
 
 #[derive(Deserialize)]
-pub struct DeepseekChoiceMessage {
+pub struct DeepseekChoiceDelta {
     pub content: String,
 }
 
@@ -81,7 +83,7 @@ pub async fn generate_commit_message(
                     role: "user",
                     content: prompt,
                 }],
-                stream: false,
+                stream: true,
             };
             let (url, api_key) = if config.provider == "siliconflow" {
                 (
@@ -98,28 +100,40 @@ pub async fn generate_commit_message(
                 eprintln!("[ai-commit] 响应错误: 状态码 {status}, 响应体: {text}");
                 anyhow::bail!("响应错误: 状态码 {status}, 响应体: {text}");
             }
-            let body: DeepseekResponse = match res.json().await {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("[ai-commit] 响应解析失败: {e:?}");
-                    anyhow::bail!("响应解析失败: {e}");
+
+            let mut message = String::new();
+            let mut stream = res.bytes_stream();
+            while let Some(item) = stream.next().await {
+                let chunk = item?;
+                let chunk_str = String::from_utf8(chunk.to_vec())?;
+                for line in chunk_str.lines() {
+                    if line.starts_with("data:") {
+                        let json_str = line.strip_prefix("data:").unwrap().trim();
+                        if json_str == "[DONE]" {
+                            break;
+                        }
+                        if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
+                            if let Some(choice) = response.choices.get(0) {
+                                let content = &choice.delta.content;
+                                print!("{content}");
+                                std::io::stdout().flush()?;
+                                message.push_str(content);
+                            }
+                        }
+                    }
                 }
-            };
-            let content = body
-                .choices
-                .get(0)
-                .map(|c| c.message.content.trim())
-                .unwrap_or("");
-            if content.contains("{{git_diff}}") || content.contains("Conventional Commits") {
+            }
+            println!();
+            if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
-            Ok(content.to_string())
+            Ok(message)
         }
         _ => {
             let request = OllamaRequest {
                 model: &config.model,
                 prompt,
-                stream: false,
+                stream: true,
             };
             let res = make_request(&client, &config.ollama_url, None, &request).await?;
             if !res.status().is_success() {
@@ -128,18 +142,26 @@ pub async fn generate_commit_message(
                 eprintln!("[ai-commit] Ollama 响应错误: 状态码 {status}, 响应体: {text}");
                 anyhow::bail!("Ollama 响应错误: 状态码 {status}, 响应体: {text}");
             }
-            let body: OllamaResponse = match res.json().await {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("[ai-commit] Ollama 响应解析失败: {e:?}");
-                    anyhow::bail!("Ollama 响应解析失败: {e}");
+
+            let mut message = String::new();
+            let mut stream = res.bytes_stream();
+            while let Some(item) = stream.next().await {
+                let chunk = item?;
+                let chunk_str = String::from_utf8(chunk.to_vec())?;
+                for line in chunk_str.lines() {
+                    if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
+                        let content = &response.response;
+                        print!("{content}");
+                        std::io::stdout().flush()?;
+                        message.push_str(content);
+                    }
                 }
-            };
-            let response = body.response.trim();
-            if response.contains("{{git_diff}}") || response.contains("Conventional Commits") {
+            }
+            println!();
+            if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
-            Ok(response.to_string())
+            Ok(message)
         }
     }
 }

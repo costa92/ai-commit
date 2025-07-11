@@ -48,8 +48,8 @@ async fn handle_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Resu
     let prompt = prompt::get_prompt(diff);
     let message = ai::generate_commit_message(diff, config, &prompt).await?;
 
-    if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
-        eprintln!("AI 生成 commit message 失败，返回了提示词模板。请检查 AI 服务。");
+    if message.is_empty() {
+        eprintln!("AI 生成 commit message 为空，请检查 AI 服务。");
         std::process::exit(1);
     }
 
