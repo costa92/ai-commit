@@ -52,6 +52,10 @@ async fn handle_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Resu
     let elapsed_time = start_time.elapsed();
     println!("AI 生成 commit message 耗时: {:.2?}", elapsed_time);
 
+    if elapsed_time.as_secs() > 30 {
+        println!("警告: AI 模型 '{}' 生成 commit message 耗时较长，建议更换更快的模型或优化网络环境。", config.model);
+    }
+
     if message.is_empty() {
         eprintln!("AI 生成 commit message 为空，请检查 AI 服务。");
         std::process::exit(1);
