@@ -12,3 +12,4 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 dotenvy = "0.15"
 futures-util = "0.3"
+regex = "1"

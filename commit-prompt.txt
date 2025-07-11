@@ -9,6 +9,7 @@
 
 ## 💬 输出要求:
 - 只输出一条符合规范的 commit message
+- **绝对不要**包含任何 markdown 标记，例如 ` ``` ` 或 ` ```plaintext `。
 - 格式：`<type>(<scope>): <subject>`，`subject` 为中文且不超过 50 个字
 - 可选 body，若有则作为第二段输出，详述变更内容
 - 不添加解释说明，只输出 message
