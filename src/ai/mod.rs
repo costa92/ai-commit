@@ -127,7 +127,12 @@ pub async fn generate_commit_message(
             if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
-            Ok(message.trim().replace("```plaintext", "").replace("```", "").to_string())
+            Ok(message
+                .trim()
+                .replace("```plaintext", "")
+                .replace("```md", "")
+                .replace("```", "")
+                .to_string())
         }
         _ => {
             let request = OllamaRequest {
@@ -161,7 +166,12 @@ pub async fn generate_commit_message(
             if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
-            Ok(message.trim().replace("```plaintext", "").replace("```", "").to_string())
+            Ok(message
+                .trim()
+                .replace("```plaintext", "")
+                .replace("```md", "")
+                .replace("```", "")
+                .to_string())
         }
     }
 }
