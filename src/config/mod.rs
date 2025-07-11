@@ -8,6 +8,8 @@ pub struct Config {
     pub deepseek_api_key: Option<String>,
     pub deepseek_url: String,
     pub ollama_url: String,
+    pub siliconflow_api_key: Option<String>,
+    pub siliconflow_url: String,
 }
 
 impl Config {
@@ -19,9 +21,12 @@ impl Config {
             deepseek_api_key: None,
             deepseek_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
             ollama_url: "http://localhost:11434/api/generate".to_string(),
+            siliconflow_api_key: None,
+            siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
         };
 
         // 加载配置文件
+        #[cfg(not(test))]
         config.load_from_env_file();
         // 加载环境变量（覆盖配置文件）
         config.load_from_env();
@@ -59,6 +64,12 @@ impl Config {
         if let Ok(url) = env::var("AI_COMMIT_OLLAMA_URL") {
             self.ollama_url = url;
         }
+        if let Ok(api_key) = env::var("AI_COMMIT_SILICONFLOW_API_KEY") {
+            self.siliconflow_api_key = Some(api_key);
+        }
+        if let Ok(url) = env::var("AI_COMMIT_SILICONFLOW_URL") {
+            self.siliconflow_url = url;
+        }
     }
 
     pub fn update_from_args(&mut self, args: &crate::cli::args::Args) {
@@ -77,6 +88,11 @@ impl Config {
             "deepseek" => {
                 if self.deepseek_api_key.is_none() {
                     anyhow::bail!("Deepseek API key is required but not set. Please set AI_COMMIT_DEEPSEEK_API_KEY environment variable or in .env file");
+                }
+            }
+            "siliconflow" => {
+                if self.siliconflow_api_key.is_none() {
+                    anyhow::bail!("SiliconFlow API key is required but not set. Please set AI_COMMIT_SILICONFLOW_API_KEY environment variable or in .env file");
                 }
             }
             "ollama" => {
@@ -101,6 +117,8 @@ mod tests {
         env::remove_var("AI_COMMIT_DEEPSEEK_API_KEY");
         env::remove_var("AI_COMMIT_DEEPSEEK_URL");
         env::remove_var("AI_COMMIT_OLLAMA_URL");
+        env::remove_var("AI_COMMIT_SILICONFLOW_API_KEY");
+        env::remove_var("AI_COMMIT_SILICONFLOW_URL");
     }
 
     #[test]
@@ -115,6 +133,11 @@ mod tests {
             "https://api.deepseek.com/v1/chat/completions"
         );
         assert_eq!(config.ollama_url, "http://localhost:11434/api/generate");
+        assert!(config.siliconflow_api_key.is_none());
+        assert_eq!(
+            config.siliconflow_url,
+            "https://api.siliconflow.cn/v1/chat/completions"
+        );
         clear_env();
     }
 
@@ -137,26 +160,35 @@ mod tests {
         clear_env();
     }
 
-    // #[test]
-    // fn test_config_validation() {
-    //     clear_env();
-    //     let mut config = Config::new();
+    #[test]
+    fn test_config_validation() {
+        clear_env();
+        let mut config = Config::new();
 
-    //     // 测试默认的 ollama provider
-    //     assert!(config.validate().is_ok());
+        // 测试默认的 ollama provider
+        assert!(config.validate().is_ok());
 
-    //     // 测试 deepseek provider 没有 API key
-    //     config.provider = "deepseek".to_string();
-    //     config.deepseek_api_key = None;
-    //     assert!(config.validate().is_err());
+        // 测试 deepseek provider 没有 API key
+        config.provider = "deepseek".to_string();
+        config.deepseek_api_key = None;
+        assert!(config.validate().is_err());
 
-    //     // 测试 deepseek provider 有 API key
-    //     config.deepseek_api_key = Some("test-key".to_string());
-    //     assert!(config.validate().is_ok());
+        // 测试 deepseek provider 有 API key
+        config.deepseek_api_key = Some("test-key".to_string());
+        assert!(config.validate().is_ok());
 
-    //     // 测试不支持的 provider
-    //     config.provider = "unsupported".to_string();
-    //     assert!(config.validate().is_err());
-    //     clear_env();
-    // }
+        // 测试 siliconflow provider 没有 API key
+        config.provider = "siliconflow".to_string();
+        config.siliconflow_api_key = None;
+        assert!(config.validate().is_err());
+
+        // 测试 siliconflow provider 有 API key
+        config.siliconflow_api_key = Some("test-key".to_string());
+        assert!(config.validate().is_ok());
+
+        // 测试不支持的 provider
+        config.provider = "unsupported".to_string();
+        assert!(config.validate().is_err());
+        clear_env();
+    }
 }

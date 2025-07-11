@@ -43,6 +43,26 @@ pub struct DeepseekChoiceMessage {
     pub content: String,
 }
 
+async fn make_request<T: Serialize>(
+    client: &Client,
+    url: &str,
+    api_key: Option<&String>,
+    request: &T,
+) -> anyhow::Result<reqwest::Response> {
+    let mut builder = client.post(url);
+    if let Some(key) = api_key {
+        builder = builder.bearer_auth(key);
+    }
+    let res = builder.json(request).send().await;
+    match res {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            eprintln!("[ai-commit] 请求失败: {e:?}");
+            anyhow::bail!("请求失败: {e}");
+        }
+    }
+}
+
 pub async fn generate_commit_message(
     diff: &str,
     config: &crate::config::Config,
@@ -54,7 +74,7 @@ pub async fn generate_commit_message(
     }
     let client = Client::new();
     match config.provider.as_str() {
-        "deepseek" => {
+        "siliconflow" | "deepseek" => {
             let request = DeepseekRequest {
                 model: &config.model,
                 messages: vec![DeepseekMessage {
@@ -63,30 +83,26 @@ pub async fn generate_commit_message(
                 }],
                 stream: false,
             };
-            let res = client
-                .post(&config.deepseek_url)
-                .bearer_auth(config.deepseek_api_key.as_ref().unwrap())
-                .json(&request)
-                .send()
-                .await;
-            let res = match res {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("[ai-commit] Deepseek 请求失败: {e:?}");
-                    anyhow::bail!("Deepseek 请求失败: {e}");
-                }
+            let (url, api_key) = if config.provider == "siliconflow" {
+                (
+                    &config.siliconflow_url,
+                    config.siliconflow_api_key.as_ref(),
+                )
+            } else {
+                (&config.deepseek_url, config.deepseek_api_key.as_ref())
             };
+            let res = make_request(&client, url, api_key, &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
-                eprintln!("[ai-commit] Deepseek 响应错误: 状态码 {status}, 响应体: {text}");
-                anyhow::bail!("Deepseek 响应错误: 状态码 {status}, 响应体: {text}");
+                eprintln!("[ai-commit] 响应错误: 状态码 {status}, 响应体: {text}");
+                anyhow::bail!("响应错误: 状态码 {status}, 响应体: {text}");
             }
             let body: DeepseekResponse = match res.json().await {
                 Ok(b) => b,
                 Err(e) => {
-                    eprintln!("[ai-commit] Deepseek 响应解析失败: {e:?}");
-                    anyhow::bail!("Deepseek 响应解析失败: {e}");
+                    eprintln!("[ai-commit] 响应解析失败: {e:?}");
+                    anyhow::bail!("响应解析失败: {e}");
                 }
             };
             let content = body
@@ -105,14 +121,7 @@ pub async fn generate_commit_message(
                 prompt,
                 stream: false,
             };
-            let res = client.post(&config.ollama_url).json(&request).send().await;
-            let res = match res {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("[ai-commit] Ollama 请求失败: {e:?}");
-                    anyhow::bail!("Ollama 请求失败: {e}");
-                }
-            };
+            let res = make_request(&client, &config.ollama_url, None, &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
