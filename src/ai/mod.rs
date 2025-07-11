@@ -1,8 +1,15 @@
 use futures_util::StreamExt;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+
+static RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?s)```(?:[a-zA-Z]+
+)?(.*?)
+```").unwrap()
+});
 
 #[derive(Serialize)]
 pub struct OllamaRequest<'a> {
@@ -129,11 +136,7 @@ pub async fn generate_commit_message(
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            // 使用正则表达式提取内容
-            let re = Regex::new(r"(?s)```(?:[a-zA-Z]+
-)?(.*?)
-```").unwrap();
-            let cleaned_message = if let Some(caps) = re.captures(&message) {
+            let cleaned_message = if let Some(caps) = RE.captures(&message) {
                 caps.get(1).map_or("", |m| m.as_str()).trim().to_string()
             } else {
                 message.trim().to_string()
@@ -174,11 +177,7 @@ pub async fn generate_commit_message(
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            // 使用正则表达式提取内容
-            let re = Regex::new(r"(?s)```(?:[a-zA-Z]+
-)?(.*?)
-```").unwrap();
-            let cleaned_message = if let Some(caps) = re.captures(&message) {
+            let cleaned_message = if let Some(caps) = RE.captures(&message) {
                 caps.get(1).map_or("", |m| m.as_str()).trim().to_string()
             } else {
                 message.trim().to_string()

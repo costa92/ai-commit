@@ -6,6 +6,7 @@ use ai_commit::git;
 use clap::Parser;
 use dotenvy;
 use std::path::PathBuf;
+use std::time::Instant;
 
 fn load_env() {
     let home_env = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
@@ -46,7 +47,10 @@ async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyho
 
 async fn handle_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
     let prompt = prompt::get_prompt(diff);
+    let start_time = Instant::now();
     let message = ai::generate_commit_message(diff, config, &prompt).await?;
+    let elapsed_time = start_time.elapsed();
+    println!("AI 生成 commit message 耗时: {:.2?}", elapsed_time);
 
     if message.is_empty() {
         eprintln!("AI 生成 commit message 为空，请检查 AI 服务。");

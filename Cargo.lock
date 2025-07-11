@@ -34,6 +34,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "futures-util",
+ "once_cell",
  "regex",
  "reqwest",
  "serde",
