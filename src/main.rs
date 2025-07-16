@@ -35,12 +35,12 @@ async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyho
     }
 
     // 创建 tag，tag 名和 note 都用上面生成的
-    let new_tag = git::create_new_tag_with_note(Some(&tag_name), &note)?;
+    git::create_tag_with_note(&tag_name, &note)?;
 
-    println!("Created new tag: {}", new_tag);
+    println!("Created new tag: {}", &tag_name);
     if args.push {
-        git::push_tag(&new_tag, args.push_branches)?;
-        println!("Pushed tag {} to remote", new_tag);
+        git::push_tag(&tag_name, args.push_branches)?;
+        println!("Pushed tag {} to remote", &tag_name);
     }
     Ok(())
 }

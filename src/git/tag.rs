@@ -95,27 +95,31 @@ fn resolve_next_tag_name(base_version: Option<&str>) -> anyhow::Result<String> {
 }
 
 /// 创建新的 tag
-pub fn create_new_tag(base_version: Option<&str>) -> anyhow::Result<String> {
-    let final_tag = resolve_next_tag_name(base_version)?;
-
-    Command::new("git")
-        .args(["tag", &final_tag])
+pub fn create_tag(tag: &str) -> anyhow::Result<()> {
+    let status = Command::new("git")
+        .args(["tag", tag])
         .status()
         .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
 
-    Ok(final_tag)
+    if !status.success() {
+        anyhow::bail!("Failed to create tag '{}'", tag);
+    }
+
+    Ok(())
 }
 
 /// 创建新的带 note 的 tag
-pub fn create_new_tag_with_note(base_version: Option<&str>, note: &str) -> anyhow::Result<String> {
-    let final_tag = resolve_next_tag_name(base_version)?;
-
-    Command::new("git")
-        .args(["tag", "-a", &final_tag, "-m", note])
+pub fn create_tag_with_note(tag: &str, note: &str) -> anyhow::Result<()> {
+    let status = Command::new("git")
+        .args(["tag", "-a", tag, "-m", note])
         .status()
         .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
 
-    Ok(final_tag)
+    if !status.success() {
+        anyhow::bail!("Failed to create tag '{}' with note", tag);
+    }
+
+    Ok(())
 }
 
 /// 推送 tag 到远程
