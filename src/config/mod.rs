@@ -25,11 +25,11 @@ impl Config {
             siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
         };
 
-        // 加载配置文件
-        #[cfg(not(test))]
-        config.load_from_env_file();
-        // 加载环境变量（覆盖配置文件）
-        config.load_from_env();
+        // 在非测试环境下加载 .env 和环境变量
+        #[cfg(not(test))] {
+            config.load_from_env_file();
+            config.load_from_env();
+        }
 
         config
     }
@@ -150,7 +150,9 @@ mod tests {
         env::set_var("AI_COMMIT_DEEPSEEK_URL", "https://test.api.deepseek.com");
         env::set_var("AI_COMMIT_OLLAMA_URL", "http://localhost:8080");
 
-        let config = Config::new();
+        let mut config = Config::new();
+        config.load_from_env();
+
         assert_eq!(config.provider, "deepseek");
         assert_eq!(config.model, "gpt-4");
         assert_eq!(config.deepseek_api_key, Some("test-key".to_string()));
