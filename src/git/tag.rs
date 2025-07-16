@@ -51,36 +51,52 @@ fn get_all_tags() -> anyhow::Result<HashSet<String>> {
 }
 
 fn resolve_next_tag_name(base_version: Option<&str>) -> anyhow::Result<String> {
-    // 1. 选择基础版本号
-    let base_owned;
-    let base: &str = if let Some(ver) = base_version {
-        ver.trim_start_matches('v')
-    } else if let Some(tag) = get_latest_tag_version() {
-        base_owned = tag.trim_start_matches('v').to_string();
-        base_owned.as_str()
-    } else {
-        "0.0.0"
-    };
-
-    // 2. 解析主次补丁
-    let mut parts: Vec<u32> = base
-        .split('.')
-        .filter_map(|s| u32::from_str(s).ok())
-        .collect();
-    if parts.len() != 3 {
-        anyhow::bail!("Invalid version format: {}", base);
-    }
-
-    // 3. 如果是指定大版本，补丁号归零，否则递增补丁号
-    if base_version.is_some() {
-        parts[2] = 0;
-    } else {
-        parts[2] += 1;
-    }
-
     let all_tags = get_all_tags()?;
-    let mut counter = 1;
 
+    // Clean up base_version: treat None, Some(""), Some("v") as "no base version specified"
+    let base_version = base_version.and_then(|v| {
+        let trimmed = v.trim_start_matches('v');
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+
+    let mut parts: Vec<u32>;
+
+    if let Some(base) = base_version {
+        // Case 1 & 2: User provided a base version string
+        parts = base
+            .split('.')
+            .filter_map(|s| u32::from_str(s).ok())
+            .collect();
+
+        if parts.len() < 2 || parts.len() > 3 {
+            anyhow::bail!("Invalid version format for --new-tag: {}", base);
+        }
+        // If only major/minor provided, start patch at 0. If full version provided, use it.
+        if parts.len() == 2 {
+            parts.push(0);
+        }
+    } else {
+        // Case 3: No base version, find latest tag and increment patch
+        let latest_tag_str = get_latest_tag_version().unwrap_or_else(|| "v0.0.0".to_string());
+        let base = latest_tag_str.trim_start_matches('v');
+
+        parts = base
+            .split('.')
+            .filter_map(|s| u32::from_str(s).ok())
+            .collect();
+
+        if parts.len() != 3 {
+            anyhow::bail!("Invalid version format in latest tag: {}", base);
+        }
+        parts[2] += 1; // Increment patch
+    }
+
+    // Loop to find the next available tag name
+    let mut counter = 0;
     loop {
         let final_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
         if !all_tags.contains(&final_tag) {
