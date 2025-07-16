@@ -13,6 +13,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[allow(unused_mut)]
     pub fn new() -> Self {
         // 默认配置
         let mut config = Config {
