@@ -150,31 +150,36 @@ The `commit-prompt.txt` template has been optimized for strict Conventional Comm
 
 **Current Template Structure:**
 ```
-只能输出以下格式，严禁任何其他内容：
+输出格式：<type>(<scope>): <subject>
 
-<type>(<scope>): <subject>
+type: feat|fix|docs|style|refactor|test|chore
+subject: 中文，不超过50字
 
-要求：
-1. 第一行必须是上述格式
-2. subject必须是中文，不超过50字
-3. 禁止输出英文、列表、解释、markdown
-4. 禁止输出"The changes"、"1."、"*"等
-5. 多文件修改时用高度概括的中文描述
+错误示例（禁止）：
+"These are good changes..."
+"Here's a breakdown:"
+"**Overall Assessment:**"
+任何英文分析或解释
 
-示例：
-feat(core): 重构核心模块
-fix(api): 修复接口错误
-refactor(all): 优化代码结构
+正确示例：
+feat(api): 添加用户认证功能
+fix(ui): 修复按钮显示问题  
+refactor(core): 重构数据处理逻辑
 
-以下是 git diff：
+git diff:
 {{git_diff}}
 ```
 
 **优化重点：**
-- **极简模板**：移除body选项，强制单行输出，减少AI偏离的可能性
-- **具体禁用模式**：明确禁止"The changes"、列表格式等常见英文模式
-- **强化验证**：检测并拒绝包含英文描述、列表符号、解释性文本的响应
-- **专门处理多文件场景**：要求高度概括而不列举文件名
+- **极简命令式模板**：直接指定输出格式，无多余解释
+- **明确反面示例**：直接展示禁止的英文分析模式
+- **全面验证逻辑**：检测20+种英文描述模式，包括：
+  - `"These are"`, `"Here's a"`, `"The changes"`
+  - `"Overall Assessment"`, `"breakdown"`, `"suggestions"`
+  - `"**"`, `"good changes"`, `"clean"`, `"helpful"`
+  - `"address"`, `"improve"`, `"1."`, `"*"`
+- **正面格式验证**：确保输出以有效type开头，包含冒号，长度合理
+- **专门处理大文件场景**：强制概括而非详细分析
 
 ### Test Coverage Summary
 

@@ -1,18 +1,18 @@
-只能输出以下格式，严禁任何其他内容：
+输出格式：<type>(<scope>): <subject>
 
-<type>(<scope>): <subject>
+type: feat|fix|docs|style|refactor|test|chore
+subject: 中文，不超过50字
 
-要求：
-1. 第一行必须是上述格式
-2. subject必须是中文，不超过50字
-3. 禁止输出英文、列表、解释、markdown
-4. 禁止输出"The changes"、"1."、"*"等
-5. 多文件修改时用高度概括的中文描述
+错误示例（禁止）：
+"These are good changes..."
+"Here's a breakdown:"
+"**Overall Assessment:**"
+任何英文分析或解释
 
-示例：
-feat(core): 重构核心模块
-fix(api): 修复接口错误
-refactor(all): 优化代码结构
+正确示例：
+feat(api): 添加用户认证功能
+fix(ui): 修复按钮显示问题  
+refactor(core): 重构数据处理逻辑
 
-以下是 git diff：
+git diff:
 {{git_diff}}

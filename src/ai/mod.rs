@@ -157,18 +157,39 @@ pub async fn generate_commit_message(
             
             // 检查响应是否为有效的 commit message
             // 如果响应包含模板内容或占位符，说明AI没有正确处理
+            // 检查响应是否为有效的 commit message
+            // 拒绝任何英文分析、解释或格式化内容
             if message.contains("{{git_diff}}") || 
-               message.contains("严格按照") || 
-               message.contains("以下是 git diff") ||
+               message.contains("输出格式") || 
+               message.contains("git diff:") ||
+               message.contains("These are") ||
                message.contains("Here's a") ||
                message.contains("The changes") ||
-               message.contains("address several") ||
-               message.contains("improve code quality") ||
+               message.contains("Overall Assessment") ||
+               message.contains("breakdown") ||
+               message.contains("suggestions") ||
+               message.contains("**") ||
+               message.contains("good changes") ||
+               message.contains("clean") ||
+               message.contains("helpful") ||
+               message.contains("address") ||
+               message.contains("improve") ||
                message.contains("1.") ||
                message.contains("*") ||
                message.starts_with("The ") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
+            }
+
+            // 正面格式检查：确保符合 Conventional Commits 格式
+            let first_line = message.lines().next().unwrap_or("").trim();
+            let valid_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
+            let has_valid_format = valid_types.iter().any(|&t| first_line.starts_with(t)) 
+                && first_line.contains(":")
+                && first_line.len() <= 100; // 合理的长度限制
+
+            if !has_valid_format {
+                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
             }
 
             Ok(clean_message(&message))
@@ -209,18 +230,39 @@ pub async fn generate_commit_message(
             
             // 检查响应是否为有效的 commit message
             // 如果响应包含模板内容或占位符，说明AI没有正确处理
+            // 检查响应是否为有效的 commit message
+            // 拒绝任何英文分析、解释或格式化内容
             if message.contains("{{git_diff}}") || 
-               message.contains("严格按照") || 
-               message.contains("以下是 git diff") ||
+               message.contains("输出格式") || 
+               message.contains("git diff:") ||
+               message.contains("These are") ||
                message.contains("Here's a") ||
                message.contains("The changes") ||
-               message.contains("address several") ||
-               message.contains("improve code quality") ||
+               message.contains("Overall Assessment") ||
+               message.contains("breakdown") ||
+               message.contains("suggestions") ||
+               message.contains("**") ||
+               message.contains("good changes") ||
+               message.contains("clean") ||
+               message.contains("helpful") ||
+               message.contains("address") ||
+               message.contains("improve") ||
                message.contains("1.") ||
                message.contains("*") ||
                message.starts_with("The ") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
+            }
+
+            // 正面格式检查：确保符合 Conventional Commits 格式
+            let first_line = message.lines().next().unwrap_or("").trim();
+            let valid_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
+            let has_valid_format = valid_types.iter().any(|&t| first_line.starts_with(t)) 
+                && first_line.contains(":")
+                && first_line.len() <= 100; // 合理的长度限制
+
+            if !has_valid_format {
+                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
             }
 
             Ok(clean_message(&message))
