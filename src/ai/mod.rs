@@ -163,6 +163,10 @@ pub async fn generate_commit_message(
                message.contains("Here's a") ||
                message.contains("The changes") ||
                message.contains("address several") ||
+               message.contains("improve code quality") ||
+               message.contains("1.") ||
+               message.contains("*") ||
+               message.starts_with("The ") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
@@ -211,6 +215,10 @@ pub async fn generate_commit_message(
                message.contains("Here's a") ||
                message.contains("The changes") ||
                message.contains("address several") ||
+               message.contains("improve code quality") ||
+               message.contains("1.") ||
+               message.contains("*") ||
+               message.starts_with("The ") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
