@@ -150,34 +150,31 @@ The `commit-prompt.txt` template has been optimized for strict Conventional Comm
 
 **Current Template Structure:**
 ```
-严格按照以下格式输出commit message，禁止输出其他内容：
+只能输出以下格式，严禁任何其他内容：
 
 <type>(<scope>): <subject>
 
-<body>
+要求：
+1. 第一行必须是上述格式
+2. subject必须是中文，不超过50字
+3. 禁止输出英文、列表、解释、markdown
+4. 禁止输出"The changes"、"1."、"*"等
+5. 多文件修改时用高度概括的中文描述
 
-关键要求：
-1. subject必须是中文，最多50个字符
-2. type只能是：feat, fix, docs, style, refactor, test, chore
-3. 当修改文件很多时，subject要高度概括，不要列举具体文件
-4. body可选，如需要可用1-2句中文简要说明
-5. 禁止输出英文、解释、markdown标记
-
-正确示例：
-feat(core): 重构核心模块架构
-fix(ui): 修复多个组件显示问题
-refactor(all): 优化代码结构和性能
-chore(deps): 更新依赖包版本
+示例：
+feat(core): 重构核心模块
+fix(api): 修复接口错误
+refactor(all): 优化代码结构
 
 以下是 git diff：
 {{git_diff}}
 ```
 
 **优化重点：**
-- 专门处理**多文件修改场景**，要求AI高度概括而不是列举文件
-- 严格限制50字符以内的中文主题
-- 增强验证逻辑，检测和拒绝英文描述性输出
-- 提供简洁明确的示例，避免冗长说明
+- **极简模板**：移除body选项，强制单行输出，减少AI偏离的可能性
+- **具体禁用模式**：明确禁止"The changes"、列表格式等常见英文模式
+- **强化验证**：检测并拒绝包含英文描述、列表符号、解释性文本的响应
+- **专门处理多文件场景**：要求高度概括而不列举文件名
 
 ### Test Coverage Summary
 
