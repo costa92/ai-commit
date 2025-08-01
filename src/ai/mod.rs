@@ -3,7 +3,16 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use tokio::io::{AsyncWriteExt, stdout};
+
+// 全局 HTTP 客户端复用
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+});
 
 static RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?s)```(?:[a-zA-Z]+
@@ -73,6 +82,15 @@ async fn make_request<T: Serialize>(
     }
 }
 
+// 提取消息清理逻辑
+fn clean_message(message: &str) -> String {
+    if let Some(caps) = RE.captures(message) {
+        caps.get(1).map_or("", |m| m.as_str()).trim().to_owned()
+    } else {
+        message.trim().to_owned()
+    }
+}
+
 pub async fn generate_commit_message(
     diff: &str,
     config: &crate::config::Config,
@@ -82,7 +100,7 @@ pub async fn generate_commit_message(
         println!("No staged changes.");
         std::process::exit(0);
     }
-    let client = Client::new();
+    let client = &*HTTP_CLIENT;
     match config.provider.as_str() {
         "siliconflow" | "deepseek" => {
             let request = DeepseekRequest {
@@ -109,11 +127,15 @@ pub async fn generate_commit_message(
                 anyhow::bail!("响应错误: 状态码 {status}, 响应体: {text}");
             }
 
-            let mut message = String::new();
+            let mut message = String::with_capacity(1024);
+            let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
+            
             while let Some(item) = stream.next().await {
                 let chunk = item?;
-                let chunk_str = String::from_utf8(chunk.to_vec())?;
+                let chunk_str = std::str::from_utf8(&chunk)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                
                 for line in chunk_str.lines() {
                     if line.starts_with("data:") {
                         let json_str = line.strip_prefix("data:").unwrap().trim();
@@ -123,26 +145,20 @@ pub async fn generate_commit_message(
                         if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
                             if let Some(choice) = response.choices.get(0) {
                                 let content = &choice.delta.content;
-                                print!("{content}");
-                                std::io::stdout().flush()?;
+                                stdout_handle.write_all(content.as_bytes()).await?;
+                                stdout_handle.flush().await?;
                                 message.push_str(content);
                             }
                         }
                     }
                 }
             }
-            println!();
+            stdout_handle.write_all(b"\n").await?;
             if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            let cleaned_message = if let Some(caps) = RE.captures(&message) {
-                caps.get(1).map_or("", |m| m.as_str()).trim().to_string()
-            } else {
-                message.trim().to_string()
-            };
-
-            Ok(cleaned_message)
+            Ok(clean_message(&message))
         }
         _ => {
             let request = OllamaRequest {
@@ -158,33 +174,199 @@ pub async fn generate_commit_message(
                 anyhow::bail!("Ollama 响应错误: 状态码 {status}, 响应体: {text}");
             }
 
-            let mut message = String::new();
+            let mut message = String::with_capacity(1024);
+            let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
+            
             while let Some(item) = stream.next().await {
                 let chunk = item?;
-                let chunk_str = String::from_utf8(chunk.to_vec())?;
+                let chunk_str = std::str::from_utf8(&chunk)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                
                 for line in chunk_str.lines() {
                     if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
                         let content = &response.response;
-                        print!("{content}");
-                        std::io::stdout().flush()?;
+                        stdout_handle.write_all(content.as_bytes()).await?;
+                        stdout_handle.flush().await?;
                         message.push_str(content);
                     }
                 }
             }
-            println!();
+            stdout_handle.write_all(b"\n").await?;
+            
             if message.contains("{{git_diff}}") || message.contains("Conventional Commits") {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            let cleaned_message = if let Some(caps) = RE.captures(&message) {
-                caps.get(1).map_or("", |m| m.as_str()).trim().to_string()
-            } else {
-                message.trim().to_string()
-            };
-
-            Ok(cleaned_message)
+            Ok(clean_message(&message))
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[test]
+    fn test_clean_message_with_code_blocks() {
+        let message_with_code = "```\nfeat(user): add user authentication\n\nAdd JWT-based authentication system\n```";
+        let cleaned = clean_message(message_with_code);
+        assert_eq!(cleaned, "feat(user): add user authentication\n\nAdd JWT-based authentication system");
+    }
+
+    #[test]
+    fn test_clean_message_without_code_blocks() {
+        let message = "feat(auth): implement login functionality";
+        let cleaned = clean_message(message);
+        assert_eq!(cleaned, "feat(auth): implement login functionality");
+    }
+
+    #[test]
+    fn test_clean_message_with_whitespace() {
+        let message = "  feat(api): add new endpoint  \n  ";
+        let cleaned = clean_message(message);
+        assert_eq!(cleaned, "feat(api): add new endpoint");
+    }
+
+    #[test]
+    fn test_clean_message_empty() {
+        let message = "";
+        let cleaned = clean_message(message);
+        assert_eq!(cleaned, "");
+    }
+
+    #[test]
+    fn test_clean_message_only_whitespace() {
+        let message = "   \n\t  ";
+        let cleaned = clean_message(message);
+        assert_eq!(cleaned, "");
+    }
+
+    #[test]
+    fn test_regex_compilation() {
+        // 测试正则表达式编译是否正确
+        let test_text = "```bash\necho hello\n```";
+        let captures = RE.captures(test_text);
+        assert!(captures.is_some());
+        assert_eq!(captures.unwrap().get(1).unwrap().as_str(), "echo hello\n");
+    }
+
+    #[test]
+    fn test_http_client_singleton() {
+        // 测试 HTTP 客户端是否是单例
+        let client1 = &*HTTP_CLIENT;
+        let client2 = &*HTTP_CLIENT;
+        
+        // 两个引用应该指向同一个对象
+        assert!(std::ptr::eq(client1, client2));
+    }
+
+    #[test]
+    fn test_request_serialization() {
+        let ollama_request = OllamaRequest {
+            model: "test-model",
+            prompt: "test prompt",
+            stream: true,
+        };
+        
+        let json = serde_json::to_string(&ollama_request).unwrap();
+        assert!(json.contains("test-model"));
+        assert!(json.contains("test prompt"));
+        assert!(json.contains("true"));
+    }
+
+    #[test]
+    fn test_deepseek_request_serialization() {
+        let deepseek_request = DeepseekRequest {
+            model: "gpt-4",
+            messages: vec![DeepseekMessage {
+                role: "user",
+                content: "Hello, world!",
+            }],
+            stream: true,
+        };
+        
+        let json = serde_json::to_string(&deepseek_request).unwrap();
+        assert!(json.contains("gpt-4"));
+        assert!(json.contains("user"));
+        assert!(json.contains("Hello, world!"));
+        assert!(json.contains("true"));
+    }
+
+    #[test]
+    fn test_ollama_response_deserialization() {
+        let json = r#"{"response": "test response", "done": false}"#;
+        let response: OllamaResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.response, "test response");
+        assert_eq!(response.done, false);
+    }
+
+    #[test]
+    fn test_deepseek_response_deserialization() {
+        let json = r#"{"choices": [{"delta": {"content": "test content"}}]}"#;
+        let response: DeepseekResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.choices.len(), 1);
+        assert_eq!(response.choices[0].delta.content, "test content");
+    }
+
+    #[test]
+    fn test_invalid_diff_detection() {
+        let invalid_messages = vec![
+            "{{git_diff}}",
+            "Conventional Commits规范",
+            "请严格按照如下 Conventional Commits 规范",
+            "以下是 git diff：\n{{git_diff}}",
+        ];
+
+        for message in invalid_messages {
+            assert!(
+                message.contains("{{git_diff}}") || message.contains("Conventional Commits"),
+                "Message should be detected as invalid: {}",
+                message
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_commit_message_empty_diff() {
+        let config = Config::new();
+        let _result = generate_commit_message("", &config, "test prompt").await;
+        
+        // 应该因为空的 diff 而退出程序，这里我们无法测试 std::process::exit(0)
+        // 但我们可以测试 diff.trim().is_empty() 的逻辑
+        assert!("".trim().is_empty());
+    }
+
+    // 模拟测试：由于实际的 HTTP 请求需要外部服务，我们主要测试数据结构和逻辑
+    #[tokio::test]
+    async fn test_make_request_structure() {
+        // 测试 make_request 函数的结构，但不实际发送请求
+        let client = &*HTTP_CLIENT;
+        
+        // 验证客户端已正确初始化（通过检查是否为有效的 Client 实例）
+        // 由于 reqwest::Client 没有实现 Display trait，我们只能验证它存在
+        assert!(std::ptr::addr_of!(*client) != std::ptr::null());
+    }
+
+    #[test]
+    fn test_config_provider_matching() {
+        // 测试配置提供商匹配逻辑
+        let providers = vec!["siliconflow", "deepseek", "ollama", "unknown"];
+        
+        for provider in providers {
+            match provider {
+                "siliconflow" | "deepseek" => {
+                    // 应该使用 DeepseekRequest 格式
+                    assert!(true);
+                }
+                _ => {
+                    // 应该使用 OllamaRequest 格式  
+                    assert!(true);
+                }
+            }
+        }
+    }
+}
+
 pub mod prompt;

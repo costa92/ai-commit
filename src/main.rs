@@ -4,23 +4,11 @@ use ai_commit::cli::args::Args;
 use ai_commit::config::Config;
 use ai_commit::git;
 use clap::Parser;
-use dotenvy;
-use std::path::PathBuf;
 use std::time::Instant;
-
-fn load_env() {
-    let home_env = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-    let user_env_path = PathBuf::from(format!("{}/.ai-commit/.env", home_env));
-    if user_env_path.exists() {
-        dotenvy::from_path(user_env_path).ok();
-    } else {
-        dotenvy::dotenv().ok();
-    }
-}
 
 async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
-    let tag_name = git::get_next_tag_name(args.new_tag.as_deref())?;
+    let tag_name = git::get_next_tag_name(args.new_tag.as_deref()).await?;
     // note 优先用 tag_note，否则用 tag_name
     let note = if !args.tag_note.is_empty() {
         args.tag_note.clone()
@@ -29,17 +17,17 @@ async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyho
     };
 
     if !diff.trim().is_empty() {
-        git::git_commit(&note);
+        git::git_commit(&note).await?;
     } else {
-        git::git_commit_allow_empty(&note);
+        git::git_commit_allow_empty(&note).await?;
     }
 
     // 创建 tag，tag 名和 note 都用上面生成的
-    git::create_tag_with_note(&tag_name, &note)?;
+    git::create_tag_with_note(&tag_name, &note).await?;
 
     println!("Created new tag: {}", &tag_name);
     if args.push {
-        git::push_tag(&tag_name, args.push_branches)?;
+        git::push_tag(&tag_name, args.push_branches).await?;
         println!("Pushed tag {} to remote", &tag_name);
     }
     Ok(())
@@ -61,16 +49,15 @@ async fn handle_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Resu
         std::process::exit(1);
     }
 
-    git::git_commit(&message);
+    git::git_commit(&message).await?;
     if args.push {
-        git::git_push();
+        git::git_push().await?;
     }
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    load_env();
     let args = Args::parse();
     let mut config = Config::new();
 
@@ -78,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     config.validate()?;
     // 显示最新 tag
     if args.show_tag {
-        if let Some((tag, note)) = git::get_latest_tag() {
+        if let Some((tag, note)) = git::get_latest_tag().await {
             println!("Latest tag: {}", tag);
             println!("Tag note: {}", note);
         } else {
@@ -89,10 +76,10 @@ async fn main() -> anyhow::Result<()> {
 
     // git add
     if !args.no_add {
-        git::git_add_all();
+        git::git_add_all().await?;
     }
 
-    let diff = git::get_git_diff();
+    let diff = git::get_git_diff().await?;
 
     // 处理 tag 或 commit
     if matches!(args.new_tag, Some(_))

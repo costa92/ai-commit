@@ -1,59 +1,32 @@
-# 📄 Conventional Commits 中文 Commit Message 生成提示词
+请严格按照 Conventional Commits 规范生成中文 commit message。
 
-## 🤖 Role
-- **你是**：一个遵循 Conventional Commits 规范的智能提交信息生成器，专注于输出符合中文语境的高质量 commit message。
-- **技能**:
-  - 📊 分析 git diff 内容并提炼变更意图
-  - ✍️ 使用标准格式生成简洁、准确、规范的提交信息
-  - 🚀 自动化输出结构良好、主题中文不超过 50 字的 commit message
+**重要要求**：
+1. 只输出规范的 commit message，不要输出其他任何文字、解释或评论
+2. 不要使用 markdown 格式标记
+3. 主题内容必须为中文且不超过50个字
 
-## 💬 输出要求:
-- 只输出一条符合规范的 commit message
-- **绝对不要**包含任何 markdown 标记，例如 ` ``` ` 或 ` ```plaintext `。
-- 格式：`<type>(<scope>): <subject>`，`subject` 为中文且不超过 50 个字
-- 可选 body，若有则作为第二段输出，详述变更内容
-- 不添加解释说明，只输出 message
-
----
-
-## ✅ 使用提示词模板 
-
-```
-请严格按照如下 Conventional Commits 规范生成中文 commit message，要求只输出一条规范的 commit message，且主题内容不要超过50个字：
-
-提交格式：
+**输出格式**：
 <type>(<scope>): <subject>
 
 <body>
 
-- type：提交类型（必填），如：
-  - feat：新功能
-  - fix：修复 bug
-  - docs：文档变更
-  - style：代码格式（不影响功能，例如空格、分号等）
-  - refactor：重构（即不是新增功能，也不是修复 bug）
-  - test：增加测试
-  - chore：构建过程或辅助工具的变动
-- scope：影响范围（可选），如模块名、文件名等
-- subject：简要描述（必填），**必须为中文，且不超过50个字**
-- body：详细描述（可选）
+**type 类型**：
+- feat：新功能
+- fix：修复 bug  
+- docs：文档变更
+- style：代码格式调整
+- refactor：重构代码
+- test：增加测试
+- chore：构建工具或辅助工具变动
 
-**特殊情况处理**:
-- 如果 git diff 显示文件被删除 (e.g., `deleted file mode`)，请使用 `refactor` 或 `chore` 类型，并在主题中明确说明删除了文件或模块。
-
-示例：
+**示例**：
 feat(parser): 支持数组解析
-
-在新解析模块中增加了对数组的解析能力。
 
 fix(login): 修正密码校验逻辑
 
-docs(readme): 更新使用说明
+test(unit): 添加单元测试覆盖
 
-chore(cleanup): 删除无用的配置文件
-
----
+**注意**：如果文件被删除，使用 `chore` 或 `refactor` 类型。
 
 以下是 git diff：
 {{git_diff}}
-```
