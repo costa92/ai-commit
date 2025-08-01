@@ -242,25 +242,25 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_tag_cache_initialization() {
+    #[tokio::test]
+    async fn test_tag_cache_initialization() {
         // 测试缓存初始化
-        let cache = TAGS_CACHE.lock().unwrap();
+        let cache = TAGS_CACHE.lock().await;
         // 缓存应该是 Option<HashSet<String>>
         assert!(cache.is_none() || cache.is_some());
     }
 
-    #[test]
-    fn test_branch_cache_initialization() {
+    #[tokio::test]
+    async fn test_branch_cache_initialization() {
         // 测试分支缓存初始化
-        let cache = BRANCH_CACHE.lock().unwrap();
+        let cache = BRANCH_CACHE.lock().await;
         assert!(cache.is_none() || cache.is_some());
     }
 
     #[tokio::test]
     async fn test_get_all_tags_caching() {
         // 清除缓存
-        *TAGS_CACHE.lock().unwrap() = None;
+        *TAGS_CACHE.lock().await = None;
         
         // 第一次调用（可能失败，但应该尝试缓存）
         let result1 = get_all_tags().await;
@@ -269,7 +269,7 @@ mod tests {
             Ok(tags1) => {
                 // 验证缓存已设置
                 {
-                    let cache = TAGS_CACHE.lock().unwrap();
+                    let cache = TAGS_CACHE.lock().await;
                     assert!(cache.is_some());
                 }
                 
@@ -516,23 +516,23 @@ mod tests {
         assert!(!matched_branches.contains(&"master"));
     }
 
-    #[test]
-    fn test_cache_thread_safety() {
-        use std::thread;
+    #[tokio::test]
+    async fn test_cache_thread_safety() {
+        use tokio::task;
 
         // 测试缓存的线程安全性
         let handles: Vec<_> = (0..5)
             .map(|_| {
-                thread::spawn(|| {
+                task::spawn(async {
                     // 尝试访问缓存
-                    let _cache = TAGS_CACHE.lock().unwrap();
-                    let _branch_cache = BRANCH_CACHE.lock().unwrap();
+                    let _cache = TAGS_CACHE.lock().await;
+                    let _branch_cache = BRANCH_CACHE.lock().await;
                 })
             })
             .collect();
 
         for handle in handles {
-            handle.join().unwrap();
+            handle.await.unwrap();
         }
 
         // 如果没有死锁或恐慌，测试通过

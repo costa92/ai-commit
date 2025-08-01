@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     let diff = git::get_git_diff().await?;
 
     // 处理 tag 或 commit
-    if matches!(args.new_tag, Some(_))
+    if args.new_tag.is_some()
         || std::env::args().any(|arg| arg == "-t" || arg == "--new-tag")
     {
         // tag 流程允许 diff 为空
