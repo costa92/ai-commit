@@ -158,8 +158,11 @@ pub async fn generate_commit_message(
             // 检查响应是否为有效的 commit message
             // 如果响应包含模板内容或占位符，说明AI没有正确处理
             if message.contains("{{git_diff}}") || 
-               message.contains("你必须严格按照") || 
+               message.contains("严格按照") || 
                message.contains("以下是 git diff") ||
+               message.contains("Here's a") ||
+               message.contains("The changes") ||
+               message.contains("address several") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
@@ -203,8 +206,11 @@ pub async fn generate_commit_message(
             // 检查响应是否为有效的 commit message
             // 如果响应包含模板内容或占位符，说明AI没有正确处理
             if message.contains("{{git_diff}}") || 
-               message.contains("你必须严格按照") || 
+               message.contains("严格按照") || 
                message.contains("以下是 git diff") ||
+               message.contains("Here's a") ||
+               message.contains("The changes") ||
+               message.contains("address several") ||
                message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
