@@ -119,9 +119,9 @@ fn test_prompt_integration() {
     assert!(prompt2.contains("line 2")); 
     assert!(!prompt2.contains("{{git_diff}}"));
     
-    // 验证模板结构
-    assert!(prompt1.contains("Conventional Commits"));
-    assert!(prompt2.contains("Conventional Commits"));
+    // 验证模板结构（更新为实际模板内容）
+    assert!(prompt1.contains("输出格式"));
+    assert!(prompt2.contains("输出格式"));
 }
 
 /// 集成测试：测试所有模块间的协调工作
@@ -154,7 +154,7 @@ fn test_full_system_integration() {
     let test_diff = "diff --git a/src/main.rs b/src/main.rs\n+println!(\"Hello, world!\");";
     let prompt = prompt::get_prompt(test_diff);
     assert!(prompt.contains("Hello, world!"));
-    assert!(prompt.contains("Conventional Commits"));
+    assert!(prompt.contains("输出格式"));
     
     // 6. 验证系统状态一致性
     assert_eq!(args.no_add, true);

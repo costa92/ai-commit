@@ -20,6 +20,16 @@ static RE: Lazy<Regex> = Lazy::new(|| {
 ```").unwrap()
 });
 
+// 预编译验证正则表达式，提升性能
+static INVALID_RESPONSE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(\{\{git_diff\}\}|输出格式|git diff:|these are|here's a|the changes|overall assessment|breakdown|suggestions|\*\*|good changes|clean|helpful|address|improve|significant changes|i don't have|represent good|contribute to|robust codebase|^the |^i |^1\.|\*)").unwrap()
+});
+
+// 正面格式验证正则
+static VALID_COMMIT_FORMAT: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\([^)]+\))?:\s*.{1,100}$").unwrap()
+});
+
 #[derive(Serialize)]
 pub struct OllamaRequest<'a> {
     pub model: &'a str,
@@ -122,7 +132,7 @@ pub async fn generate_commit_message(
             } else {
                 (&config.deepseek_url, config.deepseek_api_key.as_ref())
             };
-            let res = make_request(&client, url, api_key, &request).await?;
+            let res = make_request(client, url, api_key, &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
@@ -130,27 +140,57 @@ pub async fn generate_commit_message(
                 anyhow::bail!("响应错误: 状态码 {status}, 响应体: {text}");
             }
 
-            let mut message = String::with_capacity(1024);
+            // 优化的流处理：预分配缓冲区，减少内存重新分配
+            let mut message = String::with_capacity(2048);  // 预分配更大的缓冲区
             let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
+            let mut buffer = Vec::with_capacity(8192);  // 中间缓冲区
             
             while let Some(item) = stream.next().await {
                 let chunk = item?;
-                let chunk_str = std::str::from_utf8(&chunk)
-                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                buffer.extend_from_slice(&chunk);
                 
+                // 批量处理缓冲区中的数据
+                if buffer.len() > 4096 {  // 批量处理阈值
+                    let chunk_str = std::str::from_utf8(&buffer)
+                        .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                    
+                    for line in chunk_str.lines() {
+                        if line.starts_with("data:") {
+                            let json_str = line.strip_prefix("data:").unwrap().trim();
+                            if json_str == "[DONE]" {
+                                break;
+                            }
+                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
+                                if let Some(choice) = response.choices.first() {
+                                    let content = &choice.delta.content;
+                                    stdout_handle.write_all(content.as_bytes()).await?;
+                                    stdout_handle.flush().await?;
+                                    message.push_str(content);
+                                }
+                            }
+                        }
+                    }
+                    buffer.clear();
+                }
+            }
+            
+            // 处理剩余的数据
+            if !buffer.is_empty() {
+                let chunk_str = std::str::from_utf8(&buffer)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                    
                 for line in chunk_str.lines() {
                     if line.starts_with("data:") {
                         let json_str = line.strip_prefix("data:").unwrap().trim();
-                        if json_str == "[DONE]" {
-                            break;
-                        }
-                        if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
-                            if let Some(choice) = response.choices.get(0) {
-                                let content = &choice.delta.content;
-                                stdout_handle.write_all(content.as_bytes()).await?;
-                                stdout_handle.flush().await?;
-                                message.push_str(content);
+                        if json_str != "[DONE]" {
+                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
+                                if let Some(choice) = response.choices.first() {
+                                    let content = &choice.delta.content;
+                                    stdout_handle.write_all(content.as_bytes()).await?;
+                                    stdout_handle.flush().await?;
+                                    message.push_str(content);
+                                }
                             }
                         }
                     }
@@ -158,46 +198,14 @@ pub async fn generate_commit_message(
             }
             stdout_handle.write_all(b"\n").await?;
             
-            // 检查响应是否为有效的 commit message
-            // 如果响应包含模板内容或占位符，说明AI没有正确处理
-            // 检查响应是否为有效的 commit message
-            // 拒绝任何英文分析、解释或格式化内容
-            if message.contains("{{git_diff}}") || 
-               message.contains("输出格式") || 
-               message.contains("git diff:") ||
-               message.contains("These are") ||
-               message.contains("Here's a") ||
-               message.contains("The changes") ||
-               message.contains("Overall Assessment") ||
-               message.contains("breakdown") ||
-               message.contains("suggestions") ||
-               message.contains("**") ||
-               message.contains("good changes") ||
-               message.contains("clean") ||
-               message.contains("helpful") ||
-               message.contains("address") ||
-               message.contains("improve") ||
-               message.contains("significant changes") ||
-               message.contains("I don't have") ||
-               message.contains("represent good") ||
-               message.contains("contribute to") ||
-               message.contains("robust codebase") ||
-               message.contains("1.") ||
-               message.contains("*") ||
-               message.starts_with("The ") ||
-               message.starts_with("I ") ||
-               message.trim().is_empty() {
+            // 优化的响应验证：使用预编译正则表达式
+            if INVALID_RESPONSE_PATTERNS.is_match(&message) || message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            // 正面格式检查：确保符合 Conventional Commits 格式
+            // 正面格式检查：使用预编译正则表达式
             let first_line = message.lines().next().unwrap_or("").trim();
-            let valid_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
-            let has_valid_format = valid_types.iter().any(|&t| first_line.starts_with(t)) 
-                && first_line.contains(":")
-                && first_line.len() <= 100; // 合理的长度限制
-
-            if !has_valid_format {
+            if !VALID_COMMIT_FORMAT.is_match(first_line) {
                 anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
             }
 
@@ -209,7 +217,7 @@ pub async fn generate_commit_message(
                 prompt,
                 stream: true,
             };
-            let res = make_request(&client, &config.ollama_url, None, &request).await?;
+            let res = make_request(client, &config.ollama_url, None, &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
@@ -217,15 +225,38 @@ pub async fn generate_commit_message(
                 anyhow::bail!("Ollama 响应错误: 状态码 {status}, 响应体: {text}");
             }
 
-            let mut message = String::with_capacity(1024);
+            // 优化的流处理：预分配缓冲区，减少内存重新分配  
+            let mut message = String::with_capacity(2048);  // 预分配更大的缓冲区
             let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
+            let mut buffer = Vec::with_capacity(8192);  // 中间缓冲区
             
             while let Some(item) = stream.next().await {
                 let chunk = item?;
-                let chunk_str = std::str::from_utf8(&chunk)
-                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                buffer.extend_from_slice(&chunk);
                 
+                // 批量处理缓冲区中的数据
+                if buffer.len() > 4096 {  // 批量处理阈值
+                    let chunk_str = std::str::from_utf8(&buffer)
+                        .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                    
+                    for line in chunk_str.lines() {
+                        if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
+                            let content = &response.response;
+                            stdout_handle.write_all(content.as_bytes()).await?;
+                            stdout_handle.flush().await?;
+                            message.push_str(content);
+                        }
+                    }
+                    buffer.clear();
+                }
+            }
+            
+            // 处理剩余的数据
+            if !buffer.is_empty() {
+                let chunk_str = std::str::from_utf8(&buffer)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
+                    
                 for line in chunk_str.lines() {
                     if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
                         let content = &response.response;
@@ -237,46 +268,14 @@ pub async fn generate_commit_message(
             }
             stdout_handle.write_all(b"\n").await?;
             
-            // 检查响应是否为有效的 commit message
-            // 如果响应包含模板内容或占位符，说明AI没有正确处理
-            // 检查响应是否为有效的 commit message
-            // 拒绝任何英文分析、解释或格式化内容
-            if message.contains("{{git_diff}}") || 
-               message.contains("输出格式") || 
-               message.contains("git diff:") ||
-               message.contains("These are") ||
-               message.contains("Here's a") ||
-               message.contains("The changes") ||
-               message.contains("Overall Assessment") ||
-               message.contains("breakdown") ||
-               message.contains("suggestions") ||
-               message.contains("**") ||
-               message.contains("good changes") ||
-               message.contains("clean") ||
-               message.contains("helpful") ||
-               message.contains("address") ||
-               message.contains("improve") ||
-               message.contains("significant changes") ||
-               message.contains("I don't have") ||
-               message.contains("represent good") ||
-               message.contains("contribute to") ||
-               message.contains("robust codebase") ||
-               message.contains("1.") ||
-               message.contains("*") ||
-               message.starts_with("The ") ||
-               message.starts_with("I ") ||
-               message.trim().is_empty() {
+            // 优化的响应验证：使用预编译正则表达式
+            if INVALID_RESPONSE_PATTERNS.is_match(&message) || message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
             }
 
-            // 正面格式检查：确保符合 Conventional Commits 格式
+            // 正面格式检查：使用预编译正则表达式
             let first_line = message.lines().next().unwrap_or("").trim();
-            let valid_types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
-            let has_valid_format = valid_types.iter().any(|&t| first_line.starts_with(t)) 
-                && first_line.contains(":")
-                && first_line.len() <= 100; // 合理的长度限制
-
-            if !has_valid_format {
+            if !VALID_COMMIT_FORMAT.is_match(first_line) {
                 anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
             }
 

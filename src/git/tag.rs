@@ -2,11 +2,10 @@ use std::collections::HashSet;
 use tokio::process::Command;
 use std::str::FromStr;
 use once_cell::sync::Lazy;
-use std::sync::Mutex;
 
-// Git 命令缓存
-static BRANCH_CACHE: Lazy<Mutex<Option<HashSet<String>>>> = Lazy::new(|| Mutex::new(None));
-static TAGS_CACHE: Lazy<Mutex<Option<HashSet<String>>>> = Lazy::new(|| Mutex::new(None));
+// Git 命令缓存（使用 tokio 的异步 Mutex）
+static BRANCH_CACHE: Lazy<tokio::sync::Mutex<Option<HashSet<String>>>> = Lazy::new(|| tokio::sync::Mutex::new(None));
+static TAGS_CACHE: Lazy<tokio::sync::Mutex<Option<HashSet<String>>>> = Lazy::new(|| tokio::sync::Mutex::new(None));
 
 /// 获取最新的 tag 和备注
 pub async fn get_latest_tag() -> Option<(String, String)> {
@@ -51,7 +50,7 @@ pub async fn get_latest_tag_version() -> Option<String> {
 async fn get_all_tags() -> anyhow::Result<HashSet<String>> {
     // 检查缓存
     {
-        let cache = TAGS_CACHE.lock().unwrap();
+        let cache = TAGS_CACHE.lock().await;
         if let Some(ref tags) = *cache {
             return Ok(tags.clone());
         }
@@ -78,7 +77,7 @@ async fn get_all_tags() -> anyhow::Result<HashSet<String>> {
         .collect();
     
     // 更新缓存
-    *TAGS_CACHE.lock().unwrap() = Some(tags.clone());
+    *TAGS_CACHE.lock().await = Some(tags.clone());
     
     Ok(tags)
 }
@@ -180,7 +179,7 @@ pub async fn push_tag(tag: &str, allow_push_branches: bool) -> anyhow::Result<()
     if allow_push_branches {
         // 检查缓存的分支列表
         let existing_branches = {
-            let cache = BRANCH_CACHE.lock().unwrap();
+            let cache = BRANCH_CACHE.lock().await;
             if let Some(ref branches) = *cache {
                 branches.clone()
             } else {
@@ -206,7 +205,7 @@ pub async fn push_tag(tag: &str, allow_push_branches: bool) -> anyhow::Result<()
                     .collect();
                 
                 // 更新缓存
-                *BRANCH_CACHE.lock().unwrap() = Some(branches.clone());
+                *BRANCH_CACHE.lock().await = Some(branches.clone());
                 branches
             }
         };

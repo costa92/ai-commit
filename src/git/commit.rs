@@ -1,5 +1,34 @@
 use tokio::process::Command;
 
+// 批量Git操作：并行执行多个Git命令提升性能
+pub async fn git_status_and_diff() -> anyhow::Result<(String, String)> {
+    let (status_result, diff_result) = tokio::join!(
+        Command::new("git")
+            .args(["status", "--porcelain"])
+            .output(),
+        Command::new("git")
+            .args(["diff", "--cached"])
+            .output()
+    );
+
+    let status_output = status_result
+        .map_err(|e| anyhow::anyhow!("Failed to run git status: {}", e))?;
+    let diff_output = diff_result
+        .map_err(|e| anyhow::anyhow!("Failed to run git diff: {}", e))?;
+
+    if !status_output.status.success() {
+        anyhow::bail!("Git status failed with exit code: {:?}", status_output.status.code());
+    }
+    if !diff_output.status.success() {
+        anyhow::bail!("Git diff failed with exit code: {:?}", diff_output.status.code());
+    }
+
+    let status = String::from_utf8_lossy(&status_output.stdout).to_string();
+    let diff = String::from_utf8_lossy(&diff_output.stdout).to_string();
+
+    Ok((status, diff))
+}
+
 pub async fn git_add_all() -> anyhow::Result<()> {
     let status = Command::new("git")
         .args(["add", "."])

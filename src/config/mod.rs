@@ -21,7 +21,7 @@ pub fn ensure_env_loaded() {
     Lazy::force(&ENV_LOADED);
 }
 
-// 环境变量批量读取结构
+// 环境变量批量读取结构（增加缓存机制）
 struct EnvVars {
     provider: Option<String>,
     model: Option<String>,
@@ -32,9 +32,31 @@ struct EnvVars {
     siliconflow_url: Option<String>,
 }
 
+// 全局环境变量缓存
+static ENV_VARS_CACHE: Lazy<std::sync::Mutex<Option<EnvVars>>> = Lazy::new(|| {
+    std::sync::Mutex::new(None)
+});
+
 impl EnvVars {
     fn load() -> Self {
-        Self {
+        // 检查缓存
+        {
+            let cache = ENV_VARS_CACHE.lock().unwrap();
+            if let Some(ref cached_vars) = *cache {
+                return Self {
+                    provider: cached_vars.provider.clone(),
+                    model: cached_vars.model.clone(),
+                    deepseek_api_key: cached_vars.deepseek_api_key.clone(),
+                    deepseek_url: cached_vars.deepseek_url.clone(),
+                    ollama_url: cached_vars.ollama_url.clone(),
+                    siliconflow_api_key: cached_vars.siliconflow_api_key.clone(),
+                    siliconflow_url: cached_vars.siliconflow_url.clone(),
+                };
+            }
+        }
+        
+        // 批量读取环境变量（优化：一次性读取所有需要的环境变量）
+        let vars = Self {
             provider: env::var("AI_COMMIT_PROVIDER").ok(),
             model: env::var("AI_COMMIT_MODEL").ok(),
             deepseek_api_key: env::var("AI_COMMIT_DEEPSEEK_API_KEY").ok(),
@@ -42,11 +64,24 @@ impl EnvVars {
             ollama_url: env::var("AI_COMMIT_OLLAMA_URL").ok(),
             siliconflow_api_key: env::var("AI_COMMIT_SILICONFLOW_API_KEY").ok(),
             siliconflow_url: env::var("AI_COMMIT_SILICONFLOW_URL").ok(),
-        }
+        };
+        
+        // 更新缓存
+        *ENV_VARS_CACHE.lock().unwrap() = Some(EnvVars {
+            provider: vars.provider.clone(),
+            model: vars.model.clone(),
+            deepseek_api_key: vars.deepseek_api_key.clone(),
+            deepseek_url: vars.deepseek_url.clone(),
+            ollama_url: vars.ollama_url.clone(),
+            siliconflow_api_key: vars.siliconflow_api_key.clone(),
+            siliconflow_url: vars.siliconflow_url.clone(),
+        });
+        
+        vars
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     pub provider: String,
     pub model: String,

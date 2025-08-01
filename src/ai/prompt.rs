@@ -91,10 +91,10 @@ mod tests {
     fn test_load_prompt_template_default() {
         let template = load_prompt_template();
         
-        // 验证加载的模板包含预期内容
+        // 验证加载的模板包含预期内容（更新为实际模板内容）
         assert!(template.contains("{{git_diff}}"));
-        assert!(template.contains("Conventional Commits"));
-        assert!(template.contains("commit message"));
+        assert!(template.contains("输出格式"));
+        assert!(template.contains("feat|fix|docs"));
     }
 
     #[test]
@@ -178,7 +178,7 @@ mod tests {
         
         // 应该回退到默认模板
         let template = load_prompt_template();
-        assert!(template.contains("Conventional Commits"));
+        assert!(template.contains("输出格式"));
         
         // 恢复原始环境变量
         match original {
