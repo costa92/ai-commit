@@ -1,32 +1,20 @@
-请严格按照 Conventional Commits 规范生成中文 commit message。
+你必须严格按照以下格式输出，不允许任何偏差：
 
-**重要要求**：
-1. 只输出规范的 commit message，不要输出其他任何文字、解释或评论
-2. 不要使用 markdown 格式标记
-3. 主题内容必须为中文且不超过50个字
-
-**输出格式**：
 <type>(<scope>): <subject>
 
 <body>
 
-**type 类型**：
-- feat：新功能
-- fix：修复 bug  
-- docs：文档变更
-- style：代码格式调整
-- refactor：重构代码
-- test：增加测试
-- chore：构建工具或辅助工具变动
+要求：
+1. 第一行必须是 <type>(<scope>): <subject> 格式
+2. type 只能是：feat, fix, docs, style, refactor, test, chore
+3. subject 必须是中文，不超过50字
+4. 如果有 body，空一行后写详细说明
+5. 不要输出任何其他文字、解释或 markdown 标记
 
-**示例**：
-feat(parser): 支持数组解析
+示例：
+test(unit): 添加comprehensive单元测试覆盖
 
-fix(login): 修正密码校验逻辑
-
-test(unit): 添加单元测试覆盖
-
-**注意**：如果文件被删除，使用 `chore` 或 `refactor` 类型。
+为所有模块添加了详细的单元测试，包括边界条件和错误处理测试。
 
 以下是 git diff：
 {{git_diff}}
