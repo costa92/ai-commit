@@ -4,6 +4,7 @@ use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncWriteExt, stdout};
+use crate::ai::diff_analyzer::DiffAnalysis;
 
 // 全局 HTTP 客户端复用
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
@@ -15,9 +16,7 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
 });
 
 static RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?s)```(?:[a-zA-Z]+
-)?(.*?)
-```").unwrap()
+    Regex::new(r"(?s)```(?:[a-zA-Z]+\n)?(.*?)\n```").unwrap()
 });
 
 // 预编译验证正则表达式，提升性能
@@ -94,12 +93,12 @@ async fn make_request<T: Serialize>(
 
 // 提取消息清理逻辑
 fn clean_message(message: &str) -> String {
-    // 只取第一行，去除多余内容
-    let first_line = message.lines().next().unwrap_or("").trim();
-    
-    if let Some(caps) = RE.captures(first_line) {
+    // 首先尝试从代码块中提取内容
+    if let Some(caps) = RE.captures(message) {
         caps.get(1).map_or("", |m| m.as_str()).trim().to_owned()
     } else {
+        // 如果没有代码块，只取第一行，去除多余内容
+        let first_line = message.lines().next().unwrap_or("").trim();
         first_line.to_owned()
     }
 }
@@ -113,6 +112,21 @@ pub async fn generate_commit_message(
         println!("No staged changes.");
         std::process::exit(0);
     }
+
+    // 分析diff，优化大文件和多文件场景
+    let analysis = DiffAnalysis::analyze_diff(diff);
+    
+    // 创建优化的提示词
+    let optimized_prompt = if analysis.is_large_diff || analysis.is_multi_file {
+        println!("检测到大型变更 ({}个文件, {}字符)，正在生成摘要...", 
+                 analysis.total_files, diff.len());
+        
+        // 使用摘要版本的prompt
+        create_summarized_prompt(&analysis, diff, prompt)
+    } else {
+        prompt.to_string()
+    };
+
     let client = &*HTTP_CLIENT;
     match config.provider.as_str() {
         "siliconflow" | "deepseek" => {
@@ -120,7 +134,7 @@ pub async fn generate_commit_message(
                 model: &config.model,
                 messages: vec![DeepseekMessage {
                     role: "user",
-                    content: prompt,
+                    content: &optimized_prompt,
                 }],
                 stream: true,
             };
@@ -214,7 +228,7 @@ pub async fn generate_commit_message(
         _ => {
             let request = OllamaRequest {
                 model: &config.model,
-                prompt,
+                prompt: &optimized_prompt,
                 stream: true,
             };
             let res = make_request(client, &config.ollama_url, None, &request).await?;
@@ -284,6 +298,42 @@ pub async fn generate_commit_message(
     }
 }
 
+/// 为大型或多文件变更创建摘要化的提示词
+fn create_summarized_prompt(analysis: &DiffAnalysis, original_diff: &str, _base_prompt: &str) -> String {
+    // 创建针对大文件场景的专用提示
+    let summarized_template = format!(
+        r#"输出格式：<type>(<scope>): <subject>
+
+type: feat|fix|docs|style|refactor|test|chore  
+subject: 中文，不超过50字，突出核心变更
+
+大型变更摘要指导：
+- 当前变更：{}
+- 主要类型：{}
+- 建议scope：{}
+- 优先概括整体目标，避免详细罗列
+
+错误示例（禁止）：
+"修复config.rs、main.rs、lib.rs等多个文件的问题"
+"更新src/ai/mod.rs, src/config/mod.rs等文件"
+任何文件名罗列
+
+正确示例：
+feat(ai): 添加AI响应优化和配置管理
+refactor(core): 重构模块架构提升性能  
+fix(auth): 修复用户认证流程问题
+
+变更详情：
+{}"#,
+        analysis.generate_summary(),
+        analysis.primary_change_type,
+        analysis.dominant_scope.as_deref().unwrap_or("core"),
+        analysis.create_optimized_prompt(original_diff)
+    );
+
+    summarized_template
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,7 +380,7 @@ mod tests {
         let test_text = "```bash\necho hello\n```";
         let captures = RE.captures(test_text);
         assert!(captures.is_some());
-        assert_eq!(captures.unwrap().get(1).unwrap().as_str(), "echo hello\n");
+        assert_eq!(captures.unwrap().get(1).unwrap().as_str(), "echo hello");
     }
 
     #[test]
@@ -450,5 +500,5 @@ mod tests {
     }
 }
 
-pub mod prompt;// 测试注释1
-// 更多测试内容
+pub mod prompt;
+pub mod diff_analyzer;
