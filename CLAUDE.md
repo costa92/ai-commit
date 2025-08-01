@@ -150,29 +150,34 @@ The `commit-prompt.txt` template has been optimized for strict Conventional Comm
 
 **Current Template Structure:**
 ```
-你必须严格按照以下格式输出，不允许任何偏差：
+严格按照以下格式输出commit message，禁止输出其他内容：
 
 <type>(<scope>): <subject>
 
 <body>
 
-要求：
-1. 第一行必须是 <type>(<scope>): <subject> 格式
-2. type 只能是：feat, fix, docs, style, refactor, test, chore
-3. subject 必须是中文，不超过50字
-4. 如果有 body，空一行后写详细说明
-5. 不要输出任何其他文字、解释或 markdown 标记
+关键要求：
+1. subject必须是中文，最多50个字符
+2. type只能是：feat, fix, docs, style, refactor, test, chore
+3. 当修改文件很多时，subject要高度概括，不要列举具体文件
+4. body可选，如需要可用1-2句中文简要说明
+5. 禁止输出英文、解释、markdown标记
 
-示例：
-test(unit): 添加comprehensive单元测试覆盖
-
-为所有模块添加了详细的单元测试，包括边界条件和错误处理测试。
+正确示例：
+feat(core): 重构核心模块架构
+fix(ui): 修复多个组件显示问题
+refactor(all): 优化代码结构和性能
+chore(deps): 更新依赖包版本
 
 以下是 git diff：
 {{git_diff}}
 ```
 
-This optimized template ensures AI models strictly follow Conventional Commits format without generating conversational responses.
+**优化重点：**
+- 专门处理**多文件修改场景**，要求AI高度概括而不是列举文件
+- 严格限制50字符以内的中文主题
+- 增强验证逻辑，检测和拒绝英文描述性输出
+- 提供简洁明确的示例，避免冗长说明
 
 ### Test Coverage Summary
 
