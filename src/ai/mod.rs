@@ -84,10 +84,13 @@ async fn make_request<T: Serialize>(
 
 // 提取消息清理逻辑
 fn clean_message(message: &str) -> String {
-    if let Some(caps) = RE.captures(message) {
+    // 只取第一行，去除多余内容
+    let first_line = message.lines().next().unwrap_or("").trim();
+    
+    if let Some(caps) = RE.captures(first_line) {
         caps.get(1).map_or("", |m| m.as_str()).trim().to_owned()
     } else {
-        message.trim().to_owned()
+        first_line.to_owned()
     }
 }
 
