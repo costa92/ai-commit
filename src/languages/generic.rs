@@ -3,6 +3,12 @@ use super::{Language, LanguageAnalyzer, LanguageFeature};
 /// 通用语言分析器，用于不支持的语言
 pub struct GenericAnalyzer;
 
+impl Default for GenericAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GenericAnalyzer {
     pub fn new() -> Self {
         GenericAnalyzer
@@ -14,19 +20,26 @@ impl GenericAnalyzer {
         let lower_line = line.to_lowercase();
 
         // 检测常见的代码模式
-        if lower_line.contains("function") || lower_line.contains("def ") || lower_line.contains("fn ") {
+        if lower_line.contains("function")
+            || lower_line.contains("def ")
+            || lower_line.contains("fn ")
+        {
             features.push("function".to_string());
         }
         if lower_line.contains("class") {
             features.push("class".to_string());
         }
-        if lower_line.contains("import") || lower_line.contains("include") || lower_line.contains("require") {
+        if lower_line.contains("import")
+            || lower_line.contains("include")
+            || lower_line.contains("require")
+        {
             features.push("import".to_string());
         }
         if lower_line.contains("export") {
             features.push("export".to_string());
         }
-        if lower_line.contains("const") || lower_line.contains("let") || lower_line.contains("var") {
+        if lower_line.contains("const") || lower_line.contains("let") || lower_line.contains("var")
+        {
             features.push("variable".to_string());
         }
 
@@ -62,7 +75,7 @@ impl GenericAnalyzer {
                 .next()
                 .unwrap_or(filename)
                 .to_lowercase();
-            
+
             if !suggestions.contains(&name_without_ext) && !name_without_ext.is_empty() {
                 suggestions.push(name_without_ext);
             }
@@ -85,17 +98,18 @@ impl LanguageAnalyzer for GenericAnalyzer {
         let trimmed_line = line.trim();
 
         // 跳过空行和明显的注释行
-        if trimmed_line.is_empty() || 
-           trimmed_line.starts_with("//") || 
-           trimmed_line.starts_with("#") || 
-           trimmed_line.starts_with("/*") ||
-           trimmed_line.starts_with("*") {
+        if trimmed_line.is_empty()
+            || trimmed_line.starts_with("//")
+            || trimmed_line.starts_with("#")
+            || trimmed_line.starts_with("/*")
+            || trimmed_line.starts_with("*")
+        {
             return features;
         }
 
         // 检测通用特征
         let detected_features = self.detect_generic_features(trimmed_line);
-        
+
         for feature_type in detected_features {
             features.push(LanguageFeature {
                 feature_type: feature_type.clone(),
@@ -180,7 +194,10 @@ impl LanguageAnalyzer for GenericAnalyzer {
             risks.push("依赖关系变更需要检查版本兼容性".to_string());
         }
 
-        if features.iter().any(|f| f.feature_type == "function" || f.feature_type == "class") {
+        if features
+            .iter()
+            .any(|f| f.feature_type == "function" || f.feature_type == "class")
+        {
             risks.push("核心逻辑变更需要充分测试".to_string());
         }
 
@@ -203,11 +220,22 @@ mod tests {
     }
 
     #[test]
+    fn test_default_implementation() {
+        // 测试 Default trait 实现
+        let analyzer = GenericAnalyzer;
+        assert_eq!(analyzer.language(), Language::Unknown);
+
+        // 确保 Default 和 new() 创建的实例功能相同
+        let new_analyzer = GenericAnalyzer::new();
+        assert_eq!(analyzer.language(), new_analyzer.language());
+    }
+
+    #[test]
     fn test_function_detection() {
         let analyzer = GenericAnalyzer::new();
         let line = "function processData() {";
         let features = analyzer.analyze_line(line, 10);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert_eq!(features[0].name, "generic_function");
@@ -218,7 +246,7 @@ mod tests {
         let analyzer = GenericAnalyzer::new();
         let line = "class UserService {";
         let features = analyzer.analyze_line(line, 5);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "class");
         assert_eq!(features[0].name, "generic_class");
@@ -229,7 +257,7 @@ mod tests {
         let analyzer = GenericAnalyzer::new();
         let line = "import something from 'module';";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "import");
         assert_eq!(features[0].name, "generic_import");
@@ -240,7 +268,7 @@ mod tests {
         let analyzer = GenericAnalyzer::new();
         let line = "some random code line";
         let features = analyzer.analyze_line(line, 15);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "code_change");
         assert_eq!(features[0].name, "generic_change");
@@ -249,15 +277,15 @@ mod tests {
     #[test]
     fn test_scope_suggestions() {
         let analyzer = GenericAnalyzer::new();
-        
+
         // 测试目录
         let suggestions = analyzer.extract_scope_suggestions("tests/unit/helper.py");
         assert!(suggestions.contains(&"test".to_string()));
-        
+
         // 服务目录
         let suggestions = analyzer.extract_scope_suggestions("src/services/api.php");
         assert!(suggestions.contains(&"service".to_string()));
-        
+
         // 工具目录
         let suggestions = analyzer.extract_scope_suggestions("utils/helper.rb");
         assert!(suggestions.contains(&"utils".to_string()));
@@ -280,7 +308,7 @@ mod tests {
                 description: "test".to_string(),
             },
         ];
-        
+
         let patterns = analyzer.analyze_change_patterns(&features);
         assert!(patterns.iter().any(|p| p.contains("函数或方法定义变更")));
         assert!(patterns.iter().any(|p| p.contains("依赖导入变更")));
@@ -290,7 +318,7 @@ mod tests {
     fn test_test_suggestions() {
         let analyzer = GenericAnalyzer::new();
         let features = vec![];
-        
+
         let suggestions = analyzer.generate_test_suggestions(&features);
         assert!(suggestions.iter().any(|s| s.contains("测试文件")));
         assert!(suggestions.iter().any(|s| s.contains("不会破坏现有功能")));
@@ -299,15 +327,13 @@ mod tests {
     #[test]
     fn test_risk_assessment() {
         let analyzer = GenericAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "export".to_string(),
-                name: "generic_export".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "export".to_string(),
+            name: "generic_export".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let risks = analyzer.assess_risks(&features);
         assert!(risks.iter().any(|r| r.contains("导出内容变更")));
         assert!(risks.iter().any(|r| r.contains("语言未知")));
@@ -318,7 +344,7 @@ mod tests {
         let analyzer = GenericAnalyzer::new();
         let features = analyzer.analyze_line("", 1);
         assert_eq!(features.len(), 0);
-        
+
         let features = analyzer.analyze_line("   ", 1);
         assert_eq!(features.len(), 0);
     }
@@ -326,17 +352,17 @@ mod tests {
     #[test]
     fn test_comment_line_handling() {
         let analyzer = GenericAnalyzer::new();
-        
+
         // 不同风格的注释
         let features = analyzer.analyze_line("// This is a comment", 1);
         assert_eq!(features.len(), 0);
-        
+
         let features = analyzer.analyze_line("# This is a comment", 1);
         assert_eq!(features.len(), 0);
-        
+
         let features = analyzer.analyze_line("/* This is a comment */", 1);
         assert_eq!(features.len(), 0);
-        
+
         let features = analyzer.analyze_line("* This is a comment", 1);
         assert_eq!(features.len(), 0);
     }

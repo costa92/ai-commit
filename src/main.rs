@@ -3,40 +3,39 @@ use ai_commit::ai::prompt;
 use ai_commit::cli::args::Args;
 use ai_commit::config::Config;
 use ai_commit::git;
-use ai_commit::languages::{CodeReviewService, Language};
+use ai_commit::languages::CodeReviewService;
+use chrono::Utc;
 use clap::Parser;
 use std::time::Instant;
 
 async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool> {
     // 返回 true 如果执行了代码审查操作，false 如果应该继续执行正常流程
-    
+
     // 显示语言统计
     if args.show_languages {
         let diff = git::get_git_diff().await?;
         let service = CodeReviewService::new();
         let report = service.review_git_changes(&diff);
-        
+
         println!("🔍 检测到的编程语言:");
         for (language, count) in &report.summary.languages_detected {
             println!("  {} : {} 个文件", language.as_str(), count);
         }
-        println!("\n📊 总计: {} 个文件, {} 个代码特征", 
-                report.summary.total_files, 
-                report.summary.total_features);
+        println!(
+            "\n📊 总计: {} 个文件, {} 个代码特征",
+            report.summary.total_files, report.summary.total_features
+        );
         return Ok(true);
     }
-    
+
     // 执行代码审查
     if args.code_review {
         let start_time = Instant::now();
         let service = CodeReviewService::new();
-        
+
         let report = if let Some(files) = &args.review_files {
             // 审查指定文件
-            let file_list: Vec<String> = files
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect();
+            let file_list: Vec<String> = files.split(',').map(|s| s.trim().to_string()).collect();
             service.analyze_files(&file_list)
         } else {
             // 审查 Git diff 中的变更
@@ -47,76 +46,95 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
             }
             service.review_git_changes(&diff)
         };
-        
+
         let elapsed_time = start_time.elapsed();
-        
+
         if config.debug {
             println!("代码审查完成，耗时: {:.2?}", elapsed_time);
         }
-        
+
         // 格式化输出
         let formatted_report = match args.review_format.as_str() {
             "json" => serde_json::to_string_pretty(&report)?,
             "text" => format_report_as_text(&report),
             _ => service.format_report(&report), // markdown (default)
         };
-        
+
         // 输出到文件或控制台
         if let Some(output_file) = &args.review_output {
             std::fs::write(output_file, &formatted_report)?;
             println!("✅ 代码审查报告已保存到: {}", output_file);
         } else {
-            println!("{}", formatted_report);
+            // 默认输出到 code-review 目录
+            let code_review_dir = std::path::Path::new("code-review");
+
+            // 如果 code-review 目录不存在，则创建它
+            if !code_review_dir.exists() {
+                std::fs::create_dir_all(code_review_dir)?;
+            }
+
+            // 生成带时间戳的文件名
+            let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+            let extension = match args.review_format.as_str() {
+                "json" => "json",
+                "text" => "txt",
+                _ => "md", // markdown (default)
+            };
+            let filename = format!("review_{}.{}", timestamp, extension);
+            let output_path = code_review_dir.join(filename);
+
+            std::fs::write(&output_path, &formatted_report)?;
+            println!("✅ 代码审查报告已保存到: {}", output_path.display());
         }
-        
+
         return Ok(true);
     }
-    
+
     Ok(false)
 }
 
 fn format_report_as_text(report: &ai_commit::languages::CodeReviewReport) -> String {
     let mut output = String::new();
-    
+
     output.push_str("=== 代码审查报告 ===\n\n");
-    
+
     // 摘要
     output.push_str(&format!("总文件数: {}\n", report.summary.total_files));
     output.push_str(&format!("检测特征数: {}\n", report.summary.total_features));
     output.push_str("检测到的语言:\n");
-    
+
     for (language, count) in &report.summary.languages_detected {
         output.push_str(&format!("  - {}: {} 个文件\n", language.as_str(), count));
     }
-    output.push_str("\n");
-    
+    output.push('\n');
+
     // 变更模式
     if !report.summary.common_patterns.is_empty() {
         output.push_str("变更模式:\n");
         for pattern in &report.summary.common_patterns {
             output.push_str(&format!("  - {}\n", pattern));
         }
-        output.push_str("\n");
+        output.push('\n');
     }
-    
+
     // 风险评估
     if !report.summary.overall_risks.is_empty() {
         output.push_str("风险评估:\n");
         for risk in &report.summary.overall_risks {
             output.push_str(&format!("  - {}\n", risk));
         }
-        output.push_str("\n");
+        output.push('\n');
     }
-    
+
     // 测试建议
     if !report.summary.test_suggestions.is_empty() {
         output.push_str("测试建议:\n");
         for suggestion in &report.summary.test_suggestions {
             output.push_str(&format!("  - {}\n", suggestion));
         }
-        output.push_str("\n");
+        output.push('\n');
     }
-    
+
     output
 }
 

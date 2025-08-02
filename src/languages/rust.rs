@@ -3,18 +3,33 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 // Rust 语言特定的正则表达式
-static RUST_FN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)").unwrap());
-static RUST_STRUCT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?struct\s+(\w+)").unwrap());
-static RUST_ENUM_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?enum\s+(\w+)").unwrap());
-static RUST_TRAIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?trait\s+(\w+)").unwrap());
-static RUST_IMPL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*impl\s+(?:<[^>]*>\s+)?(?:(\w+)\s+for\s+)?(\w+)").unwrap());
-static RUST_MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?mod\s+(\w+)").unwrap());
+static RUST_FN_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+(\w+)").unwrap());
+static RUST_STRUCT_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?struct\s+(\w+)").unwrap());
+static RUST_ENUM_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?enum\s+(\w+)").unwrap());
+static RUST_TRAIT_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?trait\s+(\w+)").unwrap());
+static RUST_IMPL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*impl\s+(?:<[^>]*>\s+)?(?:(\w+)\s+for\s+)?(\w+)").unwrap());
+static RUST_MOD_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?mod\s+(\w+)").unwrap());
 static RUST_USE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*use\s+([^;]+)").unwrap());
-static RUST_CONST_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?const\s+(\w+)").unwrap());
-static RUST_STATIC_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?static\s+(\w+)").unwrap());
-static RUST_TYPE_ALIAS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?type\s+(\w+)\s*=").unwrap());
+static RUST_CONST_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?const\s+(\w+)").unwrap());
+static RUST_STATIC_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?static\s+(\w+)").unwrap());
+static RUST_TYPE_ALIAS_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?type\s+(\w+)\s*=").unwrap());
 
 pub struct RustAnalyzer;
+
+impl Default for RustAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl RustAnalyzer {
     pub fn new() -> Self {
@@ -24,7 +39,7 @@ impl RustAnalyzer {
     /// 检测函数的可见性和特殊属性
     fn analyze_function_attributes(&self, line: &str) -> Vec<String> {
         let mut attributes = Vec::new();
-        
+
         if line.contains("pub") {
             attributes.push("public".to_string());
         }
@@ -37,7 +52,7 @@ impl RustAnalyzer {
         if line.contains("const") {
             attributes.push("const".to_string());
         }
-        
+
         attributes
     }
 
@@ -74,7 +89,7 @@ impl RustAnalyzer {
                 .next()
                 .unwrap_or(filename)
                 .to_lowercase();
-            
+
             match name_without_ext.as_str() {
                 "lib" => suggestions.push("library".to_string()),
                 "main" => suggestions.push("main".to_string()),
@@ -109,8 +124,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         let trimmed_line = line.trim();
 
         // 跳过注释行
-        if trimmed_line.starts_with("//") || trimmed_line.starts_with("/*") || 
-           trimmed_line.starts_with("*") || trimmed_line.starts_with("///") {
+        if trimmed_line.starts_with("//")
+            || trimmed_line.starts_with("/*")
+            || trimmed_line.starts_with("*")
+            || trimmed_line.starts_with("///")
+        {
             return features;
         }
 
@@ -129,7 +147,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_MOD_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "module".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust module declaration for code organization".to_string(),
             });
@@ -144,7 +166,7 @@ impl LanguageAnalyzer for RustAnalyzer {
             } else {
                 format!("Rust function definition ({})", attributes.join(", "))
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: "function".to_string(),
                 name: func_name.to_string(),
@@ -157,7 +179,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_STRUCT_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "struct".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust struct definition for data structure".to_string(),
             });
@@ -167,7 +193,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_ENUM_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "enum".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust enum definition for algebraic data types".to_string(),
             });
@@ -177,7 +207,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_TRAIT_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "trait".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust trait definition for shared behavior".to_string(),
             });
@@ -186,12 +220,18 @@ impl LanguageAnalyzer for RustAnalyzer {
         // Impl 块
         if let Some(caps) = RUST_IMPL_REGEX.captures(trimmed_line) {
             let impl_name = if let Some(trait_name) = caps.get(1) {
-                format!("{} for {}", trait_name.as_str(), 
-                       caps.get(2).map(|m| m.as_str()).unwrap_or("unknown"))
+                format!(
+                    "{} for {}",
+                    trait_name.as_str(),
+                    caps.get(2).map(|m| m.as_str()).unwrap_or("unknown")
+                )
             } else {
-                caps.get(2).map(|m| m.as_str()).unwrap_or("unknown").to_string()
+                caps.get(2)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: "impl".to_string(),
                 name: impl_name,
@@ -204,7 +244,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_CONST_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "const".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust constant definition with compile-time evaluation".to_string(),
             });
@@ -214,7 +258,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_STATIC_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "static".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust static variable with 'static lifetime".to_string(),
             });
@@ -224,7 +272,11 @@ impl LanguageAnalyzer for RustAnalyzer {
         if let Some(caps) = RUST_TYPE_ALIAS_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "type_alias".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Rust type alias for complex type definitions".to_string(),
             });
@@ -294,7 +346,10 @@ impl LanguageAnalyzer for RustAnalyzer {
         for feature in features {
             match feature.feature_type.as_str() {
                 "function" => {
-                    suggestions.push(format!("为 {} 函数添加单元测试，包括边界条件", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 函数添加单元测试，包括边界条件",
+                        feature.name
+                    ));
                     if feature.description.contains("unsafe") {
                         suggestions.push("为unsafe函数添加额外的安全性测试".to_string());
                     }
@@ -349,7 +404,10 @@ impl LanguageAnalyzer for RustAnalyzer {
             if feature.description.contains("public") || feature.name.contains("pub") {
                 match feature.feature_type.as_str() {
                     "function" | "struct" | "enum" | "trait" => {
-                        risks.push(format!("公共 {} {} 的变更可能破坏API兼容性", feature.feature_type, feature.name));
+                        risks.push(format!(
+                            "公共 {} {} 的变更可能破坏API兼容性",
+                            feature.feature_type, feature.name
+                        ));
                     }
                     _ => {}
                 }
@@ -382,9 +440,9 @@ impl LanguageAnalyzer for RustAnalyzer {
         }
 
         // 生命周期和借用检查风险
-        let has_complex_types = features.iter().any(|f| 
-            f.name.contains("&") || f.name.contains("'") || 
-            f.description.contains("lifetime"));
+        let has_complex_types = features.iter().any(|f| {
+            f.name.contains("&") || f.name.contains("'") || f.description.contains("lifetime")
+        });
         if has_complex_types {
             risks.push("涉及生命周期的变更需要特别关注借用检查器的影响".to_string());
         }
@@ -404,11 +462,28 @@ mod tests {
     }
 
     #[test]
+    fn test_default_implementation() {
+        // 测试 Default trait 实现
+        let analyzer = RustAnalyzer;
+        assert_eq!(analyzer.language(), Language::Rust);
+
+        // 确保 Default 和 new() 创建的实例功能相同
+        let new_analyzer = RustAnalyzer::new();
+        assert_eq!(analyzer.language(), new_analyzer.language());
+
+        // 测试默认实例能正常工作
+        let line = "fn test() {}";
+        let features_default = analyzer.analyze_line(line, 1);
+        let features_new = new_analyzer.analyze_line(line, 1);
+        assert_eq!(features_default.len(), features_new.len());
+    }
+
+    #[test]
     fn test_function_detection() {
         let analyzer = RustAnalyzer::new();
         let line = "pub async fn process_data(input: &str) -> Result<String, Error> {";
         let features = analyzer.analyze_line(line, 10);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert_eq!(features[0].name, "process_data");
@@ -421,7 +496,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "pub struct User {";
         let features = analyzer.analyze_line(line, 15);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "struct");
         assert_eq!(features[0].name, "User");
@@ -432,7 +507,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "enum Status {";
         let features = analyzer.analyze_line(line, 20);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "enum");
         assert_eq!(features[0].name, "Status");
@@ -443,7 +518,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "pub trait Repository {";
         let features = analyzer.analyze_line(line, 25);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "trait");
         assert_eq!(features[0].name, "Repository");
@@ -454,7 +529,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "impl Repository for UserRepository {";
         let features = analyzer.analyze_line(line, 30);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "impl");
         assert!(features[0].name.contains("Repository for UserRepository"));
@@ -465,7 +540,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "use std::collections::HashMap;";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "use");
         assert_eq!(features[0].name, "std::collections::HashMap");
@@ -476,7 +551,7 @@ mod tests {
         let analyzer = RustAnalyzer::new();
         let line = "pub mod auth;";
         let features = analyzer.analyze_line(line, 5);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "module");
         assert_eq!(features[0].name, "auth");
@@ -485,15 +560,15 @@ mod tests {
     #[test]
     fn test_scope_suggestions() {
         let analyzer = RustAnalyzer::new();
-        
+
         // lib.rs
         let suggestions = analyzer.extract_scope_suggestions("src/lib.rs");
         assert!(suggestions.contains(&"library".to_string()));
-        
+
         // main.rs
         let suggestions = analyzer.extract_scope_suggestions("src/main.rs");
         assert!(suggestions.contains(&"main".to_string()));
-        
+
         // 测试文件
         let suggestions = analyzer.extract_scope_suggestions("tests/integration_test.rs");
         assert!(suggestions.contains(&"test".to_string()));
@@ -516,7 +591,7 @@ mod tests {
                 description: "test".to_string(),
             },
         ];
-        
+
         let patterns = analyzer.analyze_change_patterns(&features);
         assert!(patterns.iter().any(|p| p.contains("Trait定义变更")));
         assert!(patterns.iter().any(|p| p.contains("结构体定义变更")));
@@ -525,15 +600,13 @@ mod tests {
     #[test]
     fn test_test_suggestions() {
         let analyzer = RustAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "function".to_string(),
-                name: "process_data".to_string(),
-                line_number: Some(1),
-                description: "Rust function definition (unsafe)".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "function".to_string(),
+            name: "process_data".to_string(),
+            line_number: Some(1),
+            description: "Rust function definition (unsafe)".to_string(),
+        }];
+
         let suggestions = analyzer.generate_test_suggestions(&features);
         assert!(suggestions.iter().any(|s| s.contains("cargo test")));
         assert!(suggestions.iter().any(|s| s.contains("unsafe函数")));
@@ -542,15 +615,13 @@ mod tests {
     #[test]
     fn test_risk_assessment() {
         let analyzer = RustAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "trait".to_string(),
-                name: "PublicTrait".to_string(),
-                line_number: Some(1),
-                description: "Rust trait definition (public)".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "trait".to_string(),
+            name: "PublicTrait".to_string(),
+            line_number: Some(1),
+            description: "Rust trait definition (public)".to_string(),
+        }];
+
         let risks = analyzer.assess_risks(&features);
         assert!(risks.iter().any(|r| r.contains("Trait变更")));
     }

@@ -68,6 +68,11 @@ fn test_config_integration() {
         worktree_remove: None,
         worktree_path: None,
         worktree_clear: false,
+        code_review: false,
+        review_format: "markdown".to_string(),
+        review_output: None,
+        review_files: None,
+        show_languages: false,
     };
 
     let mut config = Config::new();
@@ -293,6 +298,11 @@ fn test_configuration_priority_integration() {
         worktree_remove: None,
         worktree_path: None,
         worktree_clear: false,
+        code_review: false,
+        review_format: "markdown".to_string(),
+        review_output: None,
+        review_files: None,
+        show_languages: false,
     };
 
     config.update_from_args(&args);

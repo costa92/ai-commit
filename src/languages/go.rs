@@ -5,14 +5,24 @@ use regex::Regex;
 // Go 语言特定的正则表达式
 static GO_PACKAGE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*package\s+(\w+)").unwrap());
 static GO_FUNC_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*func\s+(\w*\s*)?\(").unwrap());
-static GO_STRUCT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+struct").unwrap());
-static GO_INTERFACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+interface").unwrap());
+static GO_STRUCT_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+struct").unwrap());
+static GO_INTERFACE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+interface").unwrap());
 static GO_CONST_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*const\s+(\w+)").unwrap());
 static GO_VAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*var\s+(\w+)").unwrap());
-static GO_IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^\s*import\s+(?:"([^"]+)"|(\w+)\s+"([^"]+)")"#).unwrap());
-static GO_METHOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*func\s+\([^)]+\)\s+(\w+)").unwrap());
+static GO_IMPORT_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*import\s+(?:"([^"]+)"|(\w+)\s+"([^"]+)")"#).unwrap());
+static GO_METHOD_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*func\s+\([^)]+\)\s+(\w+)").unwrap());
 
 pub struct GoAnalyzer;
+
+impl Default for GoAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl GoAnalyzer {
     pub fn new() -> Self {
@@ -21,7 +31,7 @@ impl GoAnalyzer {
 
     /// 提取函数名
     fn extract_function_name(&self, line: &str) -> Option<String> {
-        if let Some(caps) = GO_FUNC_REGEX.captures(line) {
+        if let Some(_caps) = GO_FUNC_REGEX.captures(line) {
             // 提取完整的函数声明
             let func_part = line.split('(').next().unwrap_or(line);
             Some(func_part.trim().to_string())
@@ -44,7 +54,7 @@ impl GoAnalyzer {
         let path_parts: Vec<&str> = file_path.split('/').collect();
         let mut suggestions = Vec::new();
 
-        match path_parts.get(0) {
+        match path_parts.first() {
             Some(&"cmd") => {
                 suggestions.push("cli".to_string());
                 if let Some(app_name) = path_parts.get(1) {
@@ -98,15 +108,24 @@ impl LanguageAnalyzer for GoAnalyzer {
         if let Some(caps) = GO_PACKAGE_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "package".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
-                description: "Go package declaration defining module scope and namespace".to_string(),
+                description: "Go package declaration defining module scope and namespace"
+                    .to_string(),
             });
         }
 
         // Import 声明
         if let Some(caps) = GO_IMPORT_REGEX.captures(trimmed_line) {
-            let import_path = caps.get(1).or(caps.get(3)).map(|m| m.as_str()).unwrap_or("unknown");
+            let import_path = caps
+                .get(1)
+                .or(caps.get(3))
+                .map(|m| m.as_str())
+                .unwrap_or("unknown");
             features.push(LanguageFeature {
                 feature_type: "import".to_string(),
                 name: import_path.to_string(),
@@ -138,9 +157,14 @@ impl LanguageAnalyzer for GoAnalyzer {
         if let Some(caps) = GO_STRUCT_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "struct".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
-                description: "Go struct type definition for data modeling and encapsulation".to_string(),
+                description: "Go struct type definition for data modeling and encapsulation"
+                    .to_string(),
             });
         }
 
@@ -148,9 +172,14 @@ impl LanguageAnalyzer for GoAnalyzer {
         if let Some(caps) = GO_INTERFACE_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "interface".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
-                description: "Go interface definition for behavior contracts and polymorphism".to_string(),
+                description: "Go interface definition for behavior contracts and polymorphism"
+                    .to_string(),
             });
         }
 
@@ -158,7 +187,11 @@ impl LanguageAnalyzer for GoAnalyzer {
         if let Some(caps) = GO_CONST_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "const".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Go constant declaration for immutable values".to_string(),
             });
@@ -168,7 +201,11 @@ impl LanguageAnalyzer for GoAnalyzer {
         if let Some(caps) = GO_VAR_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "variable".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "Go variable declaration with optional initialization".to_string(),
             });
@@ -185,7 +222,9 @@ impl LanguageAnalyzer for GoAnalyzer {
         let mut patterns = Vec::new();
 
         let has_package = features.iter().any(|f| f.feature_type == "package");
-        let has_functions = features.iter().any(|f| f.feature_type == "function" || f.feature_type == "method");
+        let has_functions = features
+            .iter()
+            .any(|f| f.feature_type == "function" || f.feature_type == "method");
         let has_structs = features.iter().any(|f| f.feature_type == "struct");
         let has_interfaces = features.iter().any(|f| f.feature_type == "interface");
         let has_imports = features.iter().any(|f| f.feature_type == "import");
@@ -228,11 +267,17 @@ impl LanguageAnalyzer for GoAnalyzer {
         for feature in features {
             match feature.feature_type.as_str() {
                 "function" | "method" => {
-                    suggestions.push(format!("为 {} 添加单元测试，覆盖正常和异常情况", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 添加单元测试，覆盖正常和异常情况",
+                        feature.name
+                    ));
                     suggestions.push("测试函数的输入验证和错误处理".to_string());
                 }
                 "struct" => {
-                    suggestions.push(format!("测试 {} 结构体的创建、序列化和反序列化", feature.name));
+                    suggestions.push(format!(
+                        "测试 {} 结构体的创建、序列化和反序列化",
+                        feature.name
+                    ));
                     suggestions.push("验证结构体字段的约束和验证逻辑".to_string());
                 }
                 "interface" => {
@@ -264,10 +309,18 @@ impl LanguageAnalyzer for GoAnalyzer {
 
         // 公共API变更风险
         for feature in features {
-            if feature.name.chars().next().map_or(false, |c| c.is_uppercase()) {
+            if feature
+                .name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_uppercase())
+            {
                 match feature.feature_type.as_str() {
                     "function" | "struct" | "interface" => {
-                        risks.push(format!("公共 {} {} 的变更可能影响外部调用者", feature.feature_type, feature.name));
+                        risks.push(format!(
+                            "公共 {} {} 的变更可能影响外部调用者",
+                            feature.feature_type, feature.name
+                        ));
                     }
                     _ => {}
                 }
@@ -285,9 +338,11 @@ impl LanguageAnalyzer for GoAnalyzer {
         }
 
         // 并发安全风险
-        if features.iter().any(|f| f.name.to_lowercase().contains("goroutine") || 
-                                   f.name.to_lowercase().contains("channel") ||
-                                   f.name.to_lowercase().contains("mutex")) {
+        if features.iter().any(|f| {
+            f.name.to_lowercase().contains("goroutine")
+                || f.name.to_lowercase().contains("channel")
+                || f.name.to_lowercase().contains("mutex")
+        }) {
             risks.push("涉及并发的代码变更需要特别关注竞态条件和死锁问题".to_string());
         }
 
@@ -306,11 +361,28 @@ mod tests {
     }
 
     #[test]
+    fn test_default_implementation() {
+        // 测试 Default trait 实现
+        let analyzer = GoAnalyzer;
+        assert_eq!(analyzer.language(), Language::Go);
+
+        // 确保 Default 和 new() 创建的实例功能相同
+        let new_analyzer = GoAnalyzer::new();
+        assert_eq!(analyzer.language(), new_analyzer.language());
+
+        // 测试默认实例能正常工作
+        let line = "func test() {}";
+        let features_default = analyzer.analyze_line(line, 1);
+        let features_new = new_analyzer.analyze_line(line, 1);
+        assert_eq!(features_default.len(), features_new.len());
+    }
+
+    #[test]
     fn test_package_detection() {
         let analyzer = GoAnalyzer::new();
         let line = "package main";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "package");
         assert_eq!(features[0].name, "main");
@@ -321,7 +393,7 @@ mod tests {
         let analyzer = GoAnalyzer::new();
         let line = "func NewHandler(db *sql.DB) *Handler {";
         let features = analyzer.analyze_line(line, 10);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert!(features[0].name.contains("NewHandler"));
@@ -332,7 +404,7 @@ mod tests {
         let analyzer = GoAnalyzer::new();
         let line = "type User struct {";
         let features = analyzer.analyze_line(line, 15);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "struct");
         assert_eq!(features[0].name, "User");
@@ -343,7 +415,7 @@ mod tests {
         let analyzer = GoAnalyzer::new();
         let line = "type Repository interface {";
         let features = analyzer.analyze_line(line, 20);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "interface");
         assert_eq!(features[0].name, "Repository");
@@ -354,7 +426,7 @@ mod tests {
         let analyzer = GoAnalyzer::new();
         let line = "func (u *User) GetName() string {";
         let features = analyzer.analyze_line(line, 25);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "method");
         assert!(features[0].name.contains("GetName"));
@@ -363,17 +435,17 @@ mod tests {
     #[test]
     fn test_scope_suggestions() {
         let analyzer = GoAnalyzer::new();
-        
+
         // cmd 目录
         let suggestions = analyzer.extract_scope_suggestions("cmd/server/main.go");
         assert!(suggestions.contains(&"cli".to_string()));
         assert!(suggestions.contains(&"server".to_string()));
-        
+
         // pkg 目录
         let suggestions = analyzer.extract_scope_suggestions("pkg/auth/handler.go");
         assert!(suggestions.contains(&"library".to_string()));
         assert!(suggestions.contains(&"auth".to_string()));
-        
+
         // internal 目录
         let suggestions = analyzer.extract_scope_suggestions("internal/config/config.go");
         assert!(suggestions.contains(&"internal".to_string()));
@@ -397,7 +469,7 @@ mod tests {
                 description: "test".to_string(),
             },
         ];
-        
+
         let patterns = analyzer.analyze_change_patterns(&features);
         assert!(patterns.iter().any(|p| p.contains("接口定义变更")));
         assert!(patterns.iter().any(|p| p.contains("数据结构定义变更")));
@@ -406,15 +478,13 @@ mod tests {
     #[test]
     fn test_test_suggestions() {
         let analyzer = GoAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "function".to_string(),
-                name: "ProcessData".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "function".to_string(),
+            name: "ProcessData".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let suggestions = analyzer.generate_test_suggestions(&features);
         assert!(suggestions.iter().any(|s| s.contains("*_test.go")));
         assert!(suggestions.iter().any(|s| s.contains("表驱动测试")));
@@ -423,15 +493,13 @@ mod tests {
     #[test]
     fn test_risk_assessment() {
         let analyzer = GoAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "interface".to_string(),
-                name: "PublicInterface".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "interface".to_string(),
+            name: "PublicInterface".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let risks = analyzer.assess_risks(&features);
         assert!(risks.iter().any(|r| r.contains("接口变更")));
     }

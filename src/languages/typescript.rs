@@ -3,18 +3,36 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 // TypeScript 语言特定的正则表达式
-static TS_INTERFACE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?interface\s+(\w+)").unwrap());
-static TS_CLASS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)").unwrap());
-static TS_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)").unwrap());
-static TS_ARROW_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\([^)]*\)\s*)?=>").unwrap());
-static TS_METHOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:public|private|protected|static)?\s*(?:async\s+)?(\w+)\s*\(").unwrap());
-static TS_TYPE_ALIAS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?type\s+(\w+)\s*=").unwrap());
-static TS_ENUM_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?enum\s+(\w+)").unwrap());
-static TS_IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^\s*import\s+(?:\{[^}]+\}|\w+|\*\s+as\s+\w+)\s+from\s+['"]([^'"]+)['"]"#).unwrap());
-static TS_EXPORT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*export\s+(?:\{[^}]+\}|(?:default\s+)?(?:class|function|interface|type|enum|const|let|var)\s+(\w+))").unwrap());
-static TS_COMPONENT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:const|function)\s+(\w+).*React\.").unwrap());
+static TS_INTERFACE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?interface\s+(\w+)").unwrap());
+static TS_CLASS_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)").unwrap());
+static TS_FUNCTION_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)").unwrap());
+static TS_ARROW_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\([^)]*\)\s*)?=>").unwrap()
+});
+static TS_METHOD_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:public|private|protected|static)?\s*(?:async\s+)?(\w+)\s*\(").unwrap()
+});
+static TS_TYPE_ALIAS_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?type\s+(\w+)\s*=").unwrap());
+static TS_ENUM_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?enum\s+(\w+)").unwrap());
+static TS_IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"^\s*import\s+(?:\{[^}]+\}|\w+|\*\s+as\s+\w+)\s+from\s+['"]([^'"]+)['"]"#).unwrap()
+});
+static TS_EXPORT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*export\s+(?:\{[^}]+\}|(?:default\s+)?(?:class|function|interface|type|enum|const|let|var)\s+(\w+))").unwrap()
+});
 
 pub struct TypeScriptAnalyzer;
+
+impl Default for TypeScriptAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl TypeScriptAnalyzer {
     pub fn new() -> Self {
@@ -23,12 +41,12 @@ impl TypeScriptAnalyzer {
 
     /// 检测是否为 React 组件
     fn is_react_component(&self, line: &str) -> bool {
-        line.contains("React.") || 
-        line.contains("JSX.") || 
-        line.contains("ReactNode") ||
-        line.contains("Component") ||
-        line.contains("useState") ||
-        line.contains("useEffect")
+        line.contains("React.")
+            || line.contains("JSX.")
+            || line.contains("ReactNode")
+            || line.contains("Component")
+            || line.contains("useState")
+            || line.contains("useEffect")
     }
 
     /// 提取函数名（包括箭头函数）
@@ -36,7 +54,8 @@ impl TypeScriptAnalyzer {
         if let Some(caps) = TS_FUNCTION_REGEX.captures(line) {
             caps.get(1).map(|m| m.as_str().to_string())
         } else if let Some(caps) = TS_ARROW_FUNCTION_REGEX.captures(line) {
-            caps.get(1).map(|m| format!("{} (arrow function)", m.as_str()))
+            caps.get(1)
+                .map(|m| format!("{} (arrow function)", m.as_str()))
         } else {
             None
         }
@@ -76,14 +95,20 @@ impl TypeScriptAnalyzer {
                 .next()
                 .unwrap_or(filename)
                 .to_lowercase();
-            
+
             match name_without_ext.as_str() {
                 name if name.ends_with("component") => suggestions.push("component".to_string()),
                 name if name.ends_with("hook") => suggestions.push("hook".to_string()),
                 name if name.ends_with("service") => suggestions.push("service".to_string()),
-                name if name.ends_with("util") || name.ends_with("utils") => suggestions.push("utils".to_string()),
-                name if name.ends_with("type") || name.ends_with("types") => suggestions.push("types".to_string()),
-                name if name.contains("test") || name.contains("spec") => suggestions.push("test".to_string()),
+                name if name.ends_with("util") || name.ends_with("utils") => {
+                    suggestions.push("utils".to_string())
+                }
+                name if name.ends_with("type") || name.ends_with("types") => {
+                    suggestions.push("types".to_string())
+                }
+                name if name.contains("test") || name.contains("spec") => {
+                    suggestions.push("test".to_string())
+                }
                 _ => {
                     if !suggestions.contains(&name_without_ext) {
                         suggestions.push(name_without_ext);
@@ -109,7 +134,10 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         let trimmed_line = line.trim();
 
         // 跳过注释行
-        if trimmed_line.starts_with("//") || trimmed_line.starts_with("/*") || trimmed_line.starts_with("*") {
+        if trimmed_line.starts_with("//")
+            || trimmed_line.starts_with("/*")
+            || trimmed_line.starts_with("*")
+        {
             return features;
         }
 
@@ -128,7 +156,11 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         if let Some(caps) = TS_INTERFACE_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "interface".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "TypeScript interface definition for type contracts".to_string(),
             });
@@ -142,7 +174,7 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
             } else {
                 "class"
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: feature_type.to_string(),
                 name: class_name.to_string(),
@@ -158,7 +190,7 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
             } else {
                 "function"
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: feature_type.to_string(),
                 name: func_name,
@@ -172,7 +204,11 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
             if !trimmed_line.contains("function") && !trimmed_line.contains("class") {
                 features.push(LanguageFeature {
                     feature_type: "method".to_string(),
-                    name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                    name: caps
+                        .get(1)
+                        .map(|m| m.as_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
                     line_number: Some(line_number),
                     description: "TypeScript class method with access modifiers".to_string(),
                 });
@@ -183,7 +219,11 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         if let Some(caps) = TS_TYPE_ALIAS_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "type_alias".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "TypeScript type alias for complex type definitions".to_string(),
             });
@@ -193,7 +233,11 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         if let Some(caps) = TS_ENUM_REGEX.captures(trimmed_line) {
             features.push(LanguageFeature {
                 feature_type: "enum".to_string(),
-                name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                name: caps
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
                 line_number: Some(line_number),
                 description: "TypeScript enum definition for named constants".to_string(),
             });
@@ -271,20 +315,32 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         for feature in features {
             match feature.feature_type.as_str() {
                 "react_component" => {
-                    suggestions.push(format!("为 {} 组件添加 React Testing Library 测试", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 组件添加 React Testing Library 测试",
+                        feature.name
+                    ));
                     suggestions.push("测试组件的渲染、交互和状态变化".to_string());
                     suggestions.push("添加快照测试确保UI一致性".to_string());
                 }
                 "function" => {
-                    suggestions.push(format!("为 {} 函数添加单元测试，覆盖各种输入场景", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 函数添加单元测试，覆盖各种输入场景",
+                        feature.name
+                    ));
                     suggestions.push("测试函数的类型安全和边界条件".to_string());
                 }
                 "class" => {
-                    suggestions.push(format!("测试 {} 类的实例化、方法调用和状态管理", feature.name));
+                    suggestions.push(format!(
+                        "测试 {} 类的实例化、方法调用和状态管理",
+                        feature.name
+                    ));
                     suggestions.push("验证类的继承关系和多态性".to_string());
                 }
                 "interface" | "type_alias" => {
-                    suggestions.push(format!("为 {} 类型创建类型测试，确保类型安全", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 类型创建类型测试，确保类型安全",
+                        feature.name
+                    ));
                     suggestions.push("验证类型约束和类型推断的正确性".to_string());
                 }
                 _ => {}
@@ -313,14 +369,20 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         }
 
         // 类型定义风险
-        if features.iter().any(|f| f.feature_type == "interface" || f.feature_type == "type_alias") {
+        if features
+            .iter()
+            .any(|f| f.feature_type == "interface" || f.feature_type == "type_alias")
+        {
             risks.push("类型定义变更可能导致现有代码的类型检查失败".to_string());
         }
 
         // 公共API风险
         for feature in features {
             if feature.feature_type == "export" {
-                risks.push(format!("导出的 {} 变更可能影响依赖此模块的其他代码", feature.name));
+                risks.push(format!(
+                    "导出的 {} 变更可能影响依赖此模块的其他代码",
+                    feature.name
+                ));
             }
         }
 
@@ -330,16 +392,20 @@ impl LanguageAnalyzer for TypeScriptAnalyzer {
         }
 
         // 异步代码风险
-        let has_async = features.iter().any(|f| f.name.to_lowercase().contains("async") || 
-                                              f.description.to_lowercase().contains("async"));
+        let has_async = features.iter().any(|f| {
+            f.name.to_lowercase().contains("async")
+                || f.description.to_lowercase().contains("async")
+        });
         if has_async {
             risks.push("异步代码变更需要特别关注错误处理和竞态条件".to_string());
         }
 
         // 状态管理风险
-        let has_state = features.iter().any(|f| f.name.to_lowercase().contains("state") ||
-                                               f.name.to_lowercase().contains("store") ||
-                                               f.name.to_lowercase().contains("reducer"));
+        let has_state = features.iter().any(|f| {
+            f.name.to_lowercase().contains("state")
+                || f.name.to_lowercase().contains("store")
+                || f.name.to_lowercase().contains("reducer")
+        });
         if has_state {
             risks.push("状态管理变更可能影响应用的数据流和一致性".to_string());
         }
@@ -359,11 +425,28 @@ mod tests {
     }
 
     #[test]
+    fn test_default_implementation() {
+        // 测试 Default trait 实现
+        let analyzer = TypeScriptAnalyzer;
+        assert_eq!(analyzer.language(), Language::TypeScript);
+
+        // 确保 Default 和 new() 创建的实例功能相同
+        let new_analyzer = TypeScriptAnalyzer::new();
+        assert_eq!(analyzer.language(), new_analyzer.language());
+
+        // 测试默认实例能正常工作
+        let line = "function test(): void {}";
+        let features_default = analyzer.analyze_line(line, 1);
+        let features_new = new_analyzer.analyze_line(line, 1);
+        assert_eq!(features_default.len(), features_new.len());
+    }
+
+    #[test]
     fn test_interface_detection() {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "export interface User {";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "interface");
         assert_eq!(features[0].name, "User");
@@ -374,7 +457,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "export class UserService {";
         let features = analyzer.analyze_line(line, 5);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "class");
         assert_eq!(features[0].name, "UserService");
@@ -385,7 +468,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "export function processData(input: string): Promise<Result> {";
         let features = analyzer.analyze_line(line, 10);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert_eq!(features[0].name, "processData");
@@ -396,7 +479,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "const handleClick = (event: MouseEvent) => {";
         let features = analyzer.analyze_line(line, 15);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert!(features[0].name.contains("handleClick"));
@@ -408,7 +491,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "const UserProfile: React.FC<Props> = ({ user }) => {";
         let features = analyzer.analyze_line(line, 20);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "react_component");
         assert!(features[0].name.contains("UserProfile"));
@@ -419,7 +502,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "export type ApiResponse<T> = {";
         let features = analyzer.analyze_line(line, 25);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "type_alias");
         assert_eq!(features[0].name, "ApiResponse");
@@ -430,9 +513,9 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "enum UserRole {";
         let features = analyzer.analyze_line(line, 30);
-        
+
         assert_eq!(features.len(), 1);
-        assert_eq!(features[0].feature_type, "enum");  
+        assert_eq!(features[0].feature_type, "enum");
         assert_eq!(features[0].name, "UserRole");
     }
 
@@ -441,7 +524,7 @@ mod tests {
         let analyzer = TypeScriptAnalyzer::new();
         let line = "import { useState, useEffect } from 'react';";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "import");
         assert_eq!(features[0].name, "react");
@@ -450,15 +533,18 @@ mod tests {
     #[test]
     fn test_scope_suggestions() {
         let analyzer = TypeScriptAnalyzer::new();
-        
+
         // React 组件
         let suggestions = analyzer.extract_scope_suggestions("src/components/UserProfile.tsx");
-        assert!(suggestions.contains(&"ui".to_string()) || suggestions.contains(&"components".to_string()));
-        
+        assert!(
+            suggestions.contains(&"ui".to_string())
+                || suggestions.contains(&"components".to_string())
+        );
+
         // 服务层
         let suggestions = analyzer.extract_scope_suggestions("src/services/api.ts");
         assert!(suggestions.contains(&"service".to_string()));
-        
+
         // Hooks
         let suggestions = analyzer.extract_scope_suggestions("src/hooks/useAuth.ts");
         assert!(suggestions.contains(&"hook".to_string()));
@@ -481,7 +567,7 @@ mod tests {
                 description: "test".to_string(),
             },
         ];
-        
+
         let patterns = analyzer.analyze_change_patterns(&features);
         assert!(patterns.iter().any(|p| p.contains("React组件变更")));
         assert!(patterns.iter().any(|p| p.contains("类型定义变更")));
@@ -490,33 +576,35 @@ mod tests {
     #[test]
     fn test_test_suggestions() {
         let analyzer = TypeScriptAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "react_component".to_string(),
-                name: "Button".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "react_component".to_string(),
+            name: "Button".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let suggestions = analyzer.generate_test_suggestions(&features);
-        assert!(suggestions.iter().any(|s| s.contains("React Testing Library")));
-        assert!(suggestions.iter().any(|s| s.contains(".test.ts") || s.contains(".spec.ts")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains("React Testing Library")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains(".test.ts") || s.contains(".spec.ts")));
     }
 
     #[test]
     fn test_risk_assessment() {
         let analyzer = TypeScriptAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "export".to_string(),
-                name: "publicApi".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "export".to_string(),
+            name: "publicApi".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let risks = analyzer.assess_risks(&features);
-        assert!(risks.iter().any(|r| r.contains("导出的") && r.contains("可能影响")));
+        assert!(risks
+            .iter()
+            .any(|r| r.contains("导出的") && r.contains("可能影响")));
     }
 }

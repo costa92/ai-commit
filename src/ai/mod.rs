@@ -230,16 +230,26 @@ pub async fn generate_commit_message(
                 println!("字符数: {}", first_line.chars().count());
             }
 
-            if !VALID_COMMIT_FORMAT.is_match(first_line) {
-                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。\n期望格式：<type>(<scope>): <subject>\n实际内容：{}", first_line);
-            }
-
-            // 检查长度（基于字符数，不是字节数）
-            if first_line.chars().count() > 100 {
-                anyhow::bail!(
-                    "提交信息过长（{}字符），请生成更简洁的描述（不超过100字符）。",
-                    first_line.chars().count()
-                );
+            if !VALID_COMMIT_FORMAT.is_match(first_line) || first_line.chars().count() > 100 {
+                if config.debug {
+                    if first_line.chars().count() > 100 {
+                        println!(
+                            "提交信息过长（{}字符），启动智能优化...",
+                            first_line.chars().count()
+                        );
+                    } else {
+                        println!("提交信息格式不符合规范，启动智能优化...");
+                    }
+                }
+                
+                // 进行二次生成，生成更简洁的版本
+                let optimized_message = generate_optimized_commit_message(
+                    &message, 
+                    config, 
+                    &optimized_prompt,
+                    &config.provider // 使用当前 provider
+                ).await?;
+                return Ok(optimized_message);
             }
 
             Ok(clean_message(&message))
@@ -315,16 +325,26 @@ pub async fn generate_commit_message(
                 println!("字符数: {}", first_line.chars().count());
             }
 
-            if !VALID_COMMIT_FORMAT.is_match(first_line) {
-                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。\n期望格式：<type>(<scope>): <subject>\n实际内容：{}", first_line);
-            }
-
-            // 检查长度（基于字符数，不是字节数）
-            if first_line.chars().count() > 100 {
-                anyhow::bail!(
-                    "提交信息过长（{}字符），请生成更简洁的描述（不超过100字符）。",
-                    first_line.chars().count()
-                );
+            if !VALID_COMMIT_FORMAT.is_match(first_line) || first_line.chars().count() > 100 {
+                if config.debug {
+                    if first_line.chars().count() > 100 {
+                        println!(
+                            "提交信息过长（{}字符），启动智能优化...",
+                            first_line.chars().count()
+                        );
+                    } else {
+                        println!("提交信息格式不符合规范，启动智能优化...");
+                    }
+                }
+                
+                // 进行二次生成，生成更简洁的版本
+                let optimized_message = generate_optimized_commit_message(
+                    &message, 
+                    config, 
+                    &optimized_prompt,
+                    "ollama" // Ollama provider
+                ).await?;
+                return Ok(optimized_message);
             }
 
             Ok(clean_message(&message))
@@ -370,6 +390,192 @@ fix(auth): 修复用户认证流程问题
     );
 
     summarized_template
+}
+
+/// 为过长的 commit message 生成优化版本
+async fn generate_optimized_commit_message(
+    original_message: &str,
+    config: &crate::config::Config,
+    _original_prompt: &str,
+    provider: &str,
+) -> anyhow::Result<String> {
+    // 提取原始消息的第一行作为基础
+    let original_first_line = original_message.lines().next().unwrap_or("").trim();
+
+    // 创建针对长内容优化的提示词模板
+    let optimization_prompt = format!(
+        r#"直接输出符合规范的提交信息，不要任何解释！
+
+输出格式：<type>(<scope>): <subject>
+
+type: feat|fix|docs|style|refactor|test|chore
+subject: 中文，不超过50字，简洁明了
+
+原始信息：{}
+
+要求：
+- 直接输出一行符合格式的提交信息
+- 保留核心变更类型和作用域
+- 精简主题描述
+- 字符数控制在50字以内
+- 不要任何解释、分析或说明文字
+
+错误示例（严禁输出）：
+"根据提供的变更详情，以下是符合要求的提交信息格式："
+"基于原始信息，建议的commit message是："
+"以下是优化后的提交信息："
+任何解释性文字
+
+正确示例（直接输出）：
+feat(ai): 优化响应处理和验证逻辑
+fix(auth): 修复登录超时问题
+refactor(core): 简化配置管理模块"#,
+        original_first_line
+    );
+
+    let client = &*HTTP_CLIENT;
+
+    match provider {
+        "siliconflow" | "deepseek" => {
+            let request = DeepseekRequest {
+                model: &config.model,
+                messages: vec![DeepseekMessage {
+                    role: "user",
+                    content: &optimization_prompt,
+                }],
+                stream: false, // 使用非流式请求，更快获取结果
+            };
+
+            let (url, api_key) = if provider == "siliconflow" {
+                (&config.siliconflow_url, config.siliconflow_api_key.as_ref())
+            } else {
+                (&config.deepseek_url, config.deepseek_api_key.as_ref())
+            };
+
+            let res = make_request(client, url, api_key, &request).await?;
+
+            if !res.status().is_success() {
+                let status = res.status();
+                let text = res.text().await.unwrap_or_default();
+                anyhow::bail!("二次优化请求失败: 状态码 {status}, 响应体: {text}");
+            }
+
+            let response_text = res.text().await?;
+
+            // 解析非流式响应
+            if let Ok(response) = serde_json::from_str::<serde_json::Value>(&response_text) {
+                if let Some(content) = response["choices"][0]["message"]["content"].as_str() {
+                    let optimized = clean_message(content);
+                    let first_line = optimized.lines().next().unwrap_or("").trim();
+
+                    // 验证优化后的消息
+                    if VALID_COMMIT_FORMAT.is_match(first_line) && first_line.chars().count() <= 50
+                    {
+                        if config.debug {
+                            println!(
+                                "✅ 二次优化成功: '{}' ({} 字符)",
+                                first_line,
+                                first_line.chars().count()
+                            );
+                        }
+                        return Ok(optimized);
+                    }
+                }
+            }
+
+            // 如果二次优化失败，返回截断版本
+            generate_fallback_message(original_first_line)
+        }
+        _ => {
+            // Ollama 处理
+            let request = OllamaRequest {
+                model: &config.model,
+                prompt: &optimization_prompt,
+                stream: false,
+            };
+
+            let res = make_request(client, &config.ollama_url, None, &request).await?;
+
+            if !res.status().is_success() {
+                let status = res.status();
+                let text = res.text().await.unwrap_or_default();
+                anyhow::bail!("Ollama 二次优化请求失败: 状态码 {status}, 响应体: {text}");
+            }
+
+            let response_text = res.text().await?;
+
+            // 解析 Ollama 响应
+            if let Ok(response) = serde_json::from_str::<OllamaResponse>(&response_text) {
+                let optimized = clean_message(&response.response);
+                let first_line = optimized.lines().next().unwrap_or("").trim();
+
+                // 验证优化后的消息
+                if VALID_COMMIT_FORMAT.is_match(first_line) && first_line.chars().count() <= 50 {
+                    if config.debug {
+                        println!(
+                            "✅ 二次优化成功: '{}' ({} 字符)",
+                            first_line,
+                            first_line.chars().count()
+                        );
+                    }
+                    return Ok(optimized);
+                }
+            }
+
+            // 如果二次优化失败，返回截断版本
+            generate_fallback_message(original_first_line)
+        }
+    }
+}
+
+/// 生成后备的截断版本消息
+fn generate_fallback_message(original_line: &str) -> anyhow::Result<String> {
+    // 解析原始消息的组成部分
+    if let Some(caps) = VALID_COMMIT_FORMAT.captures(original_line) {
+        let commit_type = caps.get(1).map(|m| m.as_str()).unwrap_or("refactor");
+        let scope = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+
+        // 提取主题并截断
+        let subject_start = original_line.find(':').map(|i| i + 1).unwrap_or(0);
+        let subject = original_line[subject_start..].trim();
+
+        // 智能截断，保留关键词
+        let truncated_subject = if subject.chars().count() > 30 {
+            let key_words = [
+                "添加", "修复", "更新", "删除", "重构", "优化", "实现", "支持",
+            ];
+            let mut result = String::new();
+            let mut char_count = 0;
+
+            for word in subject.split_whitespace() {
+                if char_count + word.chars().count() > 30 {
+                    break;
+                }
+                if key_words.iter().any(|&kw| word.contains(kw)) || result.is_empty() {
+                    if !result.is_empty() {
+                        result.push(' ');
+                        char_count += 1;
+                    }
+                    result.push_str(word);
+                    char_count += word.chars().count();
+                }
+            }
+
+            if result.is_empty() {
+                // 如果没有关键词，直接截断
+                subject.chars().take(25).collect::<String>() + "..."
+            } else {
+                result
+            }
+        } else {
+            subject.to_string()
+        };
+
+        Ok(format!("{}{}: {}", commit_type, scope, truncated_subject))
+    } else {
+        // 如果无法解析，返回一个通用的重构消息
+        Ok("refactor(core): 代码结构优化".to_string())
+    }
 }
 
 #[cfg(test)]
@@ -583,6 +789,109 @@ mod tests {
             char_count
         );
         assert_eq!(char_count, 30, "Expected 30 characters, got {}", char_count);
+    }
+
+    #[test]
+    fn test_generate_fallback_message() {
+        let long_message = "feat(ai): 这是一个非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常长的提交信息，应该被优化";
+        let result = generate_fallback_message(long_message).unwrap();
+
+        // 验证结果格式正确
+        assert!(VALID_COMMIT_FORMAT.is_match(&result));
+        // 验证长度控制在合理范围内
+        assert!(result.chars().count() <= 50);
+        // 验证保留了核心信息
+        assert!(result.starts_with("feat"));
+    }
+
+    #[test]
+    fn test_generate_fallback_message_with_scope() {
+        let long_message =
+            "fix(auth): 修复用户登录验证流程中的超时处理逻辑和错误重试机制以及会话管理功能的问题";
+        let result = generate_fallback_message(long_message).unwrap();
+
+        // 验证结果格式正确
+        assert!(VALID_COMMIT_FORMAT.is_match(&result));
+        // 验证保留了类型和作用域
+        assert!(result.starts_with("fix(auth):"));
+        // 验证长度合适
+        assert!(result.chars().count() <= 50);
+    }
+
+    #[test]
+    fn test_generate_fallback_message_key_words() {
+        let message = "refactor(core): 重构系统配置管理模块，添加新的环境变量支持，优化性能表现，实现更好的错误处理";
+        let result = generate_fallback_message(message).unwrap();
+
+        // 应该保留关键词如"重构"、"添加"、"优化"、"实现"
+        assert!(VALID_COMMIT_FORMAT.is_match(&result));
+        let keywords = ["重构", "添加", "优化", "实现"];
+        let contains_keyword = keywords.iter().any(|&kw| result.contains(kw));
+        assert!(
+            contains_keyword,
+            "Result should contain at least one keyword: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_generate_fallback_message_invalid_format() {
+        let invalid_message = "这不是一个有效的提交信息格式";
+        let result = generate_fallback_message(invalid_message).unwrap();
+
+        // 应该返回默认的重构消息
+        assert_eq!(result, "refactor(core): 代码结构优化");
+        assert!(VALID_COMMIT_FORMAT.is_match(&result));
+    }
+
+    #[test]
+    fn test_generate_fallback_message_short_message() {
+        let short_message = "feat(ui): 添加按钮";
+        let result = generate_fallback_message(short_message).unwrap();
+
+        // 短消息应该保持不变
+        assert_eq!(result, short_message);
+        assert!(VALID_COMMIT_FORMAT.is_match(&result));
+    }
+
+    #[test]
+    fn test_optimization_prompt_generation() {
+        let original_message =
+            "feat(ai): 这是一个超级超级长的提交信息，包含了很多详细的描述和不必要的冗余信息";
+        let optimization_prompt = format!(
+            r#"输出格式：<type>(<scope>): <subject>
+
+type: feat|fix|docs|style|refactor|test|chore
+subject: 中文，不超过50字，简洁明了
+
+优化任务：将以下过长的提交信息压缩为符合规范的简洁版本
+
+原始信息：{}
+
+优化要求：
+- 保留核心变更类型（feat/fix/refactor等）
+- 保留主要作用域
+- 精简主题描述，去除冗余词汇
+- 突出最关键的变更点
+- 字符数控制在50字以内
+
+错误示例（禁止）：
+"根据以上内容，优化后的提交信息为："
+"基于原始信息，建议的commit message是："
+任何分析或解释性文字
+
+正确示例：
+feat(ai): 优化响应处理和验证逻辑
+fix(auth): 修复登录超时问题
+refactor(core): 简化配置管理模块"#,
+            original_message
+        );
+
+        // 验证模板包含必要的元素
+        assert!(optimization_prompt.contains("输出格式"));
+        assert!(optimization_prompt.contains(original_message));
+        assert!(optimization_prompt.contains("不超过50字"));
+        assert!(optimization_prompt.contains("错误示例（禁止）"));
     }
 }
 

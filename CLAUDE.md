@@ -99,6 +99,13 @@ make tag-changelog tag=v1.0.0
 - Multi-language support (Chinese Simplified/Traditional, English)
 - Centralized message management system
 
+**6. Code Review System (`src/languages/`)**
+- Multi-language code analysis engine supporting Rust, Go, JavaScript, TypeScript
+- Intelligent feature detection using language-specific regex patterns
+- Automated risk assessment and testing suggestions
+- Configurable output formats (Markdown, JSON, Text)
+- Automatic file output to `code-review/` directory with timestamp naming
+
 ### Configuration Sources
 
 The tool loads configuration in this priority order:
@@ -181,6 +188,77 @@ The tool supports Git worktree functionality for parallel development across mul
 - Bulk cleanup operations with detailed feedback
 - Current worktree protection (never removes active worktree)
 
+### Code Review System
+
+The tool includes a comprehensive code review system that analyzes Git changes and provides detailed insights:
+
+**Code Review Commands:**
+- `--code-review`: Perform code review analysis on staged Git changes
+- `--review-format FORMAT`: Output format (markdown, json, text) [default: markdown]
+- `--review-output FILE`: Custom output file path (optional)
+- `--review-files FILES`: Specify comma-separated file paths to review
+- `--show-languages`: Display detected programming languages statistics only
+
+**Supported Languages:**
+- **Rust**: Functions, structs, enums, traits, impl blocks, modules, use statements
+- **Go**: Packages, functions, methods, structs, interfaces, imports, constants
+- **JavaScript**: Functions, classes, imports/requires, exports, arrow functions
+- **TypeScript**: Interfaces, classes, functions, type aliases, enums, imports/exports
+- **Generic**: Fallback analyzer for unsupported languages
+
+**Language-Specific Features:**
+- **Regex-based pattern matching** for accurate code feature detection
+- **Scope suggestions** based on file paths and project structure
+- **Change pattern analysis** to identify common modification types
+- **Risk assessment** focused on API compatibility and breaking changes
+- **Testing suggestions** tailored to each programming language
+
+**Output Features:**
+- **Default Output**: Saves to `code-review/review_YYYYMMDD_HHMMSS.{ext}` automatically
+- **Timestamp naming** prevents file conflicts
+- **Multiple formats**: Markdown (default), JSON for automation, Text for simple output
+- **Smart content optimization**: Automatically detects long reports (>10,000 chars) and generates optimized versions
+- **Comprehensive reporting**: Summary statistics, change patterns, risk assessment, test suggestions
+- **File-level analysis** with detected features and line numbers
+
+**Code Review Report Structure:**
+```markdown
+# 代码审查报告
+
+## 📊 摘要统计
+- 总文件数、检测特征数、编程语言统计
+
+## 🔍 变更模式分析  
+- 代码变更类型识别和影响分析
+
+## ⚠️ 风险评估
+- API兼容性、依赖变更、架构影响
+
+## 🧪 测试建议
+- 语言特定的测试策略和最佳实践
+
+## 📁 详细文件分析
+- 每个文件的特征检测和作用域建议
+```
+
+**Usage Examples:**
+```bash
+# Basic code review (outputs to code-review/ directory)
+ai-commit --code-review
+
+# JSON format for CI/CD integration
+ai-commit --code-review --review-format json
+
+# Custom output location
+ai-commit --code-review --review-output reports/review.md
+
+# Review specific files
+ai-commit --code-review --review-files "src/main.rs,lib/utils.go"
+
+# Language statistics only
+ai-commit --show-languages
+```
+
 ### Tag Management Logic
 
 The tag system supports intelligent version resolution:
@@ -198,11 +276,12 @@ The tag system supports intelligent version resolution:
 
 ### Development Notes
 
-- **Testing Strategy**: Comprehensive test suite with 99+ tests covering:
+- **Testing Strategy**: Comprehensive test suite with 230+ tests covering:
   - Unit tests for all modules (inline with `#[cfg(test)]`)
   - Integration tests in `tests/integration_tests.rs`
   - Performance optimization validation
   - Concurrent access and thread safety tests
+  - **Smart commit message optimization**: Automatic length detection and secondary generation
 - **Performance Optimizations**: 
   - HTTP client singleton with connection reuse (50-80% faster connections)
   - Async/await conversion for Git operations
@@ -214,6 +293,7 @@ The tag system supports intelligent version resolution:
 - Streaming AI responses provide real-time feedback during generation
 - Configuration validation ensures required API keys are present for cloud providers
 - Memory allocation optimizations reduce heap usage by 30-50%
+- **Intelligent commit message optimization**: Automatically detects messages over 100 characters and generates optimized versions
 
 ### Prompt Template Optimization
 
@@ -260,20 +340,29 @@ git diff:
 
 ### Test Coverage Summary
 
-**Unit Tests (89 tests):**
-- AI Module: 17 tests (HTTP client, request/response handling, error scenarios)
+**Unit Tests (239+ tests):**
+- AI Module: 23+ tests (HTTP client, request/response handling, error scenarios, **smart optimization**)
 - Git Operations: 15 tests (async operations, command validation, error handling)
 - Configuration: 18 tests (environment loading, validation, priority handling)
 - Internationalization: 14 tests (language switching, message retrieval, concurrent access)
 - CLI Arguments: 15 tests (argument parsing, validation, edge cases)
 - Git Tag Management: 10 tests (version parsing, caching, thread safety)
+- Language Analysis: 73+ tests (feature detection, Default implementations, scope analysis)
+- Code Review: 15+ tests (report generation, file analysis, language detection)
+- **Smart Commit Optimization**: 6+ tests (fallback message generation, optimization prompts)
 
-**Integration Tests (10 tests):**
+**New Test Categories (Added in v0.2.0):**
+- **Default Implementation Tests**: Verify all language analyzers' Default trait implementations
+- **analyze_file_changes Tests**: Comprehensive testing of file change analysis logic
+- **Language-Specific Pattern Tests**: Test regex patterns for Rust, Go, JS, TS feature detection
+- **Code Review Integration Tests**: End-to-end testing of review report generation
+
+**Integration Tests (12 tests):**
 - Configuration system workflows
 - CLI parsing and configuration integration
 - Internationalization system integration
 - Error handling across modules
-- Performance optimization validation
+- Performance optimization validation (2 tests for HTTP client and env loading)
 - Concurrent access testing
 - Full system integration scenarios
 

@@ -18,7 +18,8 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 ## 主要功能
 
 - 自动生成规范化的 Git commit message（支持中文，主题不超 50 字）
-- **🆕 AI 驱动的 Code Review 需求文档生成**，支持 Go、TypeScript、JavaScript、Rust 等语言特定分析
+- **🆕 智能 commit message 优化**：自动检测过长内容并二次生成简洁版本
+- **🆕 智能代码审查系统**，支持 Rust、Go、JavaScript、TypeScript 等多语言分析
 - 支持 Ollama、Deepseek、SiliconFlow 等多种 AI provider
 - 可自定义模型、API 地址、API Key
 - 自动 git add/commit/push，参数可控
@@ -53,6 +54,11 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 | -t, --new-tag [VER]          | 创建新 tag（可指定版本号，如 -t v1.2.0）     |             |
 | -s, --show-tag               | 显示最新的 tag 和备注                        | false       |
 | -b, --push-branches          | 推 tag 时同时推 master develop main 分支     | false       |
+| --code-review                | 进行代码审查分析                             | false       |
+| --review-format FORMAT       | 代码审查输出格式 (markdown/json/text)        | markdown    |
+| --review-output FILE         | 代码审查报告输出文件路径                     |             |
+| --review-files FILES         | 指定要审查的文件路径列表（逗号分隔）          |             |
+| --show-languages             | 只显示检测到的语言统计                       | false       |
 | --worktree-create BRANCH     | 创建新的 Git worktree                        |             |
 | --worktree-switch NAME       | 切换到指定的 worktree                        |             |
 | --worktree-list              | 列出所有可用的 worktrees                     | false       |
@@ -125,31 +131,42 @@ $ ai-commit
 $ ai-commit --provider siliconflow --model Qwen/Qwen2.5-7B-Instruct
 ```
 
-### Code Review 需求文档生成
+### 代码审查功能
 
 ```sh
-# 生成 Go 项目的需求文档 (Markdown 格式)
-$ ai-commit --generate-requirements --target-language go
+# 基本代码审查（自动输出到 code-review/ 目录）
+$ ai-commit --code-review
 
-# 生成 TypeScript 项目的需求文档 (JSON 格式)
-$ ai-commit --gen-req --target-language typescript --output-format json
+# 指定输出格式为 JSON（用于 CI/CD 集成）
+$ ai-commit --code-review --review-format json
 
-# 保存需求文档到指定文件
-$ ai-commit --gen-req --target-language auto --output-file requirements.md
+# 指定输出格式为纯文本
+$ ai-commit --code-review --review-format text
 
-# 自动检测语言并生成详细的需求文档
-$ ai-commit --generate-requirements --target-language auto --output-format markdown
+# 自定义输出文件路径
+$ ai-commit --code-review --review-output reports/review.md
 
-# 支持的目标语言: go, typescript, javascript, rust, auto (自动检测)
-# 支持的输出格式: markdown, json
+# 审查指定文件
+$ ai-commit --code-review --review-files "src/main.rs,lib/utils.go,components/Button.tsx"
+
+# 只显示检测到的编程语言统计
+$ ai-commit --show-languages
 ```
 
-**需求文档包含以下内容：**
-- 📋 变更摘要和影响分析
-- 🔄 文件变更详情和语言特性识别
-- 🧪 语言特定的测试计划和策略
-- 📊 架构影响评估和风险分析
-- 🔒 安全考虑和迁移要求
+**代码审查报告包含以下内容：**
+- 📊 **摘要统计**：文件数量、特征数量、编程语言分布
+- 🔍 **变更模式分析**：识别常见代码变更类型和影响
+- ⚠️ **风险评估**：API兼容性、依赖变更、架构影响评估
+- 🧪 **测试建议**：语言特定的测试策略和最佳实践
+- 📁 **详细文件分析**：每个文件的特征检测和作用域建议
+- 🤖 **智能内容优化**：当报告超过10,000字符时自动优化长度，保持可读性
+
+**支持的编程语言：**
+- **Rust**: 函数、结构体、枚举、trait、impl 块、模块、use 语句
+- **Go**: 包、函数、方法、结构体、接口、导入、常量
+- **JavaScript**: 函数、类、导入/require、导出、箭头函数
+- **TypeScript**: 接口、类、函数、类型别名、枚举、导入/导出
+- **通用分析**: 支持未知语言的基础特征检测
 
 ### Git Worktree 开发模式示例
 
@@ -226,10 +243,32 @@ $ AI_COMMIT_DEBUG=true ai-commit
 # AI 生成 commit message 耗时: 1.23s
 # Created new tag: v1.0.1
 
+# 智能优化示例（当生成的消息过长时）
+$ AI_COMMIT_DEBUG=true ai-commit
+# 输出示例：
+# 初始提交信息过长（78字符），启动二次生成优化...
+# ✅ 二次优化成功: 'feat(ai): 优化响应处理和验证逻辑' (18 字符)
+
 # 通过 .env 文件配置
 $ echo "AI_COMMIT_DEBUG=true" >> .env
 $ ai-commit
 ```
+
+### 智能优化功能说明
+
+ai-commit 具备智能内容优化能力：
+
+1. **自动检测**：当生成的 commit message 超过 100 字符时自动触发
+2. **二次生成**：使用优化提示词重新生成简洁版本
+3. **智能截断**：如果 AI 优化失败，使用智能算法保留关键词并截断
+4. **调试信息**：在调试模式下显示优化过程和结果
+
+**优化策略：**
+- 保留核心变更类型（feat/fix/refactor 等）
+- 保留主要作用域信息
+- 精简主题描述，去除冗余词汇
+- 突出最关键的变更点
+- 字符数控制在 50 字以内
 
 ## 配置说明
 

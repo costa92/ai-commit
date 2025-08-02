@@ -3,15 +3,35 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 // JavaScript 语言特定的正则表达式
-static JS_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)").unwrap());
-static JS_ARROW_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\([^)]*\)\s*)?=>").unwrap());
-static JS_CLASS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?class\s+(\w+)").unwrap());
-static JS_METHOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:async\s+)?(\w+)\s*\(").unwrap());
-static JS_IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^\s*import\s+(?:\{[^}]+\}|\w+|\*\s+as\s+\w+)\s+from\s+['"]([^'"]+)['"]"#).unwrap());
-static JS_REQUIRE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^\s*(?:const|let|var)\s+(?:\{[^}]+\}|\w+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#).unwrap());
-static JS_EXPORT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:module\.)?exports?\s*(?:\.\w+)?\s*=|^\s*export\s+(?:default\s+)?(?:\{[^}]+\}|(?:class|function|const|let|var)\s+(\w+))").unwrap());
+static JS_FUNCTION_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)").unwrap());
+static JS_ARROW_FUNCTION_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\([^)]*\)\s*)?=>").unwrap()
+});
+static JS_CLASS_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:export\s+)?class\s+(\w+)").unwrap());
+static JS_METHOD_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*(?:async\s+)?(\w+)\s*\(").unwrap());
+static JS_IMPORT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"^\s*import\s+(?:\{[^}]+\}|\w+|\*\s+as\s+\w+)\s+from\s+['"]([^'"]+)['"]"#).unwrap()
+});
+static JS_REQUIRE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"^\s*(?:const|let|var)\s+(?:\{[^}]+\}|\w+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)"#,
+    )
+    .unwrap()
+});
+static JS_EXPORT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:module\.)?exports?\s*(?:\.\w+)?\s*=|^\s*export\s+(?:default\s+)?(?:\{[^}]+\}|(?:class|function|const|let|var)\s+(\w+))").unwrap()
+});
 
 pub struct JavaScriptAnalyzer;
+
+impl Default for JavaScriptAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl JavaScriptAnalyzer {
     pub fn new() -> Self {
@@ -20,11 +40,11 @@ impl JavaScriptAnalyzer {
 
     /// 检测是否为 React 组件
     fn is_react_component(&self, line: &str) -> bool {
-        line.contains("React.") || 
-        line.contains("JSX") || 
-        line.contains("useState") ||
-        line.contains("useEffect") ||
-        line.contains("Component")
+        line.contains("React.")
+            || line.contains("JSX")
+            || line.contains("useState")
+            || line.contains("useEffect")
+            || line.contains("Component")
     }
 
     /// 提取函数名（包括箭头函数）
@@ -32,7 +52,8 @@ impl JavaScriptAnalyzer {
         if let Some(caps) = JS_FUNCTION_REGEX.captures(line) {
             caps.get(1).map(|m| m.as_str().to_string())
         } else if let Some(caps) = JS_ARROW_FUNCTION_REGEX.captures(line) {
-            caps.get(1).map(|m| format!("{} (arrow function)", m.as_str()))
+            caps.get(1)
+                .map(|m| format!("{} (arrow function)", m.as_str()))
         } else {
             None
         }
@@ -71,13 +92,17 @@ impl JavaScriptAnalyzer {
                 .next()
                 .unwrap_or(filename)
                 .to_lowercase();
-            
+
             match name_without_ext.as_str() {
                 name if name.ends_with("component") => suggestions.push("component".to_string()),
                 name if name.ends_with("hook") => suggestions.push("hook".to_string()),
                 name if name.ends_with("service") => suggestions.push("service".to_string()),
-                name if name.ends_with("util") || name.ends_with("utils") => suggestions.push("utils".to_string()),
-                name if name.contains("test") || name.contains("spec") => suggestions.push("test".to_string()),
+                name if name.ends_with("util") || name.ends_with("utils") => {
+                    suggestions.push("utils".to_string())
+                }
+                name if name.contains("test") || name.contains("spec") => {
+                    suggestions.push("test".to_string())
+                }
                 name if name.contains("config") => suggestions.push("config".to_string()),
                 _ => {
                     if !suggestions.contains(&name_without_ext) {
@@ -104,7 +129,10 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
         let trimmed_line = line.trim();
 
         // 跳过注释行
-        if trimmed_line.starts_with("//") || trimmed_line.starts_with("/*") || trimmed_line.starts_with("*") {
+        if trimmed_line.starts_with("//")
+            || trimmed_line.starts_with("/*")
+            || trimmed_line.starts_with("*")
+        {
             return features;
         }
 
@@ -138,7 +166,7 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
             } else {
                 "class"
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: feature_type.to_string(),
                 name: class_name.to_string(),
@@ -154,7 +182,7 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
             } else {
                 "function"
             };
-            
+
             features.push(LanguageFeature {
                 feature_type: feature_type.to_string(),
                 name: func_name,
@@ -165,12 +193,20 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
 
         // Method 定义
         if let Some(caps) = JS_METHOD_REGEX.captures(trimmed_line) {
-            if !trimmed_line.contains("function") && !trimmed_line.contains("class") && 
-               !trimmed_line.contains("=") && !trimmed_line.contains("const") &&
-               !trimmed_line.contains("let") && !trimmed_line.contains("var") {
+            if !trimmed_line.contains("function")
+                && !trimmed_line.contains("class")
+                && !trimmed_line.contains("=")
+                && !trimmed_line.contains("const")
+                && !trimmed_line.contains("let")
+                && !trimmed_line.contains("var")
+            {
                 features.push(LanguageFeature {
                     feature_type: "method".to_string(),
-                    name: caps.get(1).map(|m| m.as_str()).unwrap_or("unknown").to_string(),
+                    name: caps
+                        .get(1)
+                        .map(|m| m.as_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
                     line_number: Some(line_number),
                     description: "JavaScript class method or object method".to_string(),
                 });
@@ -253,16 +289,25 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
         for feature in features {
             match feature.feature_type.as_str() {
                 "react_component" => {
-                    suggestions.push(format!("为 {} 组件添加 React Testing Library 测试", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 组件添加 React Testing Library 测试",
+                        feature.name
+                    ));
                     suggestions.push("测试组件的渲染、交互和状态变化".to_string());
                     suggestions.push("添加快照测试确保UI一致性".to_string());
                 }
                 "function" => {
-                    suggestions.push(format!("为 {} 函数添加单元测试，覆盖各种输入场景", feature.name));
+                    suggestions.push(format!(
+                        "为 {} 函数添加单元测试，覆盖各种输入场景",
+                        feature.name
+                    ));
                     suggestions.push("测试函数的边界条件和错误处理".to_string());
                 }
                 "class" => {
-                    suggestions.push(format!("测试 {} 类的实例化、方法调用和状态管理", feature.name));
+                    suggestions.push(format!(
+                        "测试 {} 类的实例化、方法调用和状态管理",
+                        feature.name
+                    ));
                     suggestions.push("验证类的继承关系和原型链".to_string());
                 }
                 _ => {}
@@ -293,18 +338,26 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
         // 公共API风险
         for feature in features {
             if feature.feature_type == "export" {
-                risks.push(format!("导出的 {} 变更可能影响依赖此模块的其他代码", feature.name));
+                risks.push(format!(
+                    "导出的 {} 变更可能影响依赖此模块的其他代码",
+                    feature.name
+                ));
             }
         }
 
         // 依赖变更风险
-        if features.iter().any(|f| f.feature_type == "import" || f.feature_type == "require") {
+        if features
+            .iter()
+            .any(|f| f.feature_type == "import" || f.feature_type == "require")
+        {
             risks.push("模块依赖变更可能引入运行时错误或版本冲突".to_string());
         }
 
         // 异步代码风险
-        let has_async = features.iter().any(|f| f.name.to_lowercase().contains("async") || 
-                                              f.description.to_lowercase().contains("async"));
+        let has_async = features.iter().any(|f| {
+            f.name.to_lowercase().contains("async")
+                || f.description.to_lowercase().contains("async")
+        });
         if has_async {
             risks.push("异步代码变更需要特别关注错误处理和Promise链".to_string());
         }
@@ -315,8 +368,9 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
         }
 
         // 全局变量风险
-        let has_global_vars = features.iter().any(|f| f.name.to_lowercase().contains("window") ||
-                                                     f.name.to_lowercase().contains("global"));
+        let has_global_vars = features.iter().any(|f| {
+            f.name.to_lowercase().contains("window") || f.name.to_lowercase().contains("global")
+        });
         if has_global_vars {
             risks.push("全局变量相关变更可能影响其他模块和第三方库".to_string());
         }
@@ -336,11 +390,28 @@ mod tests {
     }
 
     #[test]
+    fn test_default_implementation() {
+        // 测试 Default trait 实现
+        let analyzer = JavaScriptAnalyzer;
+        assert_eq!(analyzer.language(), Language::JavaScript);
+
+        // 确保 Default 和 new() 创建的实例功能相同
+        let new_analyzer = JavaScriptAnalyzer::new();
+        assert_eq!(analyzer.language(), new_analyzer.language());
+
+        // 测试默认实例能正常工作
+        let line = "function test() {}";
+        let features_default = analyzer.analyze_line(line, 1);
+        let features_new = new_analyzer.analyze_line(line, 1);
+        assert_eq!(features_default.len(), features_new.len());
+    }
+
+    #[test]
     fn test_function_detection() {
         let analyzer = JavaScriptAnalyzer::new();
         let line = "export function processData(input) {";
         let features = analyzer.analyze_line(line, 10);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert_eq!(features[0].name, "processData");
@@ -351,7 +422,7 @@ mod tests {
         let analyzer = JavaScriptAnalyzer::new();
         let line = "const handleClick = (event) => {";
         let features = analyzer.analyze_line(line, 15);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "function");
         assert!(features[0].name.contains("handleClick"));
@@ -363,7 +434,7 @@ mod tests {
         let analyzer = JavaScriptAnalyzer::new();
         let line = "export class UserService {";
         let features = analyzer.analyze_line(line, 5);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "class");
         assert_eq!(features[0].name, "UserService");
@@ -372,11 +443,11 @@ mod tests {
     #[test]
     fn test_react_component_detection() {
         let analyzer = JavaScriptAnalyzer::new();
-        let line = "const UserProfile = ({ user }) => {";
+        let _line = "const UserProfile = ({ user }) => {";
         // 添加React相关内容到下一行来触发React组件检测
         let line_with_react = "const UserProfile = ({ user }) => { useState();";
         let features = analyzer.analyze_line(line_with_react, 20);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "react_component");
         assert!(features[0].name.contains("UserProfile"));
@@ -387,7 +458,7 @@ mod tests {
         let analyzer = JavaScriptAnalyzer::new();
         let line = "import { useState, useEffect } from 'react';";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "import");
         assert_eq!(features[0].name, "react");
@@ -398,7 +469,7 @@ mod tests {
         let analyzer = JavaScriptAnalyzer::new();
         let line = "const fs = require('fs');";
         let features = analyzer.analyze_line(line, 1);
-        
+
         assert_eq!(features.len(), 1);
         assert_eq!(features[0].feature_type, "require");
         assert_eq!(features[0].name, "fs");
@@ -407,15 +478,18 @@ mod tests {
     #[test]
     fn test_scope_suggestions() {
         let analyzer = JavaScriptAnalyzer::new();
-        
+
         // React 组件
         let suggestions = analyzer.extract_scope_suggestions("src/components/UserProfile.jsx");
-        assert!(suggestions.contains(&"ui".to_string()) || suggestions.contains(&"components".to_string()));
-        
+        assert!(
+            suggestions.contains(&"ui".to_string())
+                || suggestions.contains(&"components".to_string())
+        );
+
         // 服务层
         let suggestions = analyzer.extract_scope_suggestions("src/services/api.js");
         assert!(suggestions.contains(&"service".to_string()));
-        
+
         // Utils
         let suggestions = analyzer.extract_scope_suggestions("src/utils/helpers.js");
         assert!(suggestions.contains(&"utils".to_string()));
@@ -438,7 +512,7 @@ mod tests {
                 description: "test".to_string(),
             },
         ];
-        
+
         let patterns = analyzer.analyze_change_patterns(&features);
         assert!(patterns.iter().any(|p| p.contains("React组件变更")));
         assert!(patterns.iter().any(|p| p.contains("函数逻辑变更")));
@@ -447,33 +521,35 @@ mod tests {
     #[test]
     fn test_test_suggestions() {
         let analyzer = JavaScriptAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "react_component".to_string(),
-                name: "Button".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "react_component".to_string(),
+            name: "Button".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let suggestions = analyzer.generate_test_suggestions(&features);
-        assert!(suggestions.iter().any(|s| s.contains("React Testing Library")));
-        assert!(suggestions.iter().any(|s| s.contains(".test.js") || s.contains(".spec.js")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains("React Testing Library")));
+        assert!(suggestions
+            .iter()
+            .any(|s| s.contains(".test.js") || s.contains(".spec.js")));
     }
 
     #[test]
     fn test_risk_assessment() {
         let analyzer = JavaScriptAnalyzer::new();
-        let features = vec![
-            LanguageFeature {
-                feature_type: "export".to_string(),
-                name: "publicApi".to_string(),
-                line_number: Some(1),
-                description: "test".to_string(),
-            },
-        ];
-        
+        let features = vec![LanguageFeature {
+            feature_type: "export".to_string(),
+            name: "publicApi".to_string(),
+            line_number: Some(1),
+            description: "test".to_string(),
+        }];
+
         let risks = analyzer.assess_risks(&features);
-        assert!(risks.iter().any(|r| r.contains("导出的") && r.contains("可能影响")));
+        assert!(risks
+            .iter()
+            .any(|r| r.contains("导出的") && r.contains("可能影响")));
     }
 }

@@ -350,6 +350,11 @@ mod tests {
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,
+            code_review: false,
+            review_format: "markdown".to_string(),
+            review_output: None,
+            review_files: None,
+            show_languages: false,
         };
 
         config.update_from_args(&args);
@@ -387,6 +392,11 @@ mod tests {
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,
+            code_review: false,
+            review_format: "markdown".to_string(),
+            review_output: None,
+            review_files: None,
+            show_languages: false,
         };
 
         config.update_from_args(&args);
@@ -432,6 +442,11 @@ mod tests {
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,
+            code_review: false,
+            review_format: "markdown".to_string(),
+            review_output: None,
+            review_files: None,
+            show_languages: false,
         };
 
         config.update_from_args(&args);
