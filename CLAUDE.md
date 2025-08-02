@@ -104,6 +104,29 @@ The tool loads configuration in this priority order:
 - Requires API key: `AI_COMMIT_SILICONFLOW_API_KEY`
 - Default URL: `https://api.siliconflow.cn/v1/chat/completions`
 
+### Debug Mode Configuration
+
+The tool supports a debug mode that controls output verbosity through the `AI_COMMIT_DEBUG` environment variable:
+
+**Debug Mode Off (Default):**
+- `AI_COMMIT_DEBUG=false` or unset
+- Only outputs final results
+- Suppresses process information and timing details
+- Ideal for production use and automation scripts
+
+**Debug Mode On:**
+- `AI_COMMIT_DEBUG=true` or `AI_COMMIT_DEBUG=1` 
+- Shows detailed operation process
+- Includes AI generation timing, large change detection, tag creation messages
+- Case-insensitive: accepts `TRUE`, `True`, `1`
+- Useful for development, debugging, and understanding tool behavior
+
+**Debug Output Examples:**
+- AI generation timing: "AI 生成 commit message 耗时: 1.23s"
+- Large change detection: "检测到大型变更 (6个文件, 15967字符)，正在生成摘要..."  
+- Tag operations: "Created new tag: v1.0.1", "Pushed tag v1.0.1 to remote"
+- Empty changes: "No staged changes."
+
 ### Tag Management Logic
 
 The tag system supports intelligent version resolution:

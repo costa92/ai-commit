@@ -18,11 +18,12 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 ## 主要功能
 
 - 自动生成规范化的 Git commit message（支持中文，主题不超 50 字）
-- 支持 Ollama、Deepseek 等多种 AI provider
+- 支持 Ollama、Deepseek、SiliconFlow 等多种 AI provider
 - 可自定义模型、API 地址、API Key
 - 自动 git add/commit/push，参数可控
 - 支持自定义提交规范模板
 - 命令行参数与 .env 配置灵活切换
+- 调试模式支持，可控制输出详细程度
 
 ---
 
@@ -82,6 +83,8 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 
 ## 示例
 
+### 基本使用
+
 ```sh
 # 有变更时自动 commit 并打 tag
 $ git add .
@@ -94,7 +97,71 @@ $ ai-commit -t -p
 $ ai-commit -t -p --tag-note "发布 v1.2.3"
 ```
 
+### 调试模式示例
+
+```sh
+# 关闭调试模式（静默运行）
+$ AI_COMMIT_DEBUG=false ai-commit
+
+# 开启调试模式（显示详细过程）
+$ AI_COMMIT_DEBUG=true ai-commit
+# 输出示例：
+# AI 生成 commit message 耗时: 1.23s
+# Created new tag: v1.0.1
+
+# 通过 .env 文件配置
+$ echo "AI_COMMIT_DEBUG=true" >> .env
+$ ai-commit
+```
+
 ## 配置说明
 
-- 支持通过 `.env` 文件配置：
-  - `AI_COMMIT_PROVIDER`
+### 环境变量配置
+
+支持通过 `.env` 文件或环境变量配置：
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|--------|
+| `AI_COMMIT_PROVIDER` | AI 提供商（ollama/deepseek/siliconflow） | ollama |
+| `AI_COMMIT_MODEL` | AI 模型名称 | mistral |
+| `AI_COMMIT_DEEPSEEK_API_KEY` | Deepseek API 密钥 | - |
+| `AI_COMMIT_DEEPSEEK_URL` | Deepseek API 地址 | https://api.deepseek.com/v1/chat/completions |
+| `AI_COMMIT_OLLAMA_URL` | Ollama API 地址 | http://localhost:11434/api/generate |
+| `AI_COMMIT_SILICONFLOW_API_KEY` | SiliconFlow API 密钥 | - |
+| `AI_COMMIT_SILICONFLOW_URL` | SiliconFlow API 地址 | https://api.siliconflow.cn/v1/chat/completions |
+| `AI_COMMIT_DEBUG` | 调试模式（true/false/1/0） | false |
+
+### 调试模式
+
+通过设置 `AI_COMMIT_DEBUG` 环境变量可以控制输出详细程度：
+
+- **关闭调试模式**（默认）：`AI_COMMIT_DEBUG=false` 或不设置
+  - 只输出最终结果，不显示过程信息
+  - 适合日常使用和自动化脚本
+
+- **开启调试模式**：`AI_COMMIT_DEBUG=true` 或 `AI_COMMIT_DEBUG=1`
+  - 显示详细的操作过程
+  - 包含 AI 生成耗时、大型变更检测、标签创建等信息
+  - 适合调试和了解工具运行过程
+
+### 配置文件
+
+配置优先级（从高到低）：
+1. 命令行参数
+2. 环境变量（`AI_COMMIT_*`）
+3. `.env` 文件（用户目录：`~/.ai-commit/.env`，然后是当前目录 `.env`）
+4. 默认值
+
+### 示例配置
+
+创建 `.env` 文件：
+
+```bash
+# AI 提供商配置
+AI_COMMIT_PROVIDER=deepseek
+AI_COMMIT_MODEL=deepseek-chat
+AI_COMMIT_DEEPSEEK_API_KEY=your-api-key-here
+
+# 调试模式（开发时可开启）
+AI_COMMIT_DEBUG=false
+```
