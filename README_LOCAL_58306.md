@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/github/issues/costa92/ai-commit?style=flat-square" alt="issues"/>
 </p>
 
-ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端大模型（如 Ollama、Deepseek、SiliconFlow），可自动根据代码变更生成符合 Conventional Commits 规范的中文提交信息，提升团队协作效率和提交规范性。
+ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端大模型（如 Ollama、Deepseek），可自动根据代码变更生成符合 Conventional Commits 规范的中文提交信息，提升团队协作效率和提交规范性。
 
 ---
 
@@ -44,7 +44,7 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 
 | 简称/全称           | 说明                                         | 默认值      |
 |---------------------|----------------------------------------------|-------------|
-| -P, --provider      | AI 提交生成服务（ollama/deepseek/siliconflow） | ollama      |
+| -P, --provider      | AI 提交生成服务（ollama/deepseek）           | ollama      |
 | -m, --model         | AI 模型名称                                  | mistral     |
 | -n, --no-add        | 不自动执行 git add .                         | false       |
 | -p, --push          | commit 后自动 git push                       | false       |
@@ -97,39 +97,6 @@ $ ai-commit -t -p
 $ ai-commit -t -p --tag-note "发布 v1.2.3"
 ```
 
-### AI 提供商使用示例
-
-```sh
-# 使用 SiliconFlow（推荐）
-$ AI_COMMIT_PROVIDER=siliconflow AI_COMMIT_SILICONFLOW_API_KEY=your-key ai-commit
-
-# 使用 Deepseek
-$ AI_COMMIT_PROVIDER=deepseek AI_COMMIT_DEEPSEEK_API_KEY=your-key ai-commit
-
-# 使用本地 Ollama（默认，需要先启动 Ollama 服务）
-$ ai-commit
-
-# 通过命令行参数指定提供商
-$ ai-commit --provider siliconflow --model Qwen/Qwen2.5-7B-Instruct
-```
-
-### 调试模式示例
-
-```sh
-# 关闭调试模式（静默运行）
-$ AI_COMMIT_DEBUG=false ai-commit
-
-# 开启调试模式（显示详细过程）
-$ AI_COMMIT_DEBUG=true ai-commit
-# 输出示例：
-# AI 生成 commit message 耗时: 1.23s
-# Created new tag: v1.0.1
-
-# 通过 .env 文件配置
-$ echo "AI_COMMIT_DEBUG=true" >> .env
-$ ai-commit
-```
-
 ### 调试模式示例
 
 ```sh
@@ -164,23 +131,6 @@ $ ai-commit
 | `AI_COMMIT_SILICONFLOW_URL` | SiliconFlow API 地址 | https://api.siliconflow.cn/v1/chat/completions |
 | `AI_COMMIT_DEBUG` | 调试模式（true/false/1/0） | false |
 
-### AI 提供商配置
-
-**Ollama（默认）：**
-- 本地运行，需要先安装 Ollama
-- 默认模型：`mistral`
-- 默认地址：`http://localhost:11434/api/generate`
-
-**Deepseek：**
-- 云端服务，需要 API Key
-- 设置：`AI_COMMIT_DEEPSEEK_API_KEY=your-key`
-- 默认地址：`https://api.deepseek.com/v1/chat/completions`
-
-**SiliconFlow：**
-- 云端服务，需要 API Key  
-- 设置：`AI_COMMIT_SILICONFLOW_API_KEY=your-key`
-- 默认地址：`https://api.siliconflow.cn/v1/chat/completions`
-
 ### 调试模式
 
 通过设置 `AI_COMMIT_DEBUG` 环境变量可以控制输出详细程度：
@@ -207,20 +157,10 @@ $ ai-commit
 创建 `.env` 文件：
 
 ```bash
-# 使用 SiliconFlow（推荐）
-AI_COMMIT_PROVIDER=siliconflow
-AI_COMMIT_MODEL=Qwen/Qwen2.5-7B-Instruct
-AI_COMMIT_SILICONFLOW_API_KEY=your-siliconflow-key
-
-# 使用 Deepseek
+# AI 提供商配置
 AI_COMMIT_PROVIDER=deepseek
 AI_COMMIT_MODEL=deepseek-chat
-AI_COMMIT_DEEPSEEK_API_KEY=your-deepseek-key
-
-# 使用本地 Ollama（默认）
-AI_COMMIT_PROVIDER=ollama
-AI_COMMIT_MODEL=mistral
-AI_COMMIT_OLLAMA_URL=http://localhost:11434/api/generate
+AI_COMMIT_DEEPSEEK_API_KEY=your-api-key-here
 
 # 调试模式（开发时可开启）
 AI_COMMIT_DEBUG=false

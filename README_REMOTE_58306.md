@@ -130,23 +130,6 @@ $ echo "AI_COMMIT_DEBUG=true" >> .env
 $ ai-commit
 ```
 
-### 调试模式示例
-
-```sh
-# 关闭调试模式（静默运行）
-$ AI_COMMIT_DEBUG=false ai-commit
-
-# 开启调试模式（显示详细过程）
-$ AI_COMMIT_DEBUG=true ai-commit
-# 输出示例：
-# AI 生成 commit message 耗时: 1.23s
-# Created new tag: v1.0.1
-
-# 通过 .env 文件配置
-$ echo "AI_COMMIT_DEBUG=true" >> .env
-$ ai-commit
-```
-
 ## 配置说明
 
 ### 环境变量配置

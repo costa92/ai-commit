@@ -97,6 +97,8 @@ $ ai-commit -t -p
 $ ai-commit -t -p --tag-note "发布 v1.2.3"
 ```
 
+<<<<<<< HEAD
+=======
 ### AI 提供商使用示例
 
 ```sh
@@ -113,23 +115,7 @@ $ ai-commit
 $ ai-commit --provider siliconflow --model Qwen/Qwen2.5-7B-Instruct
 ```
 
-### 调试模式示例
-
-```sh
-# 关闭调试模式（静默运行）
-$ AI_COMMIT_DEBUG=false ai-commit
-
-# 开启调试模式（显示详细过程）
-$ AI_COMMIT_DEBUG=true ai-commit
-# 输出示例：
-# AI 生成 commit message 耗时: 1.23s
-# Created new tag: v1.0.1
-
-# 通过 .env 文件配置
-$ echo "AI_COMMIT_DEBUG=true" >> .env
-$ ai-commit
-```
-
+>>>>>>> main
 ### 调试模式示例
 
 ```sh
@@ -164,6 +150,8 @@ $ ai-commit
 | `AI_COMMIT_SILICONFLOW_URL` | SiliconFlow API 地址 | https://api.siliconflow.cn/v1/chat/completions |
 | `AI_COMMIT_DEBUG` | 调试模式（true/false/1/0） | false |
 
+<<<<<<< HEAD
+=======
 ### AI 提供商配置
 
 **Ollama（默认）：**
@@ -181,6 +169,7 @@ $ ai-commit
 - 设置：`AI_COMMIT_SILICONFLOW_API_KEY=your-key`
 - 默认地址：`https://api.siliconflow.cn/v1/chat/completions`
 
+>>>>>>> main
 ### 调试模式
 
 通过设置 `AI_COMMIT_DEBUG` 环境变量可以控制输出详细程度：
@@ -207,6 +196,12 @@ $ ai-commit
 创建 `.env` 文件：
 
 ```bash
+<<<<<<< HEAD
+# AI 提供商配置
+AI_COMMIT_PROVIDER=deepseek
+AI_COMMIT_MODEL=deepseek-chat
+AI_COMMIT_DEEPSEEK_API_KEY=your-api-key-here
+=======
 # 使用 SiliconFlow（推荐）
 AI_COMMIT_PROVIDER=siliconflow
 AI_COMMIT_MODEL=Qwen/Qwen2.5-7B-Instruct
@@ -221,6 +216,7 @@ AI_COMMIT_DEEPSEEK_API_KEY=your-deepseek-key
 AI_COMMIT_PROVIDER=ollama
 AI_COMMIT_MODEL=mistral
 AI_COMMIT_OLLAMA_URL=http://localhost:11434/api/generate
+>>>>>>> main
 
 # 调试模式（开发时可开启）
 AI_COMMIT_DEBUG=false
