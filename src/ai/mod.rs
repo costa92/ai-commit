@@ -24,7 +24,7 @@ static INVALID_RESPONSE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
 
 // 正面格式验证正则
 static VALID_COMMIT_FORMAT: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\([^)]+\))?:\s*.{1,100}$").unwrap()
+    Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\([^)]+\))?:\s+\S+.*$").unwrap()
 });
 
 #[derive(Serialize)]
@@ -224,8 +224,19 @@ pub async fn generate_commit_message(
 
             // 正面格式检查：使用预编译正则表达式
             let first_line = message.lines().next().unwrap_or("").trim();
+            
+            if config.debug {
+                println!("检查提交信息格式: '{}'", first_line);
+                println!("字符数: {}", first_line.chars().count());
+            }
+            
             if !VALID_COMMIT_FORMAT.is_match(first_line) {
-                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
+                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。\n期望格式：<type>(<scope>): <subject>\n实际内容：{}", first_line);
+            }
+            
+            // 检查长度（基于字符数，不是字节数）
+            if first_line.chars().count() > 100 {
+                anyhow::bail!("提交信息过长（{}字符），请生成更简洁的描述（不超过100字符）。", first_line.chars().count());
             }
 
             Ok(clean_message(&message))
@@ -295,8 +306,19 @@ pub async fn generate_commit_message(
 
             // 正面格式检查：使用预编译正则表达式
             let first_line = message.lines().next().unwrap_or("").trim();
+            
+            if config.debug {
+                println!("检查提交信息格式: '{}'", first_line);
+                println!("字符数: {}", first_line.chars().count());
+            }
+            
             if !VALID_COMMIT_FORMAT.is_match(first_line) {
-                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。");
+                anyhow::bail!("AI 返回的格式不符合 Conventional Commits 规范，请重试。\n期望格式：<type>(<scope>): <subject>\n实际内容：{}", first_line);
+            }
+            
+            // 检查长度（基于字符数，不是字节数）
+            if first_line.chars().count() > 100 {
+                anyhow::bail!("提交信息过长（{}字符），请生成更简洁的描述（不超过100字符）。", first_line.chars().count());
             }
 
             Ok(clean_message(&message))
@@ -511,6 +533,40 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_commit_message_validation() {
+        let re = Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\([^)]+\))?:\s+\S+.*$").unwrap();
+        
+        let test_cases = vec![
+            ("test(git): 重构并增强Git工作树和标签测试覆盖率", true),
+            ("feat(api): 添加用户认证功能", true),
+            ("fix(ui): 修复按钮显示问题", true),
+            ("refactor(core): 重构数据处理逻辑", true),
+            ("根据提供的变更信息和格式要求，以下是符合规范的提交消息：", false),
+            ("", false),
+            ("test:", false), // 缺少内容
+            ("test: ", false), // 只有空格
+            ("test: a", true), // 最短有效内容
+            ("chore: update dependencies", true),
+            ("docs(readme): update installation guide", true),
+        ];
+        
+        for (msg, expected) in test_cases {
+            let result = re.is_match(msg);
+            assert_eq!(result, expected, "Message '{}' should be {}, but got {}", msg, expected, result);
+        }
+    }
+
+    #[test]
+    fn test_commit_message_length() {
+        let msg = "test(git): 重构并增强Git工作树和标签测试覆盖率";
+        let char_count = msg.chars().count();
+        
+        // 确保中文字符正确计算
+        assert!(char_count < 100, "Message should be under 100 characters, got {}", char_count);
+        assert_eq!(char_count, 30, "Expected 30 characters, got {}", char_count);
     }
 }
 
