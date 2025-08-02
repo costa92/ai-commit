@@ -109,7 +109,9 @@ pub async fn generate_commit_message(
     prompt: &str,
 ) -> anyhow::Result<String> {
     if diff.trim().is_empty() {
-        println!("No staged changes.");
+        if config.debug {
+            println!("No staged changes.");
+        }
         std::process::exit(0);
     }
 
@@ -118,8 +120,10 @@ pub async fn generate_commit_message(
     
     // 创建优化的提示词
     let optimized_prompt = if analysis.is_large_diff || analysis.is_multi_file {
-        println!("检测到大型变更 ({}个文件, {}字符)，正在生成摘要...", 
-                 analysis.total_files, diff.len());
+        if config.debug {
+            println!("检测到大型变更 ({}个文件, {}字符)，正在生成摘要...", 
+                     analysis.total_files, diff.len());
+        }
         
         // 使用摘要版本的prompt
         create_summarized_prompt(&analysis, diff, prompt)

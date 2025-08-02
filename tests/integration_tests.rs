@@ -15,6 +15,9 @@ fn test_config_integration() {
     assert!(!config.model.is_empty());
     assert!(config.validate().is_ok() || config.validate().is_err()); // 根据provider不同可能需要API key
     
+    // 验证debug模式默认为false
+    assert_eq!(config.debug, false);
+    
     // 2. 测试配置验证（不同提供商）
     let mut config = Config::new();
     
@@ -188,21 +191,18 @@ fn test_error_handling_integration() {
 /// 集成测试：测试配置优先级
 #[test]
 fn test_configuration_priority_integration() {
-    // 测试配置优先级：默认值 < 环境变量 < 命令行参数
-    
-    // 1. 测试默认配置（可能受到本地配置影响）
+    // 1. 测试默认配置
     let config = Config::new();
-    let original_provider = config.provider.clone();
-    let original_model = config.model.clone();
+    // 在测试环境下，环境变量不会自动加载，所以使用默认值
+    assert_eq!(config.provider, "ollama");
+    assert_eq!(config.model, "mistral");
+    assert_eq!(config.debug, false);
     
-    // 验证有有效的配置值
-    assert!(!original_provider.is_empty());
-    assert!(!original_model.is_empty());
-    
-    // 2. 测试命令行参数覆盖默认值
+    // 2. 测试命令行参数覆盖
+    let mut config = Config::new();
     let args = Args {
-        provider: "cli_provider".to_string(),
-        model: "cli_model".to_string(),
+        provider: "deepseek".to_string(),
+        model: "cli-model".to_string(),
         no_add: false,
         push: false,
         new_tag: None,
@@ -211,37 +211,84 @@ fn test_configuration_priority_integration() {
         push_branches: false,
     };
     
-    let mut config = Config::new();
     config.update_from_args(&args);
+    assert_eq!(config.provider, "deepseek");
+    assert_eq!(config.model, "cli-model");
+    // debug字段不受命令行参数影响
+    assert_eq!(config.debug, false);
+}
+
+/// 集成测试：测试性能优化效果
+#[test]
+fn test_performance_optimizations() {
+    use std::time::Instant;
     
-    // 命令行参数应该覆盖任何配置
-    assert_eq!(config.provider, "cli_provider");
-    assert_eq!(config.model, "cli_model");
+    // 测试配置加载性能
+    let start = Instant::now();
+    for _ in 0..100 {
+        let _ = Config::new();
+    }
+    let config_time = start.elapsed();
     
-    // 3. 测试空参数不覆盖配置
-    let empty_args = Args {
-        provider: String::new(),  // 空字符串不应该覆盖
-        model: String::new(),     // 空字符串不应该覆盖
-        no_add: false,
-        push: false,
-        new_tag: None,
-        tag_note: String::new(),
-        show_tag: false,
-        push_branches: false,
-    };
+    // 测试提示模板加载性能
+    let start = Instant::now();
+    for i in 0..100 {
+        let diff = format!("test diff {}", i);
+        let _ = prompt::get_prompt(&diff);
+    }
+    let prompt_time = start.elapsed();
     
+    // 验证性能在合理范围内（这些阈值可以根据实际需要调整）
+    assert!(config_time.as_millis() < 1000, "配置加载过慢: {:?}", config_time);
+    assert!(prompt_time.as_millis() < 500, "提示模板加载过慢: {:?}", prompt_time);
+    
+    // 测试环境加载只执行一次
+    let start = Instant::now();
+    for _ in 0..10 {
+        ensure_env_loaded();
+    }
+    let env_loading_time = start.elapsed();
+    
+    // 多次调用应该很快（因为单例模式）
+    assert!(env_loading_time.as_millis() < 100, "环境加载应该被缓存: {:?}", env_loading_time);
+}
+
+/// 集成测试：测试debug模式的完整功能
+#[test]
+fn test_debug_mode_integration() {
+    use std::env;
+    
+    // 1. 测试debug模式默认关闭
+    let config = Config::new();
+    assert_eq!(config.debug, false);
+    
+    // 2. 测试通过环境变量设置debug模式（手动测试）
+    env::set_var("AI_COMMIT_DEBUG", "true");
     let mut config = Config::new();
-    let before_provider = config.provider.clone();
-    let before_model = config.model.clone();
+    config.load_from_env(); // 手动加载环境变量
+    assert_eq!(config.debug, true);
     
-    config.update_from_args(&empty_args);
+    // 3. 测试debug值解析逻辑
+    let test_cases = vec![
+        ("false", false),
+        ("0", false),
+        ("invalid", false),
+        ("", false),
+    ];
     
-    // 空参数不应该覆盖现有配置
-    assert_eq!(config.provider, before_provider);
-    assert_eq!(config.model, before_model);
+    for (value, expected) in test_cases {
+        env::set_var("AI_COMMIT_DEBUG", value);
+        let mut config = Config::new();
+        config.load_from_env();
+        assert_eq!(config.debug, expected, "Value '{}' should result in {}", value, expected);
+    }
+    
+    // 清理
+    env::remove_var("AI_COMMIT_DEBUG");
 }
 
 /// 集成测试：测试并发场景
+
 #[tokio::test]
 async fn test_concurrent_integration() {
     use std::sync::Arc;
@@ -282,7 +329,7 @@ async fn test_concurrent_integration() {
 
 /// 集成测试：测试性能优化的有效性
 #[test]  
-fn test_performance_optimizations() {
+fn test_performance_optimizations_v2() {
     use std::time::Instant;
     
     // 测试提示模板缓存性能

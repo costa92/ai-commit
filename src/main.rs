@@ -6,7 +6,7 @@ use ai_commit::git;
 use clap::Parser;
 use std::time::Instant;
 
-async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyhow::Result<()> {
+async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
     let tag_name = git::get_next_tag_name(args.new_tag.as_deref()).await?;
     // note 优先用 tag_note，否则用 tag_name
@@ -25,10 +25,14 @@ async fn handle_tag_creation(args: &Args, _config: &Config, diff: &str) -> anyho
     // 创建 tag，tag 名和 note 都用上面生成的
     git::create_tag_with_note(&tag_name, &note).await?;
 
-    println!("Created new tag: {}", &tag_name);
+    if config.debug {
+        println!("Created new tag: {}", &tag_name);
+    }
     if args.push {
         git::push_tag(&tag_name, args.push_branches).await?;
-        println!("Pushed tag {} to remote", &tag_name);
+        if config.debug {
+            println!("Pushed tag {} to remote", &tag_name);
+        }
     }
     Ok(())
 }
@@ -38,10 +42,12 @@ async fn handle_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Resu
     let start_time = Instant::now();
     let message = ai::generate_commit_message(diff, config, &prompt).await?;
     let elapsed_time = start_time.elapsed();
-    println!("AI 生成 commit message 耗时: {:.2?}", elapsed_time);
-
-    if elapsed_time.as_secs() > 30 {
-        println!("警告: AI 模型 '{}' 生成 commit message 耗时较长，建议更换更快的模型或优化网络环境。", config.model);
+    
+    if config.debug {
+        println!("AI 生成 commit message 耗时: {:.2?}", elapsed_time);
+        if elapsed_time.as_secs() > 30 {
+            println!("警告: AI 模型 '{}' 生成 commit message 耗时较长，建议更换更快的模型或优化网络环境。", config.model);
+        }
     }
 
     if message.is_empty() {
@@ -89,7 +95,9 @@ async fn main() -> anyhow::Result<()> {
         handle_tag_creation(&args, &config, &diff).await?;
     } else {
         if diff.trim().is_empty() {
-            println!("No staged changes.");
+            if config.debug {
+                println!("No staged changes.");
+            }
             return Ok(());
         }
         handle_commit(&args, &config, &diff).await?;

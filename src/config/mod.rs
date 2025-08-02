@@ -22,7 +22,7 @@ pub fn ensure_env_loaded() {
 }
 
 // 环境变量批量读取结构（增加缓存机制）
-struct EnvVars {
+pub struct EnvVars {
     provider: Option<String>,
     model: Option<String>,
     deepseek_api_key: Option<String>,
@@ -30,6 +30,7 @@ struct EnvVars {
     ollama_url: Option<String>,
     siliconflow_api_key: Option<String>,
     siliconflow_url: Option<String>,
+    debug: Option<String>,
 }
 
 // 全局环境变量缓存
@@ -51,6 +52,7 @@ impl EnvVars {
                     ollama_url: cached_vars.ollama_url.clone(),
                     siliconflow_api_key: cached_vars.siliconflow_api_key.clone(),
                     siliconflow_url: cached_vars.siliconflow_url.clone(),
+                    debug: cached_vars.debug.clone(),
                 };
             }
         }
@@ -64,6 +66,7 @@ impl EnvVars {
             ollama_url: env::var("AI_COMMIT_OLLAMA_URL").ok(),
             siliconflow_api_key: env::var("AI_COMMIT_SILICONFLOW_API_KEY").ok(),
             siliconflow_url: env::var("AI_COMMIT_SILICONFLOW_URL").ok(),
+            debug: env::var("AI_COMMIT_DEBUG").ok(),
         };
         
         // 更新缓存
@@ -75,9 +78,16 @@ impl EnvVars {
             ollama_url: vars.ollama_url.clone(),
             siliconflow_api_key: vars.siliconflow_api_key.clone(),
             siliconflow_url: vars.siliconflow_url.clone(),
+            debug: vars.debug.clone(),
         });
         
         vars
+    }
+
+    // 清除缓存，仅用于测试
+    #[cfg(test)]
+    pub fn clear_cache() {
+        *ENV_VARS_CACHE.lock().unwrap() = None;
     }
 }
 
@@ -90,6 +100,7 @@ pub struct Config {
     pub ollama_url: String,
     pub siliconflow_api_key: Option<String>,
     pub siliconflow_url: String,
+    pub debug: bool,
 }
 
 impl Config {
@@ -107,6 +118,7 @@ impl Config {
             ollama_url: "http://localhost:11434/api/generate".to_owned(),
             siliconflow_api_key: None,
             siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_owned(),
+            debug: false,
         };
 
         // 在非测试环境下加载环境变量
@@ -117,7 +129,7 @@ impl Config {
         config
     }
 
-    fn load_from_env(&mut self) {
+    pub fn load_from_env(&mut self) {
         let env_vars = EnvVars::load();
         
         if let Some(provider) = env_vars.provider {
@@ -140,6 +152,9 @@ impl Config {
         }
         if let Some(url) = env_vars.siliconflow_url {
             self.siliconflow_url = url;
+        }
+        if let Some(debug) = env_vars.debug {
+            self.debug = debug.to_lowercase() == "true" || debug == "1";
         }
     }
 
@@ -190,6 +205,7 @@ mod tests {
         env::remove_var("AI_COMMIT_OLLAMA_URL");
         env::remove_var("AI_COMMIT_SILICONFLOW_API_KEY");
         env::remove_var("AI_COMMIT_SILICONFLOW_URL");
+        env::remove_var("AI_COMMIT_DEBUG");
     }
 
     #[test]
@@ -532,6 +548,123 @@ mod tests {
         config.provider = "unknown_provider".to_string();
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("Unsupported provider"));
+        
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_default() {
+        clear_env();
+        let config = Config::new();
+        assert_eq!(config.debug, false);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_from_env_true() {
+        clear_env();
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "true");
+        
+        let mut config = Config::new();
+        config.load_from_env();
+        
+        assert_eq!(config.debug, true);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_from_env_one() {
+        clear_env();
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "1");
+        
+        let mut config = Config::new();
+        config.load_from_env();
+        
+        assert_eq!(config.debug, true);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_from_env_false() {
+        clear_env();
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "false");
+        
+        let mut config = Config::new();
+        config.load_from_env();
+        
+        assert_eq!(config.debug, false);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_from_env_zero() {
+        clear_env();
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "0");
+        
+        let mut config = Config::new();
+        config.load_from_env();
+        
+        assert_eq!(config.debug, false);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_from_env_invalid() {
+        clear_env();
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "invalid");
+        
+        let mut config = Config::new();
+        config.load_from_env();
+        
+        assert_eq!(config.debug, false);
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_case_insensitive() {
+        clear_env();
+        
+        // 测试大写 TRUE
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "TRUE");
+        let mut config = Config::new();
+        config.load_from_env();
+        assert_eq!(config.debug, true);
+        
+        // 测试混合大小写 True
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "True");
+        config = Config::new();
+        config.load_from_env();
+        assert_eq!(config.debug, true);
+        
+        // 测试大写 FALSE
+        EnvVars::clear_cache();
+        env::set_var("AI_COMMIT_DEBUG", "FALSE");
+        config = Config::new();
+        config.load_from_env();
+        assert_eq!(config.debug, false);
+        
+        clear_env();
+    }
+
+    #[test]
+    fn test_debug_mode_in_env_vars_cache() {
+        clear_env();
+        EnvVars::clear_cache();
+        
+        env::set_var("AI_COMMIT_DEBUG", "true");
+        env::set_var("AI_COMMIT_PROVIDER", "deepseek");
+        
+        let env_vars = EnvVars::load();
+        
+        assert_eq!(env_vars.debug, Some("true".to_string()));
+        assert_eq!(env_vars.provider, Some("deepseek".to_string()));
         
         clear_env();
     }
