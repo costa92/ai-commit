@@ -414,12 +414,12 @@ mod tests {
     #[test]
     fn test_tag_name_generation_logic() {
         // 测试 tag 名称生成逻辑
-        let parts = vec![1, 2, 3];
+        let parts = [1, 2, 3];
         let tag_name = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
         assert_eq!(tag_name, "v1.2.3");
 
         // 测试增量逻辑
-        let mut parts = vec![1, 2, 3];
+        let mut parts = [1, 2, 3];
         parts[2] += 1; // 增加 patch 版本
         let next_tag = format!("v{}.{}.{}", parts[0], parts[1], parts[2]);
         assert_eq!(next_tag, "v1.2.4");
@@ -586,6 +586,5 @@ mod tests {
         }
 
         // 如果没有死锁或恐慌，测试通过
-        assert!(true);
     }
 }

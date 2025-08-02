@@ -291,7 +291,7 @@ mod tests {
                 let message_map = i18n
                     .strings
                     .get(key)
-                    .expect(&format!("Key '{}' should exist", key));
+                    .unwrap_or_else(|| panic!("Key '{}' should exist", key));
                 assert!(
                     message_map.contains_key(lang),
                     "Language {:?} should have message for key '{}'",
@@ -371,7 +371,7 @@ mod tests {
             let message_map = i18n.strings.get(key).unwrap();
             let mut found_expected = false;
 
-            for (_lang, message) in message_map {
+            for message in message_map.values() {
                 for substring in &expected_substrings {
                     if message.contains(substring) {
                         found_expected = true;

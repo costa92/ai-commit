@@ -293,7 +293,6 @@ mod tests {
         ensure_env_loaded();
 
         // 验证函数不会崩溃
-        assert!(true);
     }
 
     #[test]
@@ -616,7 +615,7 @@ mod tests {
     fn test_debug_mode_default() {
         clear_env();
         let config = Config::new();
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
         clear_env();
     }
 
@@ -629,7 +628,7 @@ mod tests {
         let mut config = Config::new();
         config.load_from_env();
 
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
         clear_env();
     }
 
@@ -642,7 +641,7 @@ mod tests {
         let mut config = Config::new();
         config.load_from_env();
 
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
         clear_env();
     }
 
@@ -655,7 +654,7 @@ mod tests {
         let mut config = Config::new();
         config.load_from_env();
 
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
         clear_env();
     }
 
@@ -668,7 +667,7 @@ mod tests {
         let mut config = Config::new();
         config.load_from_env();
 
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
         clear_env();
     }
 
@@ -681,7 +680,7 @@ mod tests {
         let mut config = Config::new();
         config.load_from_env();
 
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
         clear_env();
     }
 
@@ -694,21 +693,21 @@ mod tests {
         env::set_var("AI_COMMIT_DEBUG", "TRUE");
         let mut config = Config::new();
         config.load_from_env();
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
 
         // 测试混合大小写 True
         EnvVars::clear_cache();
         env::set_var("AI_COMMIT_DEBUG", "True");
         config = Config::new();
         config.load_from_env();
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
 
         // 测试大写 FALSE
         EnvVars::clear_cache();
         env::set_var("AI_COMMIT_DEBUG", "FALSE");
         config = Config::new();
         config.load_from_env();
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
 
         clear_env();
     }

@@ -88,32 +88,32 @@ mod tests {
     #[test]
     fn test_args_default_values() {
         // 测试默认参数解析
-        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
 
         assert_eq!(args.provider, "");
         assert_eq!(args.model, "");
-        assert_eq!(args.no_add, false);
-        assert_eq!(args.push, false);
+        assert!(!args.no_add);
+        assert!(!args.push);
         assert_eq!(args.new_tag, None);
         assert_eq!(args.tag_note, "");
-        assert_eq!(args.show_tag, false);
-        assert_eq!(args.push_branches, false);
+        assert!(!args.show_tag);
+        assert!(!args.push_branches);
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_switch, None);
-        assert_eq!(args.worktree_list, false);
-        assert_eq!(args.worktree_verbose, false);
-        assert_eq!(args.worktree_porcelain, false);
-        assert_eq!(args.worktree_z, false);
+        assert!(!args.worktree_list);
+        assert!(!args.worktree_verbose);
+        assert!(!args.worktree_porcelain);
+        assert!(!args.worktree_z);
         assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
-        assert_eq!(args.worktree_clear, false);
+        assert!(!args.worktree_clear);
     }
 
     #[test]
     fn test_args_short_flags() {
         // 测试短参数
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "-P",
             "deepseek",
@@ -130,17 +130,17 @@ mod tests {
 
         assert_eq!(args.provider, "deepseek");
         assert_eq!(args.model, "gpt-4");
-        assert_eq!(args.no_add, true);
-        assert_eq!(args.push, true);
+        assert!(args.no_add);
+        assert!(args.push);
         assert_eq!(args.new_tag, Some("v1.2.3".to_string()));
-        assert_eq!(args.show_tag, true);
-        assert_eq!(args.push_branches, true);
+        assert!(args.show_tag);
+        assert!(args.push_branches);
     }
 
     #[test]
     fn test_args_long_flags() {
         // 测试长参数
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--provider",
             "ollama",
@@ -159,18 +159,18 @@ mod tests {
 
         assert_eq!(args.provider, "ollama");
         assert_eq!(args.model, "mistral");
-        assert_eq!(args.no_add, true);
-        assert_eq!(args.push, true);
+        assert!(args.no_add);
+        assert!(args.push);
         assert_eq!(args.new_tag, Some("v2.0.0".to_string()));
         assert_eq!(args.tag_note, "Release version 2.0.0");
-        assert_eq!(args.show_tag, true);
-        assert_eq!(args.push_branches, true);
+        assert!(args.show_tag);
+        assert!(args.push_branches);
     }
 
     #[test]
     fn test_args_mixed_flags() {
         // 测试混合使用短参数和长参数
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "-P",
             "siliconflow",
@@ -185,7 +185,7 @@ mod tests {
 
         assert_eq!(args.provider, "siliconflow");
         assert_eq!(args.model, "qwen-plus");
-        assert_eq!(args.push, true);
+        assert!(args.push);
         assert_eq!(args.new_tag, Some("".to_string())); // --new-tag without value
         assert_eq!(args.tag_note, "Mixed flags test");
     }
@@ -195,19 +195,19 @@ mod tests {
         // 测试 new-tag 参数的不同用法
 
         // 不带值的 --new-tag
-        let args = Args::try_parse_from(&["ai-commit", "--new-tag"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--new-tag"]).unwrap();
         assert_eq!(args.new_tag, Some("".to_string()));
 
         // 带值的 --new-tag
-        let args = Args::try_parse_from(&["ai-commit", "--new-tag", "v1.0.0"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--new-tag", "v1.0.0"]).unwrap();
         assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
 
         // 短参数不带值
-        let args = Args::try_parse_from(&["ai-commit", "-t"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "-t"]).unwrap();
         assert_eq!(args.new_tag, Some("".to_string()));
 
         // 短参数带值
-        let args = Args::try_parse_from(&["ai-commit", "-t", "v2.1.0"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "-t", "v2.1.0"]).unwrap();
         assert_eq!(args.new_tag, Some("v2.1.0".to_string()));
     }
 
@@ -216,15 +216,15 @@ mod tests {
         // 测试 tag-note 参数的不同用法
 
         // 空 tag note
-        let args = Args::try_parse_from(&["ai-commit", "--tag-note", ""]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--tag-note", ""]).unwrap();
         assert_eq!(args.tag_note, "");
 
         // 简单 tag note
-        let args = Args::try_parse_from(&["ai-commit", "--tag-note", "Simple note"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--tag-note", "Simple note"]).unwrap();
         assert_eq!(args.tag_note, "Simple note");
 
         // 包含特殊字符的 tag note
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--tag-note",
             "Version 1.0.0 - Bug fixes & improvements",
@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(args.tag_note, "Version 1.0.0 - Bug fixes & improvements");
 
         // 中文 tag note
-        let args = Args::try_parse_from(&["ai-commit", "--tag-note", "发布版本 1.0.0"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--tag-note", "发布版本 1.0.0"]).unwrap();
         assert_eq!(args.tag_note, "发布版本 1.0.0");
     }
 
@@ -243,10 +243,10 @@ mod tests {
         let providers = vec!["ollama", "deepseek", "siliconflow", "custom"];
 
         for provider in providers {
-            let args = Args::try_parse_from(&["ai-commit", "-P", provider]).unwrap();
+            let args = Args::try_parse_from(["ai-commit", "-P", provider]).unwrap();
             assert_eq!(args.provider, provider);
 
-            let args = Args::try_parse_from(&["ai-commit", "--provider", provider]).unwrap();
+            let args = Args::try_parse_from(["ai-commit", "--provider", provider]).unwrap();
             assert_eq!(args.provider, provider);
         }
     }
@@ -263,10 +263,10 @@ mod tests {
         ];
 
         for model in models {
-            let args = Args::try_parse_from(&["ai-commit", "-m", model]).unwrap();
+            let args = Args::try_parse_from(["ai-commit", "-m", model]).unwrap();
             assert_eq!(args.model, model);
 
-            let args = Args::try_parse_from(&["ai-commit", "--model", model]).unwrap();
+            let args = Args::try_parse_from(["ai-commit", "--model", model]).unwrap();
             assert_eq!(args.model, model);
         }
     }
@@ -276,20 +276,20 @@ mod tests {
         // 测试所有布尔标志
 
         // 单独测试每个布尔标志
-        let args = Args::try_parse_from(&["ai-commit", "--no-add"]).unwrap();
-        assert_eq!(args.no_add, true);
+        let args = Args::try_parse_from(["ai-commit", "--no-add"]).unwrap();
+        assert!(args.no_add);
 
-        let args = Args::try_parse_from(&["ai-commit", "--push"]).unwrap();
-        assert_eq!(args.push, true);
+        let args = Args::try_parse_from(["ai-commit", "--push"]).unwrap();
+        assert!(args.push);
 
-        let args = Args::try_parse_from(&["ai-commit", "--show-tag"]).unwrap();
-        assert_eq!(args.show_tag, true);
+        let args = Args::try_parse_from(["ai-commit", "--show-tag"]).unwrap();
+        assert!(args.show_tag);
 
-        let args = Args::try_parse_from(&["ai-commit", "--push-branches"]).unwrap();
-        assert_eq!(args.push_branches, true);
+        let args = Args::try_parse_from(["ai-commit", "--push-branches"]).unwrap();
+        assert!(args.push_branches);
 
         // 组合测试
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--no-add",
             "--push",
@@ -297,23 +297,23 @@ mod tests {
             "--push-branches",
         ])
         .unwrap();
-        assert_eq!(args.no_add, true);
-        assert_eq!(args.push, true);
-        assert_eq!(args.show_tag, true);
-        assert_eq!(args.push_branches, true);
+        assert!(args.no_add);
+        assert!(args.push);
+        assert!(args.show_tag);
+        assert!(args.push_branches);
     }
 
     #[test]
     fn test_args_help_and_version() {
         // 测试 help 和 version 标志（这些会导致程序退出，所以测试失败是预期的）
 
-        let result = Args::try_parse_from(&["ai-commit", "--help"]);
+        let result = Args::try_parse_from(["ai-commit", "--help"]);
         assert!(result.is_err());
 
-        let result = Args::try_parse_from(&["ai-commit", "--version"]);
+        let result = Args::try_parse_from(["ai-commit", "--version"]);
         assert!(result.is_err());
 
-        let result = Args::try_parse_from(&["ai-commit", "-h"]);
+        let result = Args::try_parse_from(["ai-commit", "-h"]);
         assert!(result.is_err());
     }
 
@@ -321,10 +321,10 @@ mod tests {
     fn test_args_invalid_arguments() {
         // 测试无效参数
 
-        let result = Args::try_parse_from(&["ai-commit", "--invalid-flag"]);
+        let result = Args::try_parse_from(["ai-commit", "--invalid-flag"]);
         assert!(result.is_err());
 
-        let result = Args::try_parse_from(&["ai-commit", "-x"]);
+        let result = Args::try_parse_from(["ai-commit", "-x"]);
         assert!(result.is_err());
     }
 
@@ -333,12 +333,12 @@ mod tests {
         // 测试真实世界的使用场景
 
         // 场景1: 快速提交
-        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
         assert_eq!(args.provider, "");
-        assert_eq!(args.push, false);
+        assert!(!args.push);
 
         // 场景2: 使用 Deepseek 并推送
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--provider",
             "deepseek",
@@ -349,10 +349,10 @@ mod tests {
         .unwrap();
         assert_eq!(args.provider, "deepseek");
         assert_eq!(args.model, "deepseek-chat");
-        assert_eq!(args.push, true);
+        assert!(args.push);
 
         // 场景3: 创建标签并推送
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--new-tag",
             "v1.0.0",
@@ -364,22 +364,22 @@ mod tests {
         .unwrap();
         assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
         assert_eq!(args.tag_note, "First stable release");
-        assert_eq!(args.push, true);
-        assert_eq!(args.push_branches, true);
+        assert!(args.push);
+        assert!(args.push_branches);
 
         // 场景4: 查看标签信息
-        let args = Args::try_parse_from(&["ai-commit", "--show-tag"]).unwrap();
-        assert_eq!(args.show_tag, true);
+        let args = Args::try_parse_from(["ai-commit", "--show-tag"]).unwrap();
+        assert!(args.show_tag);
 
         // 场景5: 跳过 git add
-        let args = Args::try_parse_from(&["ai-commit", "--no-add"]).unwrap();
-        assert_eq!(args.no_add, true);
+        let args = Args::try_parse_from(["ai-commit", "--no-add"]).unwrap();
+        assert!(args.no_add);
     }
 
     #[test]
     fn test_args_empty_values() {
         // 测试空值处理
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--provider",
             "",
@@ -398,7 +398,7 @@ mod tests {
     #[test]
     fn test_args_debug_format() {
         // 测试 Debug trait
-        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
         let debug_str = format!("{:?}", args);
 
         assert!(debug_str.contains("Args"));
@@ -411,7 +411,7 @@ mod tests {
         // 测试复杂场景组合
 
         // 复杂场景1: 全参数
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--provider",
             "siliconflow",
@@ -429,36 +429,36 @@ mod tests {
 
         assert_eq!(args.provider, "siliconflow");
         assert_eq!(args.model, "qwen-turbo");
-        assert_eq!(args.no_add, true);
-        assert_eq!(args.push, true);
+        assert!(args.no_add);
+        assert!(args.push);
         assert_eq!(args.new_tag, Some("v2.1.0-beta".to_string()));
         assert_eq!(args.tag_note, "Beta release with new features");
-        assert_eq!(args.push_branches, true);
-        assert_eq!(args.show_tag, false); // 未设置的保持默认值
+        assert!(args.push_branches);
+        assert!(!args.show_tag); // 未设置的保持默认值
     }
 
     #[test]
     fn test_args_worktree_create() {
         // 测试 worktree-create 参数
         let args =
-            Args::try_parse_from(&["ai-commit", "--worktree-create", "feature/new-ui"]).unwrap();
+            Args::try_parse_from(["ai-commit", "--worktree-create", "feature/new-ui"]).unwrap();
 
         assert_eq!(args.worktree_create, Some("feature/new-ui".to_string()));
         assert_eq!(args.worktree_switch, None);
-        assert_eq!(args.worktree_list, false);
-        assert_eq!(args.worktree_verbose, false);
-        assert_eq!(args.worktree_porcelain, false);
-        assert_eq!(args.worktree_z, false);
+        assert!(!args.worktree_list);
+        assert!(!args.worktree_verbose);
+        assert!(!args.worktree_porcelain);
+        assert!(!args.worktree_z);
         assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
-        assert_eq!(args.worktree_clear, false);
+        assert!(!args.worktree_clear);
     }
 
     #[test]
     fn test_args_worktree_create_with_path() {
         // 测试 worktree-create 和 worktree-path 组合
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--worktree-create",
             "feature/auth",
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn test_args_worktree_switch() {
         // 测试 worktree-switch 参数
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-switch", "feature/ui"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--worktree-switch", "feature/ui"]).unwrap();
 
         assert_eq!(args.worktree_switch, Some("feature/ui".to_string()));
         assert_eq!(args.worktree_create, None);
@@ -483,9 +483,9 @@ mod tests {
     #[test]
     fn test_args_worktree_list() {
         // 测试 worktree-list 参数
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-list"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--worktree-list"]).unwrap();
 
-        assert_eq!(args.worktree_list, true);
+        assert!(args.worktree_list);
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_switch, None);
     }
@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn test_args_worktree_remove() {
         // 测试 worktree-remove 参数
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-remove", "feature/old-feature"])
+        let args = Args::try_parse_from(["ai-commit", "--worktree-remove", "feature/old-feature"])
             .unwrap();
 
         assert_eq!(
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn test_args_worktree_combined_with_commit() {
         // 测试 worktree 参数与提交参数组合
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--worktree-switch",
             "feature/api",
@@ -520,31 +520,31 @@ mod tests {
 
         assert_eq!(args.worktree_switch, Some("feature/api".to_string()));
         assert_eq!(args.provider, "deepseek");
-        assert_eq!(args.push, true);
+        assert!(args.push);
         assert_eq!(args.new_tag, Some("v1.1.0".to_string()));
     }
 
     #[test]
     fn test_args_worktree_all_options() {
         // 测试所有 worktree 相关选项的默认值
-        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
 
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_switch, None);
-        assert_eq!(args.worktree_list, false);
-        assert_eq!(args.worktree_verbose, false);
-        assert_eq!(args.worktree_porcelain, false);
-        assert_eq!(args.worktree_z, false);
+        assert!(!args.worktree_list);
+        assert!(!args.worktree_verbose);
+        assert!(!args.worktree_porcelain);
+        assert!(!args.worktree_z);
         assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
-        assert_eq!(args.worktree_clear, false);
+        assert!(!args.worktree_clear);
     }
 
     #[test]
     fn test_args_worktree_invalid_combinations() {
         // 虽然 clap 不会验证语义冲突，但确保解析正常
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--worktree-create",
             "branch1",
@@ -561,9 +561,9 @@ mod tests {
     #[test]
     fn test_args_worktree_clear() {
         // 测试 worktree-clear 参数
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-clear"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--worktree-clear"]).unwrap();
 
-        assert_eq!(args.worktree_clear, true);
+        assert!(args.worktree_clear);
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_remove, None);
     }
@@ -571,24 +571,24 @@ mod tests {
     #[test]
     fn test_args_worktree_clear_with_debug() {
         // 测试 worktree-clear 与其他参数组合
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-clear", "--provider", "ollama"])
+        let args = Args::try_parse_from(["ai-commit", "--worktree-clear", "--provider", "ollama"])
             .unwrap();
 
-        assert_eq!(args.worktree_clear, true);
+        assert!(args.worktree_clear);
         assert_eq!(args.provider, "ollama");
     }
 
     #[test]
     fn test_args_worktree_clear_default() {
         // 测试 worktree-clear 默认值
-        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
-        assert_eq!(args.worktree_clear, false);
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.worktree_clear);
     }
 
     #[test]
     fn test_args_worktree_list_options() {
         // 测试 worktree list 的各种选项
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--worktree-list",
             "--worktree-verbose",
@@ -599,22 +599,22 @@ mod tests {
         ])
         .unwrap();
 
-        assert_eq!(args.worktree_list, true);
-        assert_eq!(args.worktree_verbose, true);
-        assert_eq!(args.worktree_porcelain, true);
-        assert_eq!(args.worktree_z, true);
+        assert!(args.worktree_list);
+        assert!(args.worktree_verbose);
+        assert!(args.worktree_porcelain);
+        assert!(args.worktree_z);
         assert_eq!(args.worktree_expire, Some("2weeks".to_string()));
     }
 
     #[test]
     fn test_args_worktree_list_short_options() {
         // 测试 worktree list 的短选项
-        let args = Args::try_parse_from(&["ai-commit", "--worktree-list", "-v", "-z"]).unwrap();
+        let args = Args::try_parse_from(["ai-commit", "--worktree-list", "-v", "-z"]).unwrap();
 
-        assert_eq!(args.worktree_list, true);
-        assert_eq!(args.worktree_verbose, true);
-        assert_eq!(args.worktree_z, true);
-        assert_eq!(args.worktree_porcelain, false);
+        assert!(args.worktree_list);
+        assert!(args.worktree_verbose);
+        assert!(args.worktree_z);
+        assert!(!args.worktree_porcelain);
     }
 
     #[test]
@@ -623,7 +623,7 @@ mod tests {
         let test_cases = vec!["1week", "2weeks", "1month", "2023-01-01", "yesterday"];
 
         for expire_time in test_cases {
-            let args = Args::try_parse_from(&[
+            let args = Args::try_parse_from([
                 "ai-commit",
                 "--worktree-list",
                 "--worktree-expire",
@@ -631,7 +631,7 @@ mod tests {
             ])
             .unwrap();
 
-            assert_eq!(args.worktree_list, true);
+            assert!(args.worktree_list);
             assert_eq!(args.worktree_expire, Some(expire_time.to_string()));
         }
     }
@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn test_args_worktree_list_combinations() {
         // 测试 worktree list 选项组合
-        let args = Args::try_parse_from(&[
+        let args = Args::try_parse_from([
             "ai-commit",
             "--worktree-list",
             "--worktree-porcelain",
@@ -647,10 +647,10 @@ mod tests {
         ])
         .unwrap();
 
-        assert_eq!(args.worktree_list, true);
-        assert_eq!(args.worktree_porcelain, true);
-        assert_eq!(args.worktree_z, true);
-        assert_eq!(args.worktree_verbose, false); // 不应该同时使用 verbose 和 porcelain
+        assert!(args.worktree_list);
+        assert!(args.worktree_porcelain);
+        assert!(args.worktree_z);
+        assert!(!args.worktree_verbose); // 不应该同时使用 verbose 和 porcelain
     }
 }
 // CLI参数修改

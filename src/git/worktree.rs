@@ -434,8 +434,8 @@ mod tests {
         assert_eq!(info.path, path);
         assert_eq!(info.branch, branch);
         assert_eq!(info.commit, commit);
-        assert_eq!(info.is_bare, false);
-        assert_eq!(info.is_detached, false);
+        assert!(!info.is_bare);
+        assert!(!info.is_detached);
     }
 
     #[test]
@@ -713,13 +713,13 @@ mod tests {
     #[test]
     fn test_clear_function_signature() {
         // 编译时检查函数签名
+        #[allow(dead_code)]
         fn check_clear_other_worktrees() -> impl std::future::Future<Output = anyhow::Result<usize>>
         {
             clear_other_worktrees()
         }
 
         // 如果编译通过，说明函数签名正确
-        assert!(true);
     }
 
     #[test]

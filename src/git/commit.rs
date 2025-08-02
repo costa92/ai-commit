@@ -238,28 +238,32 @@ mod tests {
         // 验证函数签名的正确性（编译时检查）
 
         // 这些函数应该都是 async 且返回 Result
+        #[allow(dead_code)]
         fn check_git_add_all() -> impl std::future::Future<Output = anyhow::Result<()>> {
             git_add_all()
         }
 
+        #[allow(dead_code)]
         fn check_git_commit() -> impl std::future::Future<Output = anyhow::Result<()>> {
             git_commit("test")
         }
 
+        #[allow(dead_code)]
         fn check_git_push() -> impl std::future::Future<Output = anyhow::Result<()>> {
             git_push()
         }
 
+        #[allow(dead_code)]
         fn check_get_git_diff() -> impl std::future::Future<Output = anyhow::Result<String>> {
             get_git_diff()
         }
 
+        #[allow(dead_code)]
         fn check_git_commit_allow_empty() -> impl std::future::Future<Output = anyhow::Result<()>> {
             git_commit_allow_empty("test")
         }
 
         // 如果编译通过，说明函数签名正确
-        assert!(true);
     }
 }
 // 测试注释3

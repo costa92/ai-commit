@@ -38,7 +38,7 @@ fn test_config_integration() {
     assert!(config.validate().is_ok()); // ollama provider应该总是valid
 
     // 验证debug模式默认为false
-    assert_eq!(config.debug, false);
+    assert!(!config.debug);
 
     // 2. 测试配置验证（不同提供商）
     let mut config = Config::new();
@@ -82,7 +82,7 @@ fn test_config_integration() {
 #[test]
 fn test_cli_config_integration() {
     // 模拟命令行参数
-    let args = Args::try_parse_from(&[
+    let args = Args::try_parse_from([
         "ai-commit",
         "--provider",
         "deepseek",
@@ -100,10 +100,10 @@ fn test_cli_config_integration() {
     // 验证参数解析
     assert_eq!(args.provider, "deepseek");
     assert_eq!(args.model, "deepseek-chat");
-    assert_eq!(args.push, true);
+    assert!(args.push);
     assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
     assert_eq!(args.tag_note, "Integration test release");
-    assert_eq!(args.push_branches, true);
+    assert!(args.push_branches);
 
     // 测试配置更新
     let mut config = Config::new();
@@ -172,7 +172,7 @@ fn test_prompt_integration() {
 #[test]
 fn test_full_system_integration() {
     // 1. 解析命令行参数
-    let args = Args::try_parse_from(&[
+    let args = Args::try_parse_from([
         "ai-commit",
         "--provider",
         "ollama",
@@ -204,8 +204,8 @@ fn test_full_system_integration() {
     assert!(prompt.contains("输出格式"));
 
     // 6. 验证系统状态一致性
-    assert_eq!(args.no_add, true);
-    assert_eq!(args.push, false);
+    assert!(args.no_add);
+    assert!(!args.push);
     assert_eq!(config.provider, "ollama");
 }
 
@@ -223,7 +223,7 @@ fn test_error_handling_integration() {
     assert!(error_msg.contains("Deepseek API key"));
 
     // 2. 测试CLI参数解析错误
-    let parse_result = Args::try_parse_from(&["ai-commit", "--invalid-flag"]);
+    let parse_result = Args::try_parse_from(["ai-commit", "--invalid-flag"]);
     assert!(parse_result.is_err());
 
     // 3. 测试国际化的未知键处理
@@ -261,7 +261,7 @@ fn test_configuration_priority_integration() {
     };
     assert_eq!(config.provider, "ollama");
     assert_eq!(config.model, "mistral");
-    assert_eq!(config.debug, false);
+    assert!(!config.debug);
 
     // 2. 测试命令行参数覆盖
     let mut config = Config {
@@ -299,7 +299,7 @@ fn test_configuration_priority_integration() {
     assert_eq!(config.provider, "deepseek");
     assert_eq!(config.model, "cli-model");
     // debug字段不受命令行参数影响
-    assert_eq!(config.debug, false);
+    assert!(!config.debug);
 }
 
 /// 集成测试：测试性能优化效果
@@ -376,7 +376,7 @@ fn test_debug_mode_integration() {
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
         debug: false,
     };
-    assert_eq!(config.debug, false);
+    assert!(!config.debug);
 
     // 2. 测试通过环境变量设置debug模式（手动测试）
     env::set_var("AI_COMMIT_DEBUG", "true");
@@ -390,7 +390,7 @@ fn test_debug_mode_integration() {
 
     let mut config = Config::new();
     config.load_from_env(); // 手动加载环境变量
-    assert_eq!(config.debug, true);
+    assert!(config.debug);
 
     // 3. 测试debug值解析逻辑
     let test_cases = vec![
