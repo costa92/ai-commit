@@ -11,13 +11,14 @@
   <img src="https://img.shields.io/github/issues/costa92/ai-commit?style=flat-square" alt="issues"/>
 </p>
 
-ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端大模型（如 Ollama、Deepseek、SiliconFlow），可自动根据代码变更生成符合 Conventional Commits 规范的中文提交信息，提升团队协作效率和提交规范性。
+ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端大模型（如 Ollama、Deepseek、SiliconFlow），可自动根据代码变更生成符合 Conventional Commits 规范的中文提交信息，并支持 AI 驱动的 Code Review 需求文档生成，提升团队协作效率和提交规范性。
 
 ---
 
 ## 主要功能
 
 - 自动生成规范化的 Git commit message（支持中文，主题不超 50 字）
+- **🆕 AI 驱动的 Code Review 需求文档生成**，支持 Go、TypeScript、JavaScript、Rust 等语言特定分析
 - 支持 Ollama、Deepseek、SiliconFlow 等多种 AI provider
 - 可自定义模型、API 地址、API Key
 - 自动 git add/commit/push，参数可控
@@ -123,6 +124,32 @@ $ ai-commit
 # 通过命令行参数指定提供商
 $ ai-commit --provider siliconflow --model Qwen/Qwen2.5-7B-Instruct
 ```
+
+### Code Review 需求文档生成
+
+```sh
+# 生成 Go 项目的需求文档 (Markdown 格式)
+$ ai-commit --generate-requirements --target-language go
+
+# 生成 TypeScript 项目的需求文档 (JSON 格式)
+$ ai-commit --gen-req --target-language typescript --output-format json
+
+# 保存需求文档到指定文件
+$ ai-commit --gen-req --target-language auto --output-file requirements.md
+
+# 自动检测语言并生成详细的需求文档
+$ ai-commit --generate-requirements --target-language auto --output-format markdown
+
+# 支持的目标语言: go, typescript, javascript, rust, auto (自动检测)
+# 支持的输出格式: markdown, json
+```
+
+**需求文档包含以下内容：**
+- 📋 变更摘要和影响分析
+- 🔄 文件变更详情和语言特性识别
+- 🧪 语言特定的测试计划和策略
+- 📊 架构影响评估和风险分析
+- 🔒 安全考虑和迁移要求
 
 ### Git Worktree 开发模式示例
 

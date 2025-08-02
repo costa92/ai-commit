@@ -78,6 +78,26 @@ pub struct Args {
     /// 清空除当前外的所有其他 worktrees
     #[arg(long = "worktree-clear", default_value_t = false)]
     pub worktree_clear: bool,
+
+    /// 进行代码审查分析
+    #[arg(long = "code-review", default_value_t = false)]
+    pub code_review: bool,
+
+    /// 代码审查输出格式 (text, markdown, json)
+    #[arg(long = "review-format", default_value = "markdown")]
+    pub review_format: String,
+
+    /// 代码审查报告输出文件路径
+    #[arg(long = "review-output", value_name = "FILE")]
+    pub review_output: Option<String>,
+
+    /// 指定要审查的文件路径列表（逗号分隔）
+    #[arg(long = "review-files", value_name = "FILES")]
+    pub review_files: Option<String>,
+
+    /// 只显示检测到的语言统计
+    #[arg(long = "show-languages", default_value_t = false)]
+    pub show_languages: bool,
 }
 
 #[cfg(test)]
