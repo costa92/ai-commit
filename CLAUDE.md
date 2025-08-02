@@ -24,16 +24,32 @@ make install
 **Testing and Linting:**
 ```bash
 # Run all tests
+make test
+# or
 cargo test
 
-# Run tests with output
+# Run tests with verbose output
+make test-verbose
+# or
 cargo test -- --nocapture
 
-# Check code formatting
+# Code quality checks
+make check           # Run clippy + formatting check
+make clippy          # Run clippy linting only
+make fmt-check       # Check code formatting only
+# or
+cargo clippy -- -D warnings
 cargo fmt --check
 
-# Run clippy for linting
-cargo clippy -- -D warnings
+# Code formatting and fixes
+make fmt             # Format code automatically
+make fix             # Format code + fix clippy issues
+# or
+cargo fmt
+cargo clippy --fix --allow-dirty --allow-staged
+
+# Complete quality assurance
+make qa              # Run tests + checks (full QA pipeline)
 ```
 
 **Changelog and Git Utilities:**

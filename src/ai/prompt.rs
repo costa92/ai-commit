@@ -1,6 +1,6 @@
+use once_cell::sync::Lazy;
 use std::env;
 use std::fs;
-use once_cell::sync::Lazy;
 use std::sync::RwLock;
 
 // 提示模板缓存
@@ -39,11 +39,11 @@ pub fn get_prompt(diff: &str) -> String {
             return template.replace("{{git_diff}}", diff);
         }
     }
-    
+
     // 加载并缓存模板
     let template = load_prompt_template();
     *PROMPT_CACHE.write().unwrap() = Some(template.clone());
-    
+
     template.replace("{{git_diff}}", diff)
 }
 
@@ -57,7 +57,7 @@ mod tests {
     fn test_get_prompt_with_diff() {
         let diff = "diff --git a/test.txt b/test.txt\n+added line";
         let prompt = get_prompt(diff);
-        
+
         // 验证 diff 已被正确替换
         assert!(prompt.contains("added line"));
         assert!(!prompt.contains("{{git_diff}}"));
@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn test_get_prompt_empty_diff() {
         let prompt = get_prompt("");
-        
+
         // 验证空 diff 不会导致错误
         assert!(!prompt.contains("{{git_diff}}"));
         assert!(!prompt.is_empty()); // 应该包含模板内容
@@ -76,10 +76,10 @@ mod tests {
     fn test_get_prompt_multiple_calls_cached() {
         let diff1 = "first diff";
         let diff2 = "second diff";
-        
+
         let prompt1 = get_prompt(diff1);
         let prompt2 = get_prompt(diff2);
-        
+
         // 验证缓存工作正常
         assert!(prompt1.contains("first diff"));
         assert!(prompt2.contains("second diff"));
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_load_prompt_template_default() {
         let template = load_prompt_template();
-        
+
         // 验证加载的模板包含预期内容（更新为实际模板内容）
         assert!(template.contains("{{git_diff}}"));
         assert!(template.contains("输出格式"));
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn test_load_prompt_template_with_custom_file() {
         // 创建临时文件
-        let mut temp_file = NamedTempFile::new().unwrap();  
+        let mut temp_file = NamedTempFile::new().unwrap();
         let custom_content = "Custom template with {{git_diff}} placeholder";
         temp_file.write_all(custom_content.as_bytes()).unwrap();
         temp_file.flush().unwrap();
@@ -113,7 +113,7 @@ mod tests {
         *PROMPT_CACHE.write().unwrap() = None;
 
         let template = load_prompt_template();
-        
+
         // 验证模板内容 - 如果存在本地 commit-prompt.txt，则使用本地文件
         // 否则使用环境变量指定的文件
         if std::path::Path::new("commit-prompt.txt").exists() {
@@ -139,18 +139,18 @@ mod tests {
     fn test_prompt_cache_singleton() {
         // 清除缓存
         *PROMPT_CACHE.write().unwrap() = None;
-        
+
         let diff = "test diff";
         let prompt1 = get_prompt(diff);
-        
+
         // 验证缓存已设置
         {
             let cache = PROMPT_CACHE.read().unwrap();
             assert!(cache.is_some());
         }
-        
+
         let prompt2 = get_prompt(diff);
-        
+
         // 两次调用应该返回相同结果
         assert_eq!(prompt1, prompt2);
     }
@@ -160,7 +160,7 @@ mod tests {
         let template = "Before {{git_diff}} After";
         let diff = "REPLACEMENT";
         let result = template.replace("{{git_diff}}", diff);
-        
+
         assert_eq!(result, "Before REPLACEMENT After");
         assert!(!result.contains("{{git_diff}}"));
     }
@@ -169,23 +169,23 @@ mod tests {
     fn test_env_var_handling() {
         // 测试环境变量处理
         let original = std::env::var("AI_COMMIT_PROMPT_PATH").ok();
-        
+
         // 设置不存在的路径
         std::env::set_var("AI_COMMIT_PROMPT_PATH", "/nonexistent/path.txt");
-        
+
         // 清除缓存
         *PROMPT_CACHE.write().unwrap() = None;
-        
+
         // 应该回退到默认模板
         let template = load_prompt_template();
         assert!(template.contains("输出格式"));
-        
+
         // 恢复原始环境变量
         match original {
             Some(path) => std::env::set_var("AI_COMMIT_PROMPT_PATH", path),
             None => std::env::remove_var("AI_COMMIT_PROMPT_PATH"),
         }
-        
+
         // 清除缓存
         *PROMPT_CACHE.write().unwrap() = None;
     }
@@ -193,10 +193,10 @@ mod tests {
     #[test]
     fn test_concurrent_cache_access() {
         use std::thread;
-        
+
         // 清除缓存
         *PROMPT_CACHE.write().unwrap() = None;
-        
+
         let handles: Vec<_> = (0..10)
             .map(|i| {
                 thread::spawn(move || {
@@ -205,9 +205,9 @@ mod tests {
                 })
             })
             .collect();
-        
+
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        
+
         // 所有结果都应该成功生成
         assert_eq!(results.len(), 10);
         for (i, result) in results.iter().enumerate() {

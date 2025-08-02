@@ -1,10 +1,10 @@
+use crate::ai::diff_analyzer::DiffAnalysis;
 use futures_util::StreamExt;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncWriteExt, stdout};
-use crate::ai::diff_analyzer::DiffAnalysis;
+use tokio::io::{stdout, AsyncWriteExt};
 
 // 全局 HTTP 客户端复用
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
@@ -15,9 +15,7 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
         .expect("Failed to create HTTP client")
 });
 
-static RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?s)```(?:[a-zA-Z]+\n)?(.*?)\n```").unwrap()
-});
+static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?s)```(?:[a-zA-Z]+\n)?(.*?)\n```").unwrap());
 
 // 预编译验证正则表达式，提升性能
 static INVALID_RESPONSE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
@@ -117,14 +115,17 @@ pub async fn generate_commit_message(
 
     // 分析diff，优化大文件和多文件场景
     let analysis = DiffAnalysis::analyze_diff(diff);
-    
+
     // 创建优化的提示词
     let optimized_prompt = if analysis.is_large_diff || analysis.is_multi_file {
         if config.debug {
-            println!("检测到大型变更 ({}个文件, {}字符)，正在生成摘要...", 
-                     analysis.total_files, diff.len());
+            println!(
+                "检测到大型变更 ({}个文件, {}字符)，正在生成摘要...",
+                analysis.total_files,
+                diff.len()
+            );
         }
-        
+
         // 使用摘要版本的prompt
         create_summarized_prompt(&analysis, diff, prompt)
     } else {
@@ -143,10 +144,7 @@ pub async fn generate_commit_message(
                 stream: true,
             };
             let (url, api_key) = if config.provider == "siliconflow" {
-                (
-                    &config.siliconflow_url,
-                    config.siliconflow_api_key.as_ref(),
-                )
+                (&config.siliconflow_url, config.siliconflow_api_key.as_ref())
             } else {
                 (&config.deepseek_url, config.deepseek_api_key.as_ref())
             };
@@ -159,27 +157,29 @@ pub async fn generate_commit_message(
             }
 
             // 优化的流处理：预分配缓冲区，减少内存重新分配
-            let mut message = String::with_capacity(2048);  // 预分配更大的缓冲区
+            let mut message = String::with_capacity(2048); // 预分配更大的缓冲区
             let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
-            let mut buffer = Vec::with_capacity(8192);  // 中间缓冲区
-            
+            let mut buffer = Vec::with_capacity(8192); // 中间缓冲区
+
             while let Some(item) = stream.next().await {
                 let chunk = item?;
                 buffer.extend_from_slice(&chunk);
-                
+
                 // 批量处理缓冲区中的数据
-                if buffer.len() > 4096 {  // 批量处理阈值
+                if buffer.len() > 4096 {
+                    // 批量处理阈值
                     let chunk_str = std::str::from_utf8(&buffer)
                         .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
-                    
+
                     for line in chunk_str.lines() {
                         if line.starts_with("data:") {
                             let json_str = line.strip_prefix("data:").unwrap().trim();
                             if json_str == "[DONE]" {
                                 break;
                             }
-                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
+                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str)
+                            {
                                 if let Some(choice) = response.choices.first() {
                                     let content = &choice.delta.content;
                                     stdout_handle.write_all(content.as_bytes()).await?;
@@ -192,17 +192,18 @@ pub async fn generate_commit_message(
                     buffer.clear();
                 }
             }
-            
+
             // 处理剩余的数据
             if !buffer.is_empty() {
                 let chunk_str = std::str::from_utf8(&buffer)
                     .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
-                    
+
                 for line in chunk_str.lines() {
                     if line.starts_with("data:") {
                         let json_str = line.strip_prefix("data:").unwrap().trim();
                         if json_str != "[DONE]" {
-                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
+                            if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str)
+                            {
                                 if let Some(choice) = response.choices.first() {
                                     let content = &choice.delta.content;
                                     stdout_handle.write_all(content.as_bytes()).await?;
@@ -215,7 +216,7 @@ pub async fn generate_commit_message(
                 }
             }
             stdout_handle.write_all(b"\n").await?;
-            
+
             // 优化的响应验证：使用预编译正则表达式
             if INVALID_RESPONSE_PATTERNS.is_match(&message) || message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
@@ -243,21 +244,22 @@ pub async fn generate_commit_message(
                 anyhow::bail!("Ollama 响应错误: 状态码 {status}, 响应体: {text}");
             }
 
-            // 优化的流处理：预分配缓冲区，减少内存重新分配  
-            let mut message = String::with_capacity(2048);  // 预分配更大的缓冲区
+            // 优化的流处理：预分配缓冲区，减少内存重新分配
+            let mut message = String::with_capacity(2048); // 预分配更大的缓冲区
             let mut stdout_handle = stdout();
             let mut stream = res.bytes_stream();
-            let mut buffer = Vec::with_capacity(8192);  // 中间缓冲区
-            
+            let mut buffer = Vec::with_capacity(8192); // 中间缓冲区
+
             while let Some(item) = stream.next().await {
                 let chunk = item?;
                 buffer.extend_from_slice(&chunk);
-                
+
                 // 批量处理缓冲区中的数据
-                if buffer.len() > 4096 {  // 批量处理阈值
+                if buffer.len() > 4096 {
+                    // 批量处理阈值
                     let chunk_str = std::str::from_utf8(&buffer)
                         .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
-                    
+
                     for line in chunk_str.lines() {
                         if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
                             let content = &response.response;
@@ -269,12 +271,12 @@ pub async fn generate_commit_message(
                     buffer.clear();
                 }
             }
-            
+
             // 处理剩余的数据
             if !buffer.is_empty() {
                 let chunk_str = std::str::from_utf8(&buffer)
                     .map_err(|e| anyhow::anyhow!("UTF-8 decode error: {}", e))?;
-                    
+
                 for line in chunk_str.lines() {
                     if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
                         let content = &response.response;
@@ -285,7 +287,7 @@ pub async fn generate_commit_message(
                 }
             }
             stdout_handle.write_all(b"\n").await?;
-            
+
             // 优化的响应验证：使用预编译正则表达式
             if INVALID_RESPONSE_PATTERNS.is_match(&message) || message.trim().is_empty() {
                 anyhow::bail!("AI 服务未返回有效 commit message，请检查 AI 服务配置或网络连接。");
@@ -303,7 +305,11 @@ pub async fn generate_commit_message(
 }
 
 /// 为大型或多文件变更创建摘要化的提示词
-fn create_summarized_prompt(analysis: &DiffAnalysis, original_diff: &str, _base_prompt: &str) -> String {
+fn create_summarized_prompt(
+    analysis: &DiffAnalysis,
+    original_diff: &str,
+    _base_prompt: &str,
+) -> String {
     // 创建针对大文件场景的专用提示
     let summarized_template = format!(
         r#"输出格式：<type>(<scope>): <subject>
@@ -345,9 +351,13 @@ mod tests {
 
     #[test]
     fn test_clean_message_with_code_blocks() {
-        let message_with_code = "```\nfeat(user): add user authentication\n\nAdd JWT-based authentication system\n```";
+        let message_with_code =
+            "```\nfeat(user): add user authentication\n\nAdd JWT-based authentication system\n```";
         let cleaned = clean_message(message_with_code);
-        assert_eq!(cleaned, "feat(user): add user authentication\n\nAdd JWT-based authentication system");
+        assert_eq!(
+            cleaned,
+            "feat(user): add user authentication\n\nAdd JWT-based authentication system"
+        );
     }
 
     #[test]
@@ -392,7 +402,7 @@ mod tests {
         // 测试 HTTP 客户端是否是单例
         let client1 = &*HTTP_CLIENT;
         let client2 = &*HTTP_CLIENT;
-        
+
         // 两个引用应该指向同一个对象
         assert!(std::ptr::eq(client1, client2));
     }
@@ -404,7 +414,7 @@ mod tests {
             prompt: "test prompt",
             stream: true,
         };
-        
+
         let json = serde_json::to_string(&ollama_request).unwrap();
         assert!(json.contains("test-model"));
         assert!(json.contains("test prompt"));
@@ -421,7 +431,7 @@ mod tests {
             }],
             stream: true,
         };
-        
+
         let json = serde_json::to_string(&deepseek_request).unwrap();
         assert!(json.contains("gpt-4"));
         assert!(json.contains("user"));
@@ -467,7 +477,7 @@ mod tests {
     async fn test_generate_commit_message_empty_diff() {
         let config = Config::new();
         let _result = generate_commit_message("", &config, "test prompt").await;
-        
+
         // 应该因为空的 diff 而退出程序，这里我们无法测试 std::process::exit(0)
         // 但我们可以测试 diff.trim().is_empty() 的逻辑
         assert!("".trim().is_empty());
@@ -478,7 +488,7 @@ mod tests {
     async fn test_make_request_structure() {
         // 测试 make_request 函数的结构，但不实际发送请求
         let client = &*HTTP_CLIENT;
-        
+
         // 验证客户端已正确初始化（通过检查是否为有效的 Client 实例）
         // 由于 reqwest::Client 没有实现 Display trait，我们只能验证它存在
         assert!(std::ptr::addr_of!(*client) != std::ptr::null());
@@ -488,7 +498,7 @@ mod tests {
     fn test_config_provider_matching() {
         // 测试配置提供商匹配逻辑
         let providers = vec!["siliconflow", "deepseek", "ollama", "unknown"];
-        
+
         for provider in providers {
             match provider {
                 "siliconflow" | "deepseek" => {
@@ -496,7 +506,7 @@ mod tests {
                     assert!(true);
                 }
                 _ => {
-                    // 应该使用 OllamaRequest 格式  
+                    // 应该使用 OllamaRequest 格式
                     assert!(true);
                 }
             }
@@ -504,5 +514,5 @@ mod tests {
     }
 }
 
-pub mod prompt;
 pub mod diff_analyzer;
+pub mod prompt;

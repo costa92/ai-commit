@@ -45,9 +45,70 @@ run:
 	@cargo run 
 
 
+# 运行测试
+.PHONY: test
+test:
+	@echo "Running tests..."
+	@cargo test
+	@echo "All tests completed successfully"
+
+
+# 运行测试（详细输出）
+.PHONY: test-verbose
+test-verbose:
+	@echo "Running tests with verbose output..."
+	@cargo test -- --nocapture
+	@echo "All tests completed successfully"
+
+
+# 运行 clippy 检查
+.PHONY: clippy
+clippy:
+	@echo "Running clippy linting..."
+	@cargo clippy -- -D warnings
+	@echo "Clippy check completed successfully"
+
+
+# 代码格式化检查
+.PHONY: fmt-check
+fmt-check:
+	@echo "Checking code formatting..."
+	@cargo fmt --check
+	@echo "Code formatting check completed successfully"
+
+
+# 代码格式化（自动修复）
+.PHONY: fmt
+fmt:
+	@echo "Formatting code..."
+	@cargo fmt
+	@echo "Code formatting completed successfully"
+
+
+# 代码检测（clippy + 格式化检查）
+.PHONY: check
+check: clippy fmt-check
+	@echo "All code checks completed successfully"
+
+
+# 代码修复（格式化 + clippy 可修复的问题）
+.PHONY: fix
+fix:
+	@echo "Running code fixes..."
+	@cargo fmt
+	@cargo clippy --fix --allow-dirty --allow-staged
+	@echo "Code fixes completed successfully"
+
+
+# 完整代码质量检查（测试 + 检查）
+.PHONY: qa
+qa: test check
+	@echo "Quality assurance checks completed successfully"
+
+
 # 构建项目
 .PHONY: build
-build: run
+build: test
 	@echo "Building project..."
 	@cargo build --release
 	@echo "Build completed successfully"

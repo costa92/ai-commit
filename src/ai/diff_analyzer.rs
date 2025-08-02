@@ -1,23 +1,18 @@
-use std::collections::HashMap;
-use regex::Regex;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use std::collections::HashMap;
 
 // 大文件阈值 (字符数)
 const LARGE_DIFF_THRESHOLD: usize = 10000;
 // 多文件阈值 (文件数量)
 const MULTI_FILE_THRESHOLD: usize = 5;
 
-static FILE_CHANGE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^diff --git a/(.+?) b/(.+?)$").unwrap()
-});
+static FILE_CHANGE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^diff --git a/(.+?) b/(.+?)$").unwrap());
 
-static ADDITION_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\+").unwrap()
-});
+static ADDITION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\+").unwrap());
 
-static DELETION_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^-").unwrap()
-});
+static DELETION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-").unwrap());
 
 #[derive(Debug, Clone)]
 pub struct FileChange {
@@ -65,12 +60,15 @@ impl DiffAnalysis {
                         file_path,
                         additions: current_additions,
                         deletions: current_deletions,
-                        change_type: Self::determine_change_type(current_additions, current_deletions),
+                        change_type: Self::determine_change_type(
+                            current_additions,
+                            current_deletions,
+                        ),
                     });
                     current_additions = 0;
                     current_deletions = 0;
                 }
-                
+
                 current_file = Some(captures.get(2).unwrap().as_str().to_string());
             }
             // 统计添加行
@@ -125,20 +123,18 @@ impl DiffAnalysis {
 
     fn determine_primary_change_type(file_changes: &[FileChange]) -> String {
         let mut type_counts = HashMap::new();
-        
+
         for change in file_changes {
             let count = type_counts.entry(&change.change_type).or_insert(0);
             *count += 1;
         }
 
-        let dominant_type = if let Some((change_type, _)) = type_counts
-            .iter()
-            .max_by_key(|(_, count)| *count)
-        {
-            change_type
-        } else {
-            &ChangeType::Modified
-        };
+        let dominant_type =
+            if let Some((change_type, _)) = type_counts.iter().max_by_key(|(_, count)| *count) {
+                change_type
+            } else {
+                &ChangeType::Modified
+            };
 
         match dominant_type {
             ChangeType::Added => "feat".to_string(),
@@ -147,9 +143,15 @@ impl DiffAnalysis {
                 // 基于文件路径推断类型
                 if file_changes.iter().any(|f| f.file_path.contains("test")) {
                     "test".to_string()
-                } else if file_changes.iter().any(|f| f.file_path.ends_with(".md") || f.file_path.contains("doc")) {
+                } else if file_changes
+                    .iter()
+                    .any(|f| f.file_path.ends_with(".md") || f.file_path.contains("doc"))
+                {
                     "docs".to_string()
-                } else if file_changes.iter().any(|f| f.file_path.contains("fix") || f.file_path.contains("bug")) {
+                } else if file_changes
+                    .iter()
+                    .any(|f| f.file_path.contains("fix") || f.file_path.contains("bug"))
+                {
                     "fix".to_string()
                 } else {
                     "refactor".to_string()
@@ -161,7 +163,7 @@ impl DiffAnalysis {
 
     fn determine_dominant_scope(file_changes: &[FileChange]) -> Option<String> {
         let mut scope_counts = HashMap::new();
-        
+
         for change in file_changes {
             let scope = Self::extract_scope_from_path(&change.file_path);
             if let Some(scope) = scope {
@@ -179,12 +181,18 @@ impl DiffAnalysis {
     fn extract_scope_from_path(file_path: &str) -> Option<String> {
         // 从文件路径中提取作用域
         let path_parts: Vec<&str> = file_path.split('/').collect();
-        
+
         // 优先级规则：src/ > 具体模块 > 顶级目录
         if path_parts.len() >= 2 {
             match path_parts[0] {
                 "src" if path_parts.len() >= 3 => Some(path_parts[1].to_string()),
-                "src" if path_parts.len() >= 2 => Some(path_parts[1].split('.').next().unwrap_or("core").to_string()),
+                "src" if path_parts.len() >= 2 => Some(
+                    path_parts[1]
+                        .split('.')
+                        .next()
+                        .unwrap_or("core")
+                        .to_string(),
+                ),
                 "tests" => Some("test".to_string()),
                 "docs" => Some("docs".to_string()),
                 "examples" => Some("example".to_string()),
@@ -219,9 +227,12 @@ impl DiffAnalysis {
             summary_parts.push(format!("涉及{}个文件", self.total_files));
         }
 
-        // 变更摘要  
+        // 变更摘要
         if self.total_additions > 0 && self.total_deletions > 0 {
-            summary_parts.push(format!("新增{}行，删除{}行", self.total_additions, self.total_deletions));
+            summary_parts.push(format!(
+                "新增{}行，删除{}行",
+                self.total_additions, self.total_deletions
+            ));
         } else if self.total_additions > 0 {
             summary_parts.push(format!("新增{}行", self.total_additions));
         } else if self.total_deletions > 0 {
@@ -231,13 +242,13 @@ impl DiffAnalysis {
         // 主要变更类型
         let change_summary = match self.primary_change_type.as_str() {
             "feat" => "添加新功能",
-            "fix" => "修复问题", 
+            "fix" => "修复问题",
             "refactor" => "重构代码",
             "test" => "更新测试",
             "docs" => "更新文档",
             _ => "优化代码",
         };
-        
+
         summary_parts.push(change_summary.to_string());
 
         summary_parts.join("，")
@@ -250,27 +261,33 @@ impl DiffAnalysis {
         }
 
         let mut optimized_prompt = String::new();
-        
+
         // 添加摘要信息
         optimized_prompt.push_str(&format!("变更摘要：{}\n\n", self.generate_summary()));
-        
+
         // 文件列表
         optimized_prompt.push_str("主要变更文件：\n");
         for (i, change) in self.file_changes.iter().take(10).enumerate() {
             let change_type_desc = match change.change_type {
                 ChangeType::Added => "新增",
-                ChangeType::Modified => "修改", 
+                ChangeType::Modified => "修改",
                 ChangeType::Deleted => "删除",
                 ChangeType::Renamed => "重命名",
             };
-            optimized_prompt.push_str(&format!("{}. {} {} (+{} -{} lines)\n", 
-                i + 1, change_type_desc, change.file_path, change.additions, change.deletions));
+            optimized_prompt.push_str(&format!(
+                "{}. {} {} (+{} -{} lines)\n",
+                i + 1,
+                change_type_desc,
+                change.file_path,
+                change.additions,
+                change.deletions
+            ));
         }
-        
+
         if self.file_changes.len() > 10 {
             optimized_prompt.push_str(&format!("...还有{}个文件\n", self.file_changes.len() - 10));
         }
-        
+
         // 如果diff过大，只包含关键部分
         if self.is_large_diff {
             optimized_prompt.push_str("\n核心变更片段：\n");
@@ -279,7 +296,7 @@ impl DiffAnalysis {
             optimized_prompt.push_str("\n完整diff：\n");
             optimized_prompt.push_str(original_diff);
         }
-        
+
         optimized_prompt
     }
 
@@ -289,12 +306,16 @@ impl DiffAnalysis {
         let mut key_changes = Vec::new();
         let mut current_file = String::new();
         let mut change_lines = Vec::new();
-        
+
         for line in lines {
             if line.starts_with("diff --git") {
                 // 保存前一个文件的关键变更
                 if !change_lines.is_empty() {
-                    key_changes.push(format!("File: {}\n{}", current_file, change_lines.join("\n")));
+                    key_changes.push(format!(
+                        "File: {}\n{}",
+                        current_file,
+                        change_lines.join("\n")
+                    ));
                     change_lines.clear();
                 }
                 current_file = line.to_string();
@@ -303,17 +324,22 @@ impl DiffAnalysis {
                 change_lines.push(line.to_string());
             } else if line.starts_with('+') || line.starts_with('-') {
                 // 保存变更行
-                if change_lines.len() < 20 { // 限制每个文件最多20行关键变更
+                if change_lines.len() < 20 {
+                    // 限制每个文件最多20行关键变更
                     change_lines.push(line.to_string());
                 }
             }
         }
-        
+
         // 保存最后一个文件
         if !change_lines.is_empty() {
-            key_changes.push(format!("File: {}\n{}", current_file, change_lines.join("\n")));
+            key_changes.push(format!(
+                "File: {}\n{}",
+                current_file,
+                change_lines.join("\n")
+            ));
         }
-        
+
         key_changes.join("\n\n")
     }
 }
@@ -383,29 +409,62 @@ index 1234567..abcdefg 100644
         assert!(analysis.total_additions > 0);
         assert!(!analysis.is_large_diff);
         assert!(!analysis.is_multi_file); // 3 files < MULTI_FILE_THRESHOLD (5)
-        
+
         // Check file changes
         assert_eq!(analysis.file_changes.len(), 3);
-        assert!(analysis.file_changes.iter().any(|f| f.file_path == "src/lib.rs"));
-        assert!(analysis.file_changes.iter().any(|f| f.file_path == "src/new_module.rs"));
-        assert!(analysis.file_changes.iter().any(|f| f.file_path == "tests/integration.rs"));
+        assert!(analysis
+            .file_changes
+            .iter()
+            .any(|f| f.file_path == "src/lib.rs"));
+        assert!(analysis
+            .file_changes
+            .iter()
+            .any(|f| f.file_path == "src/new_module.rs"));
+        assert!(analysis
+            .file_changes
+            .iter()
+            .any(|f| f.file_path == "tests/integration.rs"));
     }
 
     #[test]
     fn test_scope_extraction() {
-        assert_eq!(DiffAnalysis::extract_scope_from_path("src/ai/mod.rs"), Some("ai".to_string()));
-        assert_eq!(DiffAnalysis::extract_scope_from_path("src/config.rs"), Some("config".to_string()));
-        assert_eq!(DiffAnalysis::extract_scope_from_path("tests/unit.rs"), Some("test".to_string()));
-        assert_eq!(DiffAnalysis::extract_scope_from_path("docs/README.md"), Some("docs".to_string()));
-        assert_eq!(DiffAnalysis::extract_scope_from_path("Cargo.toml"), Some("cargo".to_string()));
+        assert_eq!(
+            DiffAnalysis::extract_scope_from_path("src/ai/mod.rs"),
+            Some("ai".to_string())
+        );
+        assert_eq!(
+            DiffAnalysis::extract_scope_from_path("src/config.rs"),
+            Some("config".to_string())
+        );
+        assert_eq!(
+            DiffAnalysis::extract_scope_from_path("tests/unit.rs"),
+            Some("test".to_string())
+        );
+        assert_eq!(
+            DiffAnalysis::extract_scope_from_path("docs/README.md"),
+            Some("docs".to_string())
+        );
+        assert_eq!(
+            DiffAnalysis::extract_scope_from_path("Cargo.toml"),
+            Some("cargo".to_string())
+        );
     }
 
     #[test]
     fn test_change_type_determination() {
         assert_eq!(DiffAnalysis::determine_change_type(5, 0), ChangeType::Added);
-        assert_eq!(DiffAnalysis::determine_change_type(0, 3), ChangeType::Deleted);
-        assert_eq!(DiffAnalysis::determine_change_type(2, 4), ChangeType::Modified);
-        assert_eq!(DiffAnalysis::determine_change_type(0, 0), ChangeType::Modified);
+        assert_eq!(
+            DiffAnalysis::determine_change_type(0, 3),
+            ChangeType::Deleted
+        );
+        assert_eq!(
+            DiffAnalysis::determine_change_type(2, 4),
+            ChangeType::Modified
+        );
+        assert_eq!(
+            DiffAnalysis::determine_change_type(0, 0),
+            ChangeType::Modified
+        );
     }
 
     #[test]
@@ -422,11 +481,11 @@ index 1234567..abcdefg 100644
 +    println!("test2");
 -    old_code();
 "#;
-        
+
         let mut analysis = DiffAnalysis::analyze_diff(diff);
         analysis.is_multi_file = true; // Force multi-file for testing
         analysis.total_files = 6;
-        
+
         let summary = analysis.generate_summary();
         assert!(summary.contains("6个文件"));
         assert!(summary.contains("新增2行"));
