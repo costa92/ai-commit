@@ -55,6 +55,10 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 | --worktree-create BRANCH     | 创建新的 Git worktree                        |             |
 | --worktree-switch NAME       | 切换到指定的 worktree                        |             |
 | --worktree-list              | 列出所有可用的 worktrees                     | false       |
+| --worktree-verbose, -v       | worktree list 详细模式                       | false       |
+| --worktree-porcelain         | worktree list 机器可读输出                   | false       |
+| --worktree-z, -z             | worktree list 使用NUL字符终止记录            | false       |
+| --worktree-expire TIME       | worktree list 显示过期时间注释               |             |
 | --worktree-remove NAME       | 删除指定的 worktree                          |             |
 | --worktree-path PATH         | 指定 worktree 创建的自定义路径               |             |
 | --worktree-clear             | 清空除当前外的所有其他 worktrees             | false       |
@@ -137,6 +141,25 @@ $ ai-commit --worktree-list
 # Available worktrees:
 #   refs/heads/main -> /Users/username/project [abc12345]
 #   refs/heads/feature/new-ui -> /Users/username/worktree-feature-new-ui [def67890]
+
+# 详细模式列出 worktrees (等同于 git worktree list -v)
+$ ai-commit --worktree-list --worktree-verbose
+# 或简写
+$ ai-commit --worktree-list -v
+
+# 机器可读格式输出 (等同于 git worktree list --porcelain)
+$ ai-commit --worktree-list --worktree-porcelain
+
+# 使用NUL字符分隔输出 (等同于 git worktree list -z)
+$ ai-commit --worktree-list --worktree-z
+# 或简写
+$ ai-commit --worktree-list -z
+
+# 显示过期时间注释 (等同于 git worktree list --expire 2weeks)
+$ ai-commit --worktree-list --worktree-expire 2weeks
+
+# 组合使用多个选项
+$ ai-commit --worktree-list --worktree-porcelain --worktree-z --worktree-expire 1month
 
 # 切换到指定的 worktree（注意：这会改变当前工作目录）
 $ ai-commit --worktree-switch feature/new-ui

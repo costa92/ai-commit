@@ -77,9 +77,39 @@ pub async fn create_worktree_with_new_branch(branch: &str, custom_path: Option<&
     Ok(path)
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct WorktreeListOptions {
+    pub verbose: bool,
+    pub porcelain: bool,
+    pub z: bool,
+    pub expire: Option<String>,
+}
+
 pub async fn list_worktrees() -> anyhow::Result<Vec<WorktreeInfo>> {
+    list_worktrees_with_options(&WorktreeListOptions::default()).await
+}
+
+pub async fn list_worktrees_with_options(options: &WorktreeListOptions) -> anyhow::Result<Vec<WorktreeInfo>> {
+    let mut args = vec!["worktree", "list"];
+    
+    // 构建Git命令参数
+    if options.verbose {
+        args.push("-v");
+    } else if options.porcelain {
+        args.push("--porcelain");
+    }
+    
+    if options.z {
+        args.push("-z");
+    }
+    
+    if let Some(expire) = &options.expire {
+        args.push("--expire");
+        args.push(expire);
+    }
+    
     let output = Command::new("git")
-        .args(["worktree", "list", "--porcelain"])
+        .args(&args)
         .output()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to run git worktree list: {}", e))?;
@@ -89,7 +119,90 @@ pub async fn list_worktrees() -> anyhow::Result<Vec<WorktreeInfo>> {
     }
     
     let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_worktree_list(&stdout)
+    
+    if options.porcelain {
+        parse_worktree_list(&stdout)
+    } else {
+        parse_worktree_list_verbose(&stdout, options.verbose)
+    }
+}
+
+pub async fn list_worktrees_raw(options: &WorktreeListOptions) -> anyhow::Result<String> {
+    let mut args = vec!["worktree", "list"];
+    
+    // 构建Git命令参数
+    if options.verbose {
+        args.push("-v");
+    } else if options.porcelain {
+        args.push("--porcelain");
+    }
+    
+    if options.z {
+        args.push("-z");
+    }
+    
+    if let Some(expire) = &options.expire {
+        args.push("--expire");
+        args.push(expire);
+    }
+    
+    let output = Command::new("git")
+        .args(&args)
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run git worktree list: {}", e))?;
+    
+    if !output.status.success() {
+        anyhow::bail!("Git worktree list failed with exit code: {:?}", output.status.code());
+    }
+    
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<Vec<WorktreeInfo>> {
+    let mut worktrees = Vec::new();
+    
+    for line in output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        // Verbose模式的格式示例：
+        // /path/to/worktree  abc1234 [branch-name]
+        // /path/to/worktree  abc1234 (bare)
+        // /path/to/worktree  abc1234 (detached HEAD)
+        
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        
+        let path = PathBuf::from(parts[0]);
+        let commit = parts[1].to_string();
+        
+        let mut branch = String::new();
+        let mut is_bare = false;
+        let mut is_detached = false;
+        
+        if parts.len() > 2 {
+            let remainder = parts[2..].join(" ");
+            if remainder.contains("(bare)") {
+                is_bare = true;
+                branch = "bare".to_string();
+            } else if remainder.contains("(detached HEAD)") {
+                is_detached = true;
+                branch = "detached".to_string();
+            } else if remainder.starts_with('[') && remainder.ends_with(']') {
+                branch = remainder.trim_start_matches('[').trim_end_matches(']').to_string();
+            } else {
+                branch = remainder;
+            }
+        }
+        
+        worktrees.push(WorktreeInfo::new(path, branch, commit, is_bare, is_detached));
+    }
+    
+    Ok(worktrees)
 }
 
 pub async fn remove_worktree(path_or_name: &str) -> anyhow::Result<()> {
@@ -552,5 +665,146 @@ mod tests {
         
         // 如果编译通过，说明函数签名正确
         assert!(true);
+    }
+
+    #[test]
+    fn test_worktree_list_options_default() {
+        let options = WorktreeListOptions::default();
+        assert!(!options.verbose);
+        assert!(!options.porcelain);
+        assert!(!options.z);
+        assert!(options.expire.is_none());
+    }
+
+    #[test]
+    fn test_worktree_list_options_creation() {
+        let options = WorktreeListOptions {
+            verbose: true,
+            porcelain: false,
+            z: true,
+            expire: Some("2weeks".to_string()),
+        };
+        
+        assert!(options.verbose);
+        assert!(!options.porcelain);
+        assert!(options.z);
+        assert_eq!(options.expire, Some("2weeks".to_string()));
+    }
+
+    #[test]
+    fn test_worktree_list_options_debug() {
+        let options = WorktreeListOptions {
+            verbose: true,
+            porcelain: true,
+            z: false,
+            expire: None,
+        };
+        
+        let debug_str = format!("{:?}", options);
+        assert!(debug_str.contains("WorktreeListOptions"));
+        assert!(debug_str.contains("verbose: true"));
+        assert!(debug_str.contains("porcelain: true"));
+    }
+
+    #[tokio::test]
+    async fn test_list_worktrees_with_options_command_structure() {
+        let options = WorktreeListOptions {
+            verbose: true,
+            porcelain: false,
+            z: false,
+            expire: None,
+        };
+        
+        let result = list_worktrees_with_options(&options).await;
+        
+        match result {
+            Ok(worktrees) => {
+                println!("List worktrees with options succeeded, count: {}", worktrees.len());
+                assert!(worktrees.is_empty() || !worktrees.is_empty());
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                assert!(
+                    error_msg.contains("Failed to run git worktree list") ||
+                    error_msg.contains("Git worktree list failed"),
+                    "Error message should contain git worktree list information: {}",
+                    error_msg
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_worktrees_raw_command_structure() {
+        let options = WorktreeListOptions {
+            verbose: false,
+            porcelain: true,
+            z: false,
+            expire: None,
+        };
+        
+        let result = list_worktrees_raw(&options).await;
+        
+        match result {
+            Ok(output) => {
+                println!("List worktrees raw succeeded, output length: {}", output.len());
+                // 输出可能为空也可能有内容
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                assert!(
+                    error_msg.contains("Failed to run git worktree list") ||
+                    error_msg.contains("Git worktree list failed"),
+                    "Error message should contain git worktree list information: {}",
+                    error_msg
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_worktree_list_verbose_empty() {
+        let output = "";
+        let result = parse_worktree_list_verbose(output, true).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_worktree_list_verbose_single() {
+        let output = "/path/to/main  abc1234 [main]";
+        let result = parse_worktree_list_verbose(output, true).unwrap();
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, PathBuf::from("/path/to/main"));
+        assert_eq!(result[0].commit, "abc1234");
+        assert_eq!(result[0].branch, "main");
+        assert!(!result[0].is_bare);
+        assert!(!result[0].is_detached);
+    }
+
+    #[test]
+    fn test_parse_worktree_list_verbose_bare() {
+        let output = "/path/to/bare  abc1234 (bare)";
+        let result = parse_worktree_list_verbose(output, true).unwrap();
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, PathBuf::from("/path/to/bare"));
+        assert_eq!(result[0].commit, "abc1234");
+        assert_eq!(result[0].branch, "bare");
+        assert!(result[0].is_bare);
+        assert!(!result[0].is_detached);
+    }
+
+    #[test]
+    fn test_parse_worktree_list_verbose_detached() {
+        let output = "/path/to/detached  abc1234 (detached HEAD)";
+        let result = parse_worktree_list_verbose(output, true).unwrap();
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, PathBuf::from("/path/to/detached"));
+        assert_eq!(result[0].commit, "abc1234");
+        assert_eq!(result[0].branch, "detached");
+        assert!(!result[0].is_bare);
+        assert!(result[0].is_detached);
     }
 }

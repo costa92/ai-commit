@@ -11,25 +11,40 @@ async fn handle_worktree_operations(args: &Args, config: &Config) -> anyhow::Res
     
     // 列出所有 worktrees
     if args.worktree_list {
-        let worktrees = git::list_worktrees().await?;
-        if worktrees.is_empty() {
-            println!("No worktrees found in the repository");
+        // 构建worktree list选项
+        let options = git::WorktreeListOptions {
+            verbose: args.worktree_verbose,
+            porcelain: args.worktree_porcelain,
+            z: args.worktree_z,
+            expire: args.worktree_expire.clone(),
+        };
+        
+        // 如果用户指定了原生Git选项，直接输出原始结果
+        if args.worktree_verbose || args.worktree_porcelain || args.worktree_z || args.worktree_expire.is_some() {
+            let raw_output = git::list_worktrees_raw(&options).await?;
+            print!("{}", raw_output);
         } else {
-            println!("Available worktrees:");
-            for worktree in &worktrees {
-                let status = if worktree.is_bare {
-                    " (bare)"
-                } else if worktree.is_detached {
-                    " (detached HEAD)"
-                } else {
-                    ""
-                };
-                println!("  {} -> {} [{}]{}",
-                    worktree.branch,
-                    worktree.path.display(),
-                    &worktree.commit[..8.min(worktree.commit.len())],
-                    status
-                );
+            // 使用我们的格式化输出
+            let worktrees = git::list_worktrees_with_options(&options).await?;
+            if worktrees.is_empty() {
+                println!("No worktrees found in the repository");
+            } else {
+                println!("Available worktrees:");
+                for worktree in &worktrees {
+                    let status = if worktree.is_bare {
+                        " (bare)"
+                    } else if worktree.is_detached {
+                        " (detached HEAD)"
+                    } else {
+                        ""
+                    };
+                    println!("  {} -> {} [{}]{}",
+                        worktree.branch,
+                        worktree.path.display(),
+                        &worktree.commit[..8.min(worktree.commit.len())],
+                        status
+                    );
+                }
             }
         }
         return Ok(true);

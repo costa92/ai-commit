@@ -84,8 +84,7 @@ impl EnvVars {
         vars
     }
 
-    // 清除缓存，仅用于测试
-    #[cfg(test)]
+    // 清除缓存，用于测试
     pub fn clear_cache() {
         *ENV_VARS_CACHE.lock().unwrap() = None;
     }
@@ -336,6 +335,10 @@ mod tests {
             worktree_create: None,
             worktree_switch: None,
             worktree_list: false,
+            worktree_verbose: false,
+            worktree_porcelain: false,
+            worktree_z: false,
+            worktree_expire: None,
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,
@@ -369,6 +372,10 @@ mod tests {
             worktree_create: None,
             worktree_switch: None,
             worktree_list: false,
+            worktree_verbose: false,
+            worktree_porcelain: false,
+            worktree_z: false,
+            worktree_expire: None,
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,
@@ -410,6 +417,10 @@ mod tests {
             worktree_create: None,
             worktree_switch: None,
             worktree_list: false,
+            worktree_verbose: false,
+            worktree_porcelain: false,
+            worktree_z: false,
+            worktree_expire: None,
             worktree_remove: None,
             worktree_path: None,
             worktree_clear: false,

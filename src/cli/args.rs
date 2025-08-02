@@ -51,6 +51,22 @@ pub struct Args {
     #[arg(long = "worktree-list", default_value_t = false)]
     pub worktree_list: bool,
 
+    /// worktree list 详细模式 (等同于 git worktree list -v)
+    #[arg(long = "worktree-verbose", short = 'v', default_value_t = false)]
+    pub worktree_verbose: bool,
+
+    /// worktree list 机器可读输出 (等同于 git worktree list --porcelain)
+    #[arg(long = "worktree-porcelain", default_value_t = false)]
+    pub worktree_porcelain: bool,
+
+    /// worktree list 使用NUL字符终止记录 (等同于 git worktree list -z)
+    #[arg(long = "worktree-z", short = 'z', default_value_t = false)]
+    pub worktree_z: bool,
+
+    /// worktree list 显示过期时间 (等同于 git worktree list --expire)
+    #[arg(long = "worktree-expire", value_name = "TIME")]
+    pub worktree_expire: Option<String>,
+
     /// 删除指定的 worktree（指定worktree名称或路径）
     #[arg(long = "worktree-remove", value_name = "NAME")]
     pub worktree_remove: Option<String>,
@@ -85,6 +101,10 @@ mod tests {
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_switch, None);
         assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_verbose, false);
+        assert_eq!(args.worktree_porcelain, false);
+        assert_eq!(args.worktree_z, false);
+        assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
         assert_eq!(args.worktree_clear, false);
@@ -396,6 +416,10 @@ mod tests {
         assert_eq!(args.worktree_create, Some("feature/new-ui".to_string()));
         assert_eq!(args.worktree_switch, None);
         assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_verbose, false);
+        assert_eq!(args.worktree_porcelain, false);
+        assert_eq!(args.worktree_z, false);
+        assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
         assert_eq!(args.worktree_clear, false);
@@ -476,6 +500,10 @@ mod tests {
         assert_eq!(args.worktree_create, None);
         assert_eq!(args.worktree_switch, None);
         assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_verbose, false);
+        assert_eq!(args.worktree_porcelain, false);
+        assert_eq!(args.worktree_z, false);
+        assert_eq!(args.worktree_expire, None);
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
         assert_eq!(args.worktree_clear, false);
@@ -526,6 +554,74 @@ mod tests {
         // 测试 worktree-clear 默认值
         let args = Args::try_parse_from(&["ai-commit"]).unwrap();
         assert_eq!(args.worktree_clear, false);
+    }
+
+    #[test]
+    fn test_args_worktree_list_options() {
+        // 测试 worktree list 的各种选项
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-list",
+            "--worktree-verbose",
+            "--worktree-porcelain",
+            "--worktree-z",
+            "--worktree-expire", "2weeks"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_list, true);
+        assert_eq!(args.worktree_verbose, true);
+        assert_eq!(args.worktree_porcelain, true);
+        assert_eq!(args.worktree_z, true);
+        assert_eq!(args.worktree_expire, Some("2weeks".to_string()));
+    }
+
+    #[test]
+    fn test_args_worktree_list_short_options() {
+        // 测试 worktree list 的短选项
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-list",
+            "-v",
+            "-z"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_list, true);
+        assert_eq!(args.worktree_verbose, true);
+        assert_eq!(args.worktree_z, true);
+        assert_eq!(args.worktree_porcelain, false);
+    }
+
+    #[test]
+    fn test_args_worktree_list_expire_formats() {
+        // 测试不同的过期时间格式
+        let test_cases = vec!["1week", "2weeks", "1month", "2023-01-01", "yesterday"];
+        
+        for expire_time in test_cases {
+            let args = Args::try_parse_from(&[
+                "ai-commit",
+                "--worktree-list",
+                "--worktree-expire", expire_time
+            ]).unwrap();
+            
+            assert_eq!(args.worktree_list, true);
+            assert_eq!(args.worktree_expire, Some(expire_time.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_args_worktree_list_combinations() {
+        // 测试 worktree list 选项组合
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-list",
+            "--worktree-porcelain",
+            "--worktree-z"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_list, true);
+        assert_eq!(args.worktree_porcelain, true);
+        assert_eq!(args.worktree_z, true);
+        assert_eq!(args.worktree_verbose, false); // 不应该同时使用 verbose 和 porcelain
     }
 }
 // CLI参数修改

@@ -137,6 +137,10 @@ The tool supports Git worktree functionality for parallel development across mul
 - `--worktree-create BRANCH`: Create new worktree for specified branch
 - `--worktree-switch NAME`: Switch current working directory to specified worktree  
 - `--worktree-list`: List all available worktrees with branch info
+- `--worktree-verbose, -v`: Enable verbose mode for worktree list (equivalent to `git worktree list -v`)
+- `--worktree-porcelain`: Enable machine-readable output for worktree list (equivalent to `git worktree list --porcelain`)
+- `--worktree-z, -z`: Use NUL character to terminate records (equivalent to `git worktree list -z`)
+- `--worktree-expire TIME`: Show prunable annotation for old worktrees (equivalent to `git worktree list --expire`)
 - `--worktree-remove NAME`: Remove specified worktree and cleanup references
 - `--worktree-path PATH`: Specify custom path for worktree creation
 - `--worktree-clear`: Clear all other worktrees except current one
