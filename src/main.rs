@@ -6,6 +6,107 @@ use ai_commit::git;
 use clap::Parser;
 use std::time::Instant;
 
+async fn handle_worktree_operations(args: &Args, config: &Config) -> anyhow::Result<bool> {
+    // 返回 true 如果执行了 worktree 操作，false 如果应该继续执行正常流程
+    
+    // 列出所有 worktrees
+    if args.worktree_list {
+        let worktrees = git::list_worktrees().await?;
+        if worktrees.is_empty() {
+            println!("No worktrees found in the repository");
+        } else {
+            println!("Available worktrees:");
+            for worktree in &worktrees {
+                let status = if worktree.is_bare {
+                    " (bare)"
+                } else if worktree.is_detached {
+                    " (detached HEAD)"
+                } else {
+                    ""
+                };
+                println!("  {} -> {} [{}]{}",
+                    worktree.branch,
+                    worktree.path.display(),
+                    &worktree.commit[..8.min(worktree.commit.len())],
+                    status
+                );
+            }
+        }
+        return Ok(true);
+    }
+    
+    // 创建新的 worktree
+    if let Some(branch) = &args.worktree_create {
+        let custom_path = args.worktree_path.as_deref();
+        
+        // 尝试先创建已存在的分支的 worktree
+        let path = match git::create_worktree(branch, custom_path).await {
+            Ok(path) => {
+                if config.debug {
+                    println!("Created worktree for existing branch '{}' at: {}", branch, path.display());
+                }
+                path
+            }
+            Err(_) => {
+                // 如果失败，尝试创建新分支的 worktree
+                let path = git::create_worktree_with_new_branch(branch, custom_path).await?;
+                if config.debug {
+                    println!("Created worktree with new branch '{}' at: {}", branch, path.display());
+                }
+                path
+            }
+        };
+        
+        println!("✓ Worktree created at: {}", path.display());
+        println!("  To switch to this worktree, run: cd {}", path.display());
+        return Ok(true);
+    }
+    
+    // 切换到指定的 worktree
+    if let Some(name) = &args.worktree_switch {
+        let path = git::switch_to_worktree(name).await?;
+        println!("✓ Switched to worktree: {}", path.display());
+        
+        // 显示当前 worktree 信息
+        if let Some(current) = git::get_current_worktree().await? {
+            println!("  Current branch: {}", current.branch);
+            println!("  Working directory: {}", current.path.display());
+        }
+        return Ok(true);
+    }
+    
+    // 删除指定的 worktree
+    if let Some(name) = &args.worktree_remove {
+        git::remove_worktree(name).await?;
+        println!("✓ Removed worktree: {}", name);
+        
+        // 清理无效的 worktree 引用
+        if config.debug {
+            println!("Pruning worktree references...");
+        }
+        git::prune_worktrees().await?;
+        return Ok(true);
+    }
+    
+    // 清空除当前外的所有其他 worktrees
+    if args.worktree_clear {
+        let removed_count = git::clear_other_worktrees().await?;
+        
+        if removed_count == 0 {
+            println!("✓ No other worktrees to remove");
+        } else {
+            println!("✓ Cleared {} other worktree(s)", removed_count);
+        }
+        
+        if config.debug {
+            println!("Cleared all worktrees except current");
+        }
+        return Ok(true);
+    }
+    
+    Ok(false)
+}
+
 async fn handle_tag_creation(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
     let tag_name = git::get_next_tag_name(args.new_tag.as_deref()).await?;
@@ -69,6 +170,12 @@ async fn main() -> anyhow::Result<()> {
 
     config.update_from_args(&args);
     config.validate()?;
+    
+    // 处理 worktree 操作
+    if handle_worktree_operations(&args, &config).await? {
+        return Ok(()); // 如果执行了 worktree 操作，直接返回
+    }
+    
     // 显示最新 tag
     if args.show_tag {
         if let Some((tag, note)) = git::get_latest_tag().await {

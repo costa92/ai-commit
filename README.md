@@ -24,6 +24,7 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 - 支持自定义提交规范模板
 - 命令行参数与 .env 配置灵活切换
 - 调试模式支持，可控制输出详细程度
+- Git worktree 开发模式，支持多分支并行开发
 
 ---
 
@@ -42,15 +43,21 @@ ai-commit 是一个基于 Rust 的智能 Git 提交工具，集成本地/云端�
 
 ## 命令行参数
 
-| 简称/全称           | 说明                                         | 默认值      |
-|---------------------|----------------------------------------------|-------------|
-| -P, --provider      | AI 提交生成服务（ollama/deepseek/siliconflow） | ollama      |
-| -m, --model         | AI 模型名称                                  | mistral     |
-| -n, --no-add        | 不自动执行 git add .                         | false       |
-| -p, --push          | commit 后自动 git push                       | false       |
-| -t, --new-tag [VER] | 创建新 tag（可指定版本号，如 -t v1.2.0）     |             |
-| -s, --show-tag      | 显示最新的 tag 和备注                        | false       |
-| -b, --push-branches | 推 tag 时同时推 master develop main 分支     | false       |
+| 简称/全称                    | 说明                                         | 默认值      |
+|------------------------------|----------------------------------------------|-------------|
+| -P, --provider               | AI 提交生成服务（ollama/deepseek/siliconflow） | ollama      |
+| -m, --model                  | AI 模型名称                                  | mistral     |
+| -n, --no-add                 | 不自动执行 git add .                         | false       |
+| -p, --push                   | commit 后自动 git push                       | false       |
+| -t, --new-tag [VER]          | 创建新 tag（可指定版本号，如 -t v1.2.0）     |             |
+| -s, --show-tag               | 显示最新的 tag 和备注                        | false       |
+| -b, --push-branches          | 推 tag 时同时推 master develop main 分支     | false       |
+| --worktree-create BRANCH     | 创建新的 Git worktree                        |             |
+| --worktree-switch NAME       | 切换到指定的 worktree                        |             |
+| --worktree-list              | 列出所有可用的 worktrees                     | false       |
+| --worktree-remove NAME       | 删除指定的 worktree                          |             |
+| --worktree-path PATH         | 指定 worktree 创建的自定义路径               |             |
+| --worktree-clear             | 清空除当前外的所有其他 worktrees             | false       |
 
 > 所有参数均支持简称和全称，可混用。详见 `ai-commit --help`。
 
@@ -113,21 +120,48 @@ $ ai-commit
 $ ai-commit --provider siliconflow --model Qwen/Qwen2.5-7B-Instruct
 ```
 
-### 调试模式示例
+### Git Worktree 开发模式示例
 
 ```sh
-# 关闭调试模式（静默运行）
-$ AI_COMMIT_DEBUG=false ai-commit
+# 创建新的 worktree 用于功能开发
+$ ai-commit --worktree-create feature/new-ui
+# ✓ Worktree created at: ../worktree-feature-new-ui
+#   To switch to this worktree, run: cd ../worktree-feature-new-ui
 
-# 开启调试模式（显示详细过程）
-$ AI_COMMIT_DEBUG=true ai-commit
-# 输出示例：
-# AI 生成 commit message 耗时: 1.23s
-# Created new tag: v1.0.1
+# 创建 worktree 并指定自定义路径
+$ ai-commit --worktree-create feature/auth --worktree-path ~/dev/auth-feature
+# ✓ Worktree created at: /Users/username/dev/auth-feature
 
-# 通过 .env 文件配置
-$ echo "AI_COMMIT_DEBUG=true" >> .env
-$ ai-commit
+# 列出所有可用的 worktrees
+$ ai-commit --worktree-list
+# Available worktrees:
+#   refs/heads/main -> /Users/username/project [abc12345]
+#   refs/heads/feature/new-ui -> /Users/username/worktree-feature-new-ui [def67890]
+
+# 切换到指定的 worktree（注意：这会改变当前工作目录）
+$ ai-commit --worktree-switch feature/new-ui
+# ✓ Switched to worktree: /Users/username/worktree-feature-new-ui
+#   Current branch: refs/heads/feature/new-ui
+#   Working directory: /Users/username/worktree-feature-new-ui
+
+# 在 worktree 中正常使用 ai-commit
+$ ai-commit --provider deepseek --push
+
+# 删除不需要的 worktree
+$ ai-commit --worktree-remove feature/old-feature
+# ✓ Removed worktree: feature/old-feature
+
+# 组合使用：创建 worktree 并立即在其中提交
+$ ai-commit --worktree-create hotfix/critical-bug && cd ../worktree-hotfix-critical-bug && ai-commit
+
+# 清空除当前外的所有其他 worktrees（批量清理）
+$ ai-commit --worktree-clear
+# ✓ Cleared 3 other worktree(s)
+
+# 在调试模式下清空其他 worktrees
+$ AI_COMMIT_DEBUG=true ai-commit --worktree-clear
+# ✓ Cleared 2 other worktree(s)
+# Cleared all worktrees except current
 ```
 
 ### 调试模式示例

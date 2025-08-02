@@ -4,7 +4,7 @@ use clap::Parser;
 #[command(
     name = "ai-commit",
     version,
-    about = "Generate commit messages using Ollama or Deepseek"
+    about = "Generate commit messages using AI and manage Git worktrees"
 )]
 pub struct Args {
     /// AI provider to use (ollama or deepseek)
@@ -38,6 +38,30 @@ pub struct Args {
     /// 推送 tag 时是否同时推送 master develop main 分支
     #[arg(short = 'b', long = "push-branches", default_value_t = false)]
     pub push_branches: bool,
+
+    /// 创建新的 Git worktree（指定分支名，如 --worktree-create feature/new-ui）
+    #[arg(long = "worktree-create", value_name = "BRANCH")]
+    pub worktree_create: Option<String>,
+
+    /// 切换到指定的 worktree（指定worktree名称或路径）
+    #[arg(long = "worktree-switch", value_name = "NAME")]
+    pub worktree_switch: Option<String>,
+
+    /// 列出所有可用的 worktrees
+    #[arg(long = "worktree-list", default_value_t = false)]
+    pub worktree_list: bool,
+
+    /// 删除指定的 worktree（指定worktree名称或路径）
+    #[arg(long = "worktree-remove", value_name = "NAME")]
+    pub worktree_remove: Option<String>,
+
+    /// 指定 worktree 创建的自定义路径
+    #[arg(long = "worktree-path", value_name = "PATH")]
+    pub worktree_path: Option<String>,
+
+    /// 清空除当前外的所有其他 worktrees
+    #[arg(long = "worktree-clear", default_value_t = false)]
+    pub worktree_clear: bool,
 }
 
 #[cfg(test)]
@@ -58,6 +82,12 @@ mod tests {
         assert_eq!(args.tag_note, "");
         assert_eq!(args.show_tag, false);
         assert_eq!(args.push_branches, false);
+        assert_eq!(args.worktree_create, None);
+        assert_eq!(args.worktree_switch, None);
+        assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_remove, None);
+        assert_eq!(args.worktree_path, None);
+        assert_eq!(args.worktree_clear, false);
     }
 
     #[test]
@@ -353,6 +383,149 @@ mod tests {
         assert_eq!(args.tag_note, "Beta release with new features");
         assert_eq!(args.push_branches, true);
         assert_eq!(args.show_tag, false); // 未设置的保持默认值
+    }
+
+    #[test]
+    fn test_args_worktree_create() {
+        // 测试 worktree-create 参数
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-create", "feature/new-ui"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_create, Some("feature/new-ui".to_string()));
+        assert_eq!(args.worktree_switch, None);
+        assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_remove, None);
+        assert_eq!(args.worktree_path, None);
+        assert_eq!(args.worktree_clear, false);
+    }
+
+    #[test]
+    fn test_args_worktree_create_with_path() {
+        // 测试 worktree-create 和 worktree-path 组合
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-create", "feature/auth",
+            "--worktree-path", "../worktrees/auth"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_create, Some("feature/auth".to_string()));
+        assert_eq!(args.worktree_path, Some("../worktrees/auth".to_string()));
+    }
+
+    #[test]
+    fn test_args_worktree_switch() {
+        // 测试 worktree-switch 参数
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-switch", "feature/ui"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_switch, Some("feature/ui".to_string()));
+        assert_eq!(args.worktree_create, None);
+    }
+
+    #[test]
+    fn test_args_worktree_list() {
+        // 测试 worktree-list 参数
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-list"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_list, true);
+        assert_eq!(args.worktree_create, None);
+        assert_eq!(args.worktree_switch, None);
+    }
+
+    #[test]
+    fn test_args_worktree_remove() {
+        // 测试 worktree-remove 参数
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-remove", "feature/old-feature"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_remove, Some("feature/old-feature".to_string()));
+        assert_eq!(args.worktree_create, None);
+    }
+
+    #[test]
+    fn test_args_worktree_combined_with_commit() {
+        // 测试 worktree 参数与提交参数组合
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-switch", "feature/api",
+            "--provider", "deepseek",
+            "--push",
+            "--new-tag", "v1.1.0"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_switch, Some("feature/api".to_string()));
+        assert_eq!(args.provider, "deepseek");
+        assert_eq!(args.push, true);
+        assert_eq!(args.new_tag, Some("v1.1.0".to_string()));
+    }
+
+    #[test]
+    fn test_args_worktree_all_options() {
+        // 测试所有 worktree 相关选项的默认值
+        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        
+        assert_eq!(args.worktree_create, None);
+        assert_eq!(args.worktree_switch, None);
+        assert_eq!(args.worktree_list, false);
+        assert_eq!(args.worktree_remove, None);
+        assert_eq!(args.worktree_path, None);
+        assert_eq!(args.worktree_clear, false);
+    }
+
+    #[test]
+    fn test_args_worktree_invalid_combinations() {
+        // 虽然 clap 不会验证语义冲突，但确保解析正常
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-create", "branch1",
+            "--worktree-switch", "branch2"
+        ]).unwrap();
+        
+        // 两个参数都应该被正确解析
+        assert_eq!(args.worktree_create, Some("branch1".to_string()));
+        assert_eq!(args.worktree_switch, Some("branch2".to_string()));
+    }
+
+    #[test]
+    fn test_args_worktree_clear() {
+        // 测试 worktree-clear 参数
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-clear"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_clear, true);
+        assert_eq!(args.worktree_create, None);
+        assert_eq!(args.worktree_remove, None);
+    }
+
+    #[test]
+    fn test_args_worktree_clear_with_debug() {
+        // 测试 worktree-clear 与其他参数组合
+        let args = Args::try_parse_from(&[
+            "ai-commit",
+            "--worktree-clear",
+            "--provider", "ollama"
+        ]).unwrap();
+        
+        assert_eq!(args.worktree_clear, true);
+        assert_eq!(args.provider, "ollama");
+    }
+
+    #[test]
+    fn test_args_worktree_clear_default() {
+        // 测试 worktree-clear 默认值
+        let args = Args::try_parse_from(&["ai-commit"]).unwrap();
+        assert_eq!(args.worktree_clear, false);
     }
 }
 // CLI参数修改

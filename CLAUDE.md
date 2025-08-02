@@ -69,6 +69,7 @@ make tag-changelog tag=v1.0.0
 **3. Git Operations (`src/git/`)**
 - `commit.rs`: Standard git operations (add, commit, push, diff)
 - `tag.rs`: Advanced tag management with semantic versioning
+- `worktree.rs`: Git worktree management for parallel development
 - Automatic tag version resolution and conflict avoidance
 - Support for both commit and tag workflows
 
@@ -76,6 +77,7 @@ make tag-changelog tag=v1.0.0
 - Built with `clap` for argument parsing
 - Supports both short and long argument forms
 - Comprehensive tag creation and push options
+- Full worktree management commands
 
 **5. Internationalization (`src/internationalization.rs`)**
 - Multi-language support (Chinese Simplified/Traditional, English)
@@ -126,6 +128,38 @@ The tool supports a debug mode that controls output verbosity through the `AI_CO
 - Large change detection: "检测到大型变更 (6个文件, 15967字符)，正在生成摘要..."  
 - Tag operations: "Created new tag: v1.0.1", "Pushed tag v1.0.1 to remote"
 - Empty changes: "No staged changes."
+
+### Git Worktree Development Workflow
+
+The tool supports Git worktree functionality for parallel development across multiple branches:
+
+**Worktree Management Commands:**
+- `--worktree-create BRANCH`: Create new worktree for specified branch
+- `--worktree-switch NAME`: Switch current working directory to specified worktree  
+- `--worktree-list`: List all available worktrees with branch info
+- `--worktree-remove NAME`: Remove specified worktree and cleanup references
+- `--worktree-path PATH`: Specify custom path for worktree creation
+- `--worktree-clear`: Clear all other worktrees except current one
+
+**Worktree Creation Logic:**
+- Default path: `../worktree-{branch-name}` (replaces `/` with `-`)
+- Custom paths supported via `--worktree-path`
+- Automatically tries existing branch first, then creates new branch if needed
+- Smart branch name sanitization for filesystem compatibility
+
+**Development Workflow Benefits:**
+- Work on multiple features simultaneously without branch switching
+- Isolated working directories for each feature/bugfix
+- Seamless ai-commit integration within any worktree
+- Automatic working directory switching and path resolution
+
+**Safety Features:**
+- Worktree conflict detection and resolution
+- Automatic pruning of invalid worktree references
+- Path validation and error handling
+- Branch existence checking before worktree creation
+- Bulk cleanup operations with detailed feedback
+- Current worktree protection (never removes active worktree)
 
 ### Tag Management Logic
 

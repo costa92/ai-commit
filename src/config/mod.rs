@@ -110,7 +110,7 @@ impl Config {
         ensure_env_loaded();
         
         // 默认配置
-        let mut config = Config {
+        let config = Config {
             provider: "ollama".to_owned(),
             model: "mistral".to_owned(),
             deepseek_api_key: None,
@@ -123,9 +123,12 @@ impl Config {
 
         // 在非测试环境下加载环境变量
         #[cfg(not(test))] {
+            let mut config = config;
             config.load_from_env();
+            config
         }
-
+        
+        #[cfg(test)]
         config
     }
 
@@ -330,6 +333,12 @@ mod tests {
             tag_note: String::new(),
             show_tag: false,
             push_branches: false,
+            worktree_create: None,
+            worktree_switch: None,
+            worktree_list: false,
+            worktree_remove: None,
+            worktree_path: None,
+            worktree_clear: false,
         };
         
         config.update_from_args(&args);
@@ -357,6 +366,12 @@ mod tests {
             tag_note: String::new(),
             show_tag: false,
             push_branches: false,
+            worktree_create: None,
+            worktree_switch: None,
+            worktree_list: false,
+            worktree_remove: None,
+            worktree_path: None,
+            worktree_clear: false,
         };
         
         config.update_from_args(&args);
@@ -392,6 +407,12 @@ mod tests {
             tag_note: String::new(),
             show_tag: false,
             push_branches: false,
+            worktree_create: None,
+            worktree_switch: None,
+            worktree_list: false,
+            worktree_remove: None,
+            worktree_path: None,
+            worktree_clear: false,
         };
         
         config.update_from_args(&args);

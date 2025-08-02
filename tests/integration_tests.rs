@@ -36,6 +36,12 @@ fn test_config_integration() {
         tag_note: String::new(),
         show_tag: false,
         push_branches: false,
+        worktree_create: None,
+        worktree_switch: None,
+        worktree_list: false,
+        worktree_remove: None,
+        worktree_path: None,
+        worktree_clear: false,
     };
     
     let mut config = Config::new();
@@ -209,6 +215,12 @@ fn test_configuration_priority_integration() {
         tag_note: String::new(),
         show_tag: false,
         push_branches: false,
+        worktree_create: None,
+        worktree_switch: None,
+        worktree_list: false,
+        worktree_remove: None,
+        worktree_path: None,
+        worktree_clear: false,
     };
     
     config.update_from_args(&args);
