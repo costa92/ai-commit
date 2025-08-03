@@ -361,6 +361,7 @@ mod tests {
             ai_language_specific: true,
             ai_include_static: true,
             ai_review_lang: "zh".to_string(),
+            review_clear: false,
         };
 
         config.update_from_args(&args);
@@ -409,6 +410,7 @@ mod tests {
             ai_language_specific: true,
             ai_include_static: true,
             ai_review_lang: "zh".to_string(),
+            review_clear: false,
         };
 
         config.update_from_args(&args);
@@ -465,6 +467,7 @@ mod tests {
             ai_language_specific: true,
             ai_include_static: true,
             ai_review_lang: "zh".to_string(),
+            review_clear: false,
         };
 
         config.update_from_args(&args);

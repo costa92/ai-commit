@@ -11,6 +11,36 @@ use std::time::Instant;
 async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool> {
     // 返回 true 如果执行了代码审查操作，false 如果应该继续执行正常流程
 
+    // 清空代码审查报告目录
+    if args.review_clear {
+        let code_review_dir = std::path::Path::new("code-review");
+        if code_review_dir.exists() {
+            match std::fs::read_dir(code_review_dir) {
+                Ok(entries) => {
+                    let mut count = 0;
+                    for entry in entries.flatten() {
+                        if let Ok(file_type) = entry.file_type() {
+                            if file_type.is_file() && std::fs::remove_file(entry.path()).is_ok() {
+                                count += 1;
+                            }
+                        }
+                    }
+                    if count > 0 {
+                        println!("✅ 已清空 {} 个代码审查报告文件", count);
+                    } else {
+                        println!("✅ 代码审查报告目录已经是空的");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ 读取代码审查目录失败: {}", e);
+                }
+            }
+        } else {
+            println!("✅ 代码审查报告目录不存在，无需清空");
+        }
+        return Ok(true);
+    }
+
     // 显示语言统计
     if args.show_languages {
         let diff = git::get_git_diff().await?;
@@ -36,10 +66,11 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
         let options = ReviewOptions {
             enable_ai_review: args.ai_review,
             ai_review_types: vec![args.ai_review_type.clone()],
-            include_static_analysis: args.ai_include_static,
+            include_static_analysis: true, // 默认启用静态分析
             detailed_feedback: args.ai_review_detail == "detailed"
                 || args.ai_review_detail == "comprehensive",
             language_specific_rules: args.ai_language_specific,
+            enable_sensitive_info_detection: true, // 默认启用敏感信息检测
         };
 
         // 创建支持 AI 的代码审查服务

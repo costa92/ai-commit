@@ -1,4 +1,7 @@
 use crate::config::Config;
+use crate::languages::sensitive_info::{
+    SensitiveInfoDetector, SensitiveInfoResult, SensitiveInfoSummary,
+};
 use crate::languages::static_analysis::{StaticAnalysisResult, StaticAnalysisService};
 use crate::languages::{Language, LanguageAnalysisResult, LanguageAnalyzerFactory};
 use serde::{Deserialize, Serialize};
@@ -14,7 +17,7 @@ pub struct CodeReviewService {
     enable_ai_review: bool,
 }
 
-/// 增强的文件分析结果，包含 AI 审查结果
+/// 增强的文件分析结果，包含 AI 审查结果和敏感信息检测
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileAnalysisResult {
     pub file_path: String,
@@ -22,6 +25,7 @@ pub struct FileAnalysisResult {
     pub analysis: LanguageAnalysisResult,
     pub static_analysis: Vec<StaticAnalysisResult>,
     pub ai_review: Option<AIReviewResult>,
+    pub sensitive_info: Option<SensitiveInfoResult>,
 }
 
 /// AI 审查结果
@@ -38,13 +42,14 @@ pub struct AIReviewResult {
     pub learning_resources: Vec<String>,
 }
 
-/// 增强的代码审查报告
+/// 增强的代码审查报告，包含敏感信息检测
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodeReviewReport {
     pub files: Vec<FileAnalysisResult>,
     pub summary: ReviewSummary,
     pub static_analysis_summary: StaticAnalysisSummary,
     pub ai_review_summary: Option<AIReviewSummary>,
+    pub sensitive_info_summary: Option<SensitiveInfoSummary>,
 }
 
 /// AI 审查摘要
@@ -88,6 +93,7 @@ pub struct ReviewOptions {
     pub include_static_analysis: bool,
     pub detailed_feedback: bool,
     pub language_specific_rules: bool,
+    pub enable_sensitive_info_detection: bool,
 }
 
 impl Default for ReviewOptions {
@@ -98,6 +104,7 @@ impl Default for ReviewOptions {
             include_static_analysis: true,
             detailed_feedback: true,
             language_specific_rules: true,
+            enable_sensitive_info_detection: true,
         }
     }
 }
@@ -127,7 +134,7 @@ impl CodeReviewService {
         Language::from_file_path(file_path)
     }
 
-    /// 分析单个文件（包含静态分析和可选的 AI 审查）
+    /// 分析单个文件（包含静态分析、AI审查和敏感信息检测）
     pub async fn analyze_file_with_options(
         &self,
         file_path: &str,
@@ -161,12 +168,21 @@ impl CodeReviewService {
             None
         };
 
+        // 运行敏感信息检测
+        let sensitive_info = if options.enable_sensitive_info_detection {
+            let detector = SensitiveInfoDetector::new();
+            Some(detector.detect(file_path, file_content))
+        } else {
+            None
+        };
+
         FileAnalysisResult {
             file_path: file_path.to_string(),
             language,
             analysis,
             static_analysis,
             ai_review,
+            sensitive_info,
         }
     }
 
@@ -270,7 +286,7 @@ impl CodeReviewService {
         })
     }
 
-    /// 从Git diff分析变更的文件（增强版本）
+    /// 从Git diff分析变更的文件（增强版本，包含敏感信息检测）
     pub async fn review_git_changes_with_options(
         &self,
         diff_content: &str,
@@ -312,12 +328,22 @@ impl CodeReviewService {
                 None
             };
 
+            // 运行敏感信息检测
+            let sensitive_info = if options.enable_sensitive_info_detection {
+                let detector = SensitiveInfoDetector::new();
+                let code_content = added_lines.join("\n");
+                Some(detector.detect(&file_path, &code_content))
+            } else {
+                None
+            };
+
             files.push(FileAnalysisResult {
                 file_path,
                 language,
                 analysis,
                 static_analysis,
                 ai_review,
+                sensitive_info,
             });
         }
 
@@ -328,12 +354,14 @@ impl CodeReviewService {
         } else {
             None
         };
+        let sensitive_info_summary = self.generate_sensitive_info_summary(&files);
 
         CodeReviewReport {
             files,
             summary,
             static_analysis_summary,
             ai_review_summary,
+            sensitive_info_summary,
         }
     }
 
@@ -344,7 +372,7 @@ impl CodeReviewService {
             .await
     }
 
-    /// 分析指定文件列表
+    /// 分析指定文件列表（包含敏感信息检测）
     pub async fn analyze_files_with_options(
         &self,
         file_paths: &[String],
@@ -374,12 +402,14 @@ impl CodeReviewService {
         } else {
             None
         };
+        let sensitive_info_summary = self.generate_sensitive_info_summary(&files);
 
         CodeReviewReport {
             files,
             summary,
             static_analysis_summary,
             ai_review_summary,
+            sensitive_info_summary,
         }
     }
 
@@ -387,6 +417,68 @@ impl CodeReviewService {
     pub async fn analyze_files(&self, file_paths: &[String]) -> CodeReviewReport {
         let options = ReviewOptions::default();
         self.analyze_files_with_options(file_paths, &options).await
+    }
+
+    /// 生成敏感信息摘要
+    fn generate_sensitive_info_summary(
+        &self,
+        files: &[FileAnalysisResult],
+    ) -> Option<SensitiveInfoSummary> {
+        let mut all_sensitive_items = Vec::new();
+        let mut has_sensitive_data = false;
+
+        for file in files {
+            if let Some(ref sensitive_info) = file.sensitive_info {
+                if !sensitive_info.items.is_empty() {
+                    has_sensitive_data = true;
+                    all_sensitive_items.extend(sensitive_info.items.clone());
+                }
+            }
+        }
+
+        if !has_sensitive_data {
+            return None;
+        }
+
+        // 重新计算整体摘要
+        let mut types_detected = HashMap::new();
+        let mut critical_count = 0;
+        let mut high_count = 0;
+        let mut medium_count = 0;
+        let mut low_count = 0;
+
+        for item in &all_sensitive_items {
+            *types_detected.entry(item.info_type.clone()).or_insert(0) += 1;
+
+            match item.info_type.risk_level() {
+                crate::languages::sensitive_info::SensitiveRiskLevel::Critical => {
+                    critical_count += 1
+                }
+                crate::languages::sensitive_info::SensitiveRiskLevel::High => high_count += 1,
+                crate::languages::sensitive_info::SensitiveRiskLevel::Medium => medium_count += 1,
+                crate::languages::sensitive_info::SensitiveRiskLevel::Low => low_count += 1,
+            }
+        }
+
+        let overall_risk = if critical_count > 0 {
+            crate::languages::sensitive_info::SensitiveRiskLevel::Critical
+        } else if high_count > 0 {
+            crate::languages::sensitive_info::SensitiveRiskLevel::High
+        } else if medium_count > 0 {
+            crate::languages::sensitive_info::SensitiveRiskLevel::Medium
+        } else {
+            crate::languages::sensitive_info::SensitiveRiskLevel::Low
+        };
+
+        Some(SensitiveInfoSummary {
+            total_count: all_sensitive_items.len(),
+            critical_count,
+            high_count,
+            medium_count,
+            low_count,
+            types_detected,
+            overall_risk,
+        })
     }
 
     /// 生成 AI 审查摘要
@@ -522,23 +614,21 @@ impl CodeReviewService {
         // 处理两种格式：
         // 1. diff --git a/file.ext b/file.ext
         // 2. diff --git "a/file with spaces.ext" "b/file with spaces.ext"
-        
+
         if let Some(b_part) = line.split(" b/").nth(1) {
             // 标准格式：a/file b/file
             Some(b_part.to_string())
         } else if let Some(quoted_part) = line.split(" \"b/").nth(1) {
             // 带引号格式："a/file" "b/file"
-            if let Some(end_quote) = quoted_part.find('"') {
-                Some(quoted_part[..end_quote].to_string())
-            } else {
-                None
-            }
+            quoted_part
+                .find('"')
+                .map(|end_quote| quoted_part[..end_quote].to_string())
         } else {
             None
         }
     }
 
-    /// 格式化报告（增强版本）
+    /// 格式化报告（增强版本，包含敏感信息检测结果）
     pub fn format_enhanced_report(&self, report: &CodeReviewReport) -> String {
         let mut output = String::new();
 
@@ -567,14 +657,79 @@ impl CodeReviewService {
             ));
         }
 
+        // 敏感信息统计
+        if let Some(ref sensitive_summary) = report.sensitive_info_summary {
+            output.push_str(&format!(
+                "- **敏感信息检测**: {} 项 (风险等级: {} {})\n",
+                sensitive_summary.total_count,
+                sensitive_summary.overall_risk.emoji(),
+                sensitive_summary.overall_risk.as_str()
+            ));
+        }
+
         output.push_str("\n## 🗣️ 检测到的编程语言\n\n");
         for (language, count) in &report.summary.languages_detected {
             output.push_str(&format!("- **{}**: {} 个文件\n", language.as_str(), count));
         }
 
+        // 敏感信息摘要
+        if let Some(ref sensitive_summary) = report.sensitive_info_summary {
+            output.push_str("\n## 🚨 敏感信息检测摘要\n\n");
+
+            output.push_str(&format!(
+                "**总体风险**: {} {} ({} 项)\n\n",
+                sensitive_summary.overall_risk.emoji(),
+                sensitive_summary.overall_risk.as_str(),
+                sensitive_summary.total_count
+            ));
+
+            // 风险等级分布
+            output.push_str("### 📊 风险等级分布\n\n");
+            if sensitive_summary.critical_count > 0 {
+                output.push_str(&format!(
+                    "- 🚨 **严重**: {} 项\n",
+                    sensitive_summary.critical_count
+                ));
+            }
+            if sensitive_summary.high_count > 0 {
+                output.push_str(&format!(
+                    "- ⚠️ **高**: {} 项\n",
+                    sensitive_summary.high_count
+                ));
+            }
+            if sensitive_summary.medium_count > 0 {
+                output.push_str(&format!(
+                    "- 🟡 **中等**: {} 项\n",
+                    sensitive_summary.medium_count
+                ));
+            }
+            if sensitive_summary.low_count > 0 {
+                output.push_str(&format!(
+                    "- ℹ️ **低**: {} 项\n",
+                    sensitive_summary.low_count
+                ));
+            }
+
+            // 敏感信息类型分布
+            if !sensitive_summary.types_detected.is_empty() {
+                output.push_str("\n### 🔍 检测到的敏感信息类型\n\n");
+                for (info_type, count) in &sensitive_summary.types_detected {
+                    output.push_str(&format!(
+                        "- {} **{}**: {} 项 ({})\n",
+                        info_type.risk_level().emoji(),
+                        info_type.as_str(),
+                        count,
+                        info_type.risk_level().as_str()
+                    ));
+                }
+            }
+
+            output.push('\n');
+        }
+
         // AI 审查摘要
         if let Some(ref ai_summary) = report.ai_review_summary {
-            output.push_str("\n## 🤖 AI 审查摘要\n\n");
+            output.push_str("## 🤖 AI 审查摘要\n\n");
 
             if !ai_summary.critical_issues.is_empty() {
                 output.push_str("### ⚠️ 关键问题\n\n");
@@ -593,12 +748,134 @@ impl CodeReviewService {
             }
         }
 
-        // 详细文件分析
+        // 静态分析详情
+        if report.static_analysis_summary.total_issues > 0
+            || !report.static_analysis_summary.tools_used.is_empty()
+        {
+            output.push_str("## 🔍 静态分析问题\n\n");
+
+            // 显示使用的工具
+            if !report.static_analysis_summary.tools_used.is_empty() {
+                output.push_str("### 🛠️ 执行的工具\n\n");
+                for tool in &report.static_analysis_summary.tools_used {
+                    output.push_str(&format!("- {}\n", tool));
+                }
+                output.push('\n');
+            }
+
+            // 按严重程度显示问题统计
+            if !report.static_analysis_summary.issues_by_severity.is_empty() {
+                output.push_str("### 按严重程度分类\n\n");
+                for (severity, count) in &report.static_analysis_summary.issues_by_severity {
+                    let emoji = match severity.as_str() {
+                        "error" => "❌",
+                        "warning" => "⚠️",
+                        "info" => "ℹ️",
+                        "style" => "🎨",
+                        _ => "•",
+                    };
+                    output.push_str(&format!("- {} **{}**: {} 个\n", emoji, severity, count));
+                }
+                output.push('\n');
+            }
+
+            // 显示每个文件的静态分析问题
+            for file in &report.files {
+                if !file.static_analysis.is_empty() {
+                    output.push_str(&format!("### 📄 {} 的问题\n\n", file.file_path));
+
+                    for analysis in &file.static_analysis {
+                        output.push_str(&format!("**{}**", analysis.tool.name()));
+                        if analysis.success {
+                            if analysis.issues.is_empty() {
+                                output.push_str(" ✅ 无问题\n");
+                            } else {
+                                output.push_str(&format!(
+                                    " 发现 {} 个问题:\n",
+                                    analysis.issues.len()
+                                ));
+                            }
+                        } else {
+                            output.push_str(" ❌ 执行失败");
+                            if let Some(ref error) = analysis.error_message {
+                                output.push_str(&format!(" ({})", error));
+                            }
+                            output.push('\n');
+                        }
+
+                        for issue in &analysis.issues {
+                            let location = if let (Some(line), Some(col)) =
+                                (issue.line_number, issue.column)
+                            {
+                                format!("第{}行:{}列", line, col)
+                            } else if let Some(line) = issue.line_number {
+                                format!("第{}行", line)
+                            } else {
+                                "位置未知".to_string()
+                            };
+
+                            let severity_icon = match issue.severity {
+                                crate::languages::static_analysis::IssueSeverity::Error => "❌",
+                                crate::languages::static_analysis::IssueSeverity::Warning => "⚠️",
+                                crate::languages::static_analysis::IssueSeverity::Info => "ℹ️",
+                                crate::languages::static_analysis::IssueSeverity::Style => "🎨",
+                            };
+
+                            output.push_str(&format!(
+                                "- {} **{}**: {} ({})\n",
+                                severity_icon,
+                                issue.severity.as_str(),
+                                issue.message,
+                                location
+                            ));
+                        }
+                        output.push('\n');
+                    }
+                }
+            }
+        }
+
+        // 详细文件分析（包含敏感信息）
         output.push_str("## 📁 详细文件分析\n\n");
         for file in &report.files {
             output.push_str(&format!("### 📄 {}\n\n", file.file_path));
             output.push_str(&format!("- **语言**: {}\n", file.language.as_str()));
             output.push_str(&format!("- **特征数**: {}\n", file.analysis.features.len()));
+
+            // 敏感信息检测结果
+            if let Some(ref sensitive_info) = file.sensitive_info {
+                if !sensitive_info.items.is_empty() {
+                    output.push_str(&format!(
+                        "- **敏感信息**: {} 项 ({})\n",
+                        sensitive_info.items.len(),
+                        sensitive_info.summary.overall_risk.as_str()
+                    ));
+
+                    // 显示敏感信息详情
+                    output.push_str("\n#### 🚨 检测到的敏感信息:\n\n");
+                    for item in &sensitive_info.items {
+                        output.push_str(&format!(
+                            "- {} **{}** (第{}行): `{}` → `{}`\n",
+                            item.info_type.risk_level().emoji(),
+                            item.info_type.as_str(),
+                            item.line_number,
+                            item.matched_text,
+                            item.masked_text
+                        ));
+                        output.push_str(&format!("  - 置信度: {:.1}%\n", item.confidence * 100.0));
+                        output.push_str(&format!("  - 说明: {}\n", item.description));
+                        if !item.recommendations.is_empty() {
+                            output.push_str("  - 建议:\n");
+                            for rec in &item.recommendations {
+                                output.push_str(&format!("    - {}\n", rec));
+                            }
+                        }
+                        output.push('\n');
+                    }
+                } else {
+                    output.push_str("- **敏感信息**: ✅ 未检测到敏感信息\n");
+                }
+            }
 
             if let Some(ref ai_review) = file.ai_review {
                 output.push_str(&format!(
@@ -640,6 +917,7 @@ mod tests {
         assert!(options.enable_ai_review);
         assert!(options.include_static_analysis);
         assert!(options.detailed_feedback);
+        assert!(options.enable_sensitive_info_detection);
         assert_eq!(options.ai_review_types.len(), 1);
     }
 
@@ -686,5 +964,163 @@ mod tests {
         let summary = service.generate_ai_review_summary(&ai_reviews);
         assert_eq!(summary.total_files_reviewed, 1);
         assert_eq!(summary.average_score, 8.5);
+    }
+
+    #[tokio::test]
+    async fn test_sensitive_info_detection_in_file_analysis() {
+        let service = CodeReviewService::new();
+        let options = ReviewOptions {
+            enable_ai_review: false,
+            include_static_analysis: false,
+            enable_sensitive_info_detection: true,
+            ..ReviewOptions::default()
+        };
+
+        let file_content = r#"
+        const config = {
+            api_key: "sk-1234567890abcdef1234567890abcdef",
+            password: "secretpassword123",
+            email: "admin@company.com"
+        };
+        "#;
+
+        let result = service
+            .analyze_file_with_options("config.js", file_content, &options)
+            .await;
+
+        assert!(result.sensitive_info.is_some());
+        let sensitive_info = result.sensitive_info.unwrap();
+        assert_eq!(sensitive_info.items.len(), 3);
+
+        // 检查检测到的敏感信息类型
+        let info_types: Vec<_> = sensitive_info
+            .items
+            .iter()
+            .map(|item| &item.info_type)
+            .collect();
+        assert!(info_types.contains(&&crate::languages::sensitive_info::SensitiveInfoType::ApiKey));
+        assert!(
+            info_types.contains(&&crate::languages::sensitive_info::SensitiveInfoType::Password)
+        );
+        assert!(info_types.contains(&&crate::languages::sensitive_info::SensitiveInfoType::Email));
+    }
+
+    #[tokio::test]
+    async fn test_sensitive_info_summary_generation() {
+        let service = CodeReviewService::new();
+
+        // 创建包含敏感信息的测试数据
+        let files = vec![FileAnalysisResult {
+            file_path: "test.js".to_string(),
+            language: crate::languages::Language::JavaScript,
+            analysis: crate::languages::LanguageAnalysisResult {
+                language: crate::languages::Language::JavaScript,
+                features: vec![],
+                scope_suggestions: vec![],
+                change_patterns: vec![],
+            },
+            static_analysis: vec![],
+            ai_review: None,
+            sensitive_info: Some(crate::languages::sensitive_info::SensitiveInfoResult {
+                file_path: "test.js".to_string(),
+                items: vec![crate::languages::sensitive_info::SensitiveInfoItem {
+                    info_type: crate::languages::sensitive_info::SensitiveInfoType::ApiKey,
+                    line_number: 1,
+                    column_start: 0,
+                    column_end: 10,
+                    matched_text: "api_key".to_string(),
+                    masked_text: "***".to_string(),
+                    confidence: 0.9,
+                    description: "API Key detected".to_string(),
+                    recommendations: vec!["Use environment variables".to_string()],
+                }],
+                summary: crate::languages::sensitive_info::SensitiveInfoSummary {
+                    total_count: 1,
+                    critical_count: 1,
+                    high_count: 0,
+                    medium_count: 0,
+                    low_count: 0,
+                    types_detected: std::collections::HashMap::new(),
+                    overall_risk: crate::languages::sensitive_info::SensitiveRiskLevel::Critical,
+                },
+            }),
+        }];
+
+        let summary = service.generate_sensitive_info_summary(&files);
+        assert!(summary.is_some());
+
+        let summary = summary.unwrap();
+        assert_eq!(summary.total_count, 1);
+        assert_eq!(summary.critical_count, 1);
+        assert!(matches!(
+            summary.overall_risk,
+            crate::languages::sensitive_info::SensitiveRiskLevel::Critical
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_no_sensitive_info_detected() {
+        let service = CodeReviewService::new();
+        let options = ReviewOptions {
+            enable_ai_review: false,
+            include_static_analysis: false,
+            enable_sensitive_info_detection: true,
+            ..ReviewOptions::default()
+        };
+
+        let file_content = r#"
+        function calculateSum(a, b) {
+            return a + b;
+        }
+        const result = calculateSum(1, 2);
+        "#;
+
+        let result = service
+            .analyze_file_with_options("safe.js", file_content, &options)
+            .await;
+
+        assert!(result.sensitive_info.is_some());
+        let sensitive_info = result.sensitive_info.unwrap();
+        assert_eq!(sensitive_info.items.len(), 0);
+    }
+
+    #[test]
+    fn test_format_report_with_sensitive_info() {
+        let service = CodeReviewService::new();
+
+        let report = CodeReviewReport {
+            files: vec![],
+            summary: ReviewSummary {
+                total_files: 1,
+                languages_detected: std::collections::HashMap::new(),
+                total_features: 0,
+                common_patterns: vec![],
+                overall_risks: vec![],
+                test_suggestions: vec![],
+            },
+            static_analysis_summary: StaticAnalysisSummary {
+                tools_used: vec![],
+                total_issues: 0,
+                issues_by_severity: std::collections::HashMap::new(),
+                issues_by_tool: std::collections::HashMap::new(),
+                execution_time: std::time::Duration::from_secs(0),
+                tools_unavailable: vec![],
+            },
+            ai_review_summary: None,
+            sensitive_info_summary: Some(crate::languages::sensitive_info::SensitiveInfoSummary {
+                total_count: 2,
+                critical_count: 1,
+                high_count: 1,
+                medium_count: 0,
+                low_count: 0,
+                types_detected: std::collections::HashMap::new(),
+                overall_risk: crate::languages::sensitive_info::SensitiveRiskLevel::Critical,
+            }),
+        };
+
+        let formatted = service.format_enhanced_report(&report);
+        assert!(formatted.contains("敏感信息检测"));
+        assert!(formatted.contains("🚨"));
+        assert!(formatted.contains("严重"));
     }
 }

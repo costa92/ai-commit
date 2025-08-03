@@ -79,6 +79,7 @@ fn test_config_integration() {
         ai_language_specific: true,
         ai_include_static: true,
         ai_review_lang: "zh".to_string(),
+        review_clear: false,
     };
 
     let mut config = Config::new();
@@ -315,6 +316,7 @@ fn test_configuration_priority_integration() {
         ai_language_specific: true,
         ai_include_static: true,
         ai_review_lang: "zh".to_string(),
+        review_clear: false,
     };
 
     config.update_from_args(&args);

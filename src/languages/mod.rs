@@ -108,6 +108,7 @@ pub mod go;
 pub mod javascript;
 pub mod review_service_v2;
 pub mod rust;
+pub mod sensitive_info;
 pub mod static_analysis;
 pub mod typescript;
 

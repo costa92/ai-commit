@@ -106,7 +106,10 @@ pub async fn generate_commit_message(
     config: &crate::config::Config,
     prompt: &str,
 ) -> anyhow::Result<String> {
-    if diff.trim().is_empty() {
+    // 只有在真正的 commit message 生成时才检查 diff 为空
+    // AI 审查功能会传入空 diff，应该允许继续执行
+    if diff.trim().is_empty() && !prompt.contains("代码审查") && !prompt.contains("code review")
+    {
         if config.debug {
             println!("No staged changes.");
         }

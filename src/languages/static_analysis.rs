@@ -11,11 +11,12 @@ pub enum StaticAnalysisTool {
     GoFmt,
     GoVet,
     GoLint,
-    // 可扩展的其他语言工具
-    // RustFmt,
-    // RustClippy,
-    // ESLint,
-    // Prettier,
+    GoBuild, // 新增：Go 编译器检查
+             // 可扩展的其他语言工具
+             // RustFmt,
+             // RustClippy,
+             // ESLint,
+             // Prettier,
 }
 
 /// 静态分析问题严重级别
@@ -72,6 +73,7 @@ impl StaticAnalysisService {
                 StaticAnalysisTool::GoFmt,
                 StaticAnalysisTool::GoVet,
                 StaticAnalysisTool::GoLint,
+                StaticAnalysisTool::GoBuild, // 新增：编译器检查
             ],
         );
 
@@ -80,13 +82,18 @@ impl StaticAnalysisService {
 
     /// 检查工具是否可用
     pub async fn check_tool_availability(&self, tool: &StaticAnalysisTool) -> bool {
-        let command = match tool {
-            StaticAnalysisTool::GoFmt => "gofmt",
-            StaticAnalysisTool::GoVet => "go",
-            StaticAnalysisTool::GoLint => "golint",
+        let result = match tool {
+            StaticAnalysisTool::GoFmt => Command::new("gofmt").arg("--help").output().await,
+            StaticAnalysisTool::GoVet => {
+                // go vet 是 go 的子命令，检查 go version 更可靠
+                Command::new("go").arg("version").output().await
+            }
+            StaticAnalysisTool::GoLint => Command::new("golint").arg("--help").output().await,
+            StaticAnalysisTool::GoBuild => {
+                // go build 是 go 的子命令，检查 go version 更可靠
+                Command::new("go").arg("version").output().await
+            }
         };
-
-        let result = Command::new(command).arg("--help").output().await;
 
         match result {
             Ok(output) => output.status.success(),
@@ -223,6 +230,46 @@ impl StaticAnalysisService {
         })
     }
 
+    /// 运行 Go 编译器检查
+    pub async fn run_go_build(&self, file_path: &str) -> anyhow::Result<StaticAnalysisResult> {
+        let start_time = std::time::Instant::now();
+
+        // 使用 go build 进行编译检查，不生成可执行文件
+        let output = Command::new("go")
+            .args(["build", "-o", "/dev/null", file_path])
+            .output()
+            .await?;
+
+        let execution_time = start_time.elapsed();
+        let success = output.status.success();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut issues = Vec::new();
+
+        // 解析 Go 编译器输出
+        for line in stderr.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            // Go 编译器错误格式: ./filename:line:column: error message
+            if let Some(issue) = parse_go_build_line(line, file_path) {
+                issues.push(issue);
+            }
+        }
+
+        Ok(StaticAnalysisResult {
+            tool: StaticAnalysisTool::GoBuild,
+            issues,
+            execution_time,
+            success,
+            error_message: if success {
+                None
+            } else {
+                Some(stderr.to_string())
+            },
+        })
+    }
+
     /// 对指定文件运行所有适用的静态分析工具
     pub async fn analyze_file(
         &self,
@@ -249,6 +296,7 @@ impl StaticAnalysisService {
                     StaticAnalysisTool::GoFmt => self.run_gofmt(file_path).await,
                     StaticAnalysisTool::GoVet => self.run_go_vet(file_path).await,
                     StaticAnalysisTool::GoLint => self.run_golint(file_path).await,
+                    StaticAnalysisTool::GoBuild => self.run_go_build(file_path).await,
                 };
 
                 match result {
@@ -350,12 +398,68 @@ fn parse_golint_line(line: &str, file_path: &str) -> Option<StaticAnalysisIssue>
     }
 }
 
+/// 解析 Go 编译器输出行
+fn parse_go_build_line(line: &str, file_path: &str) -> Option<StaticAnalysisIssue> {
+    // Go 编译器错误格式: ./filename:line:column: error message
+    // 或者: # command-line-arguments\n./filename:line:column: error message
+    let line = line.trim();
+
+    // 跳过包信息行
+    if line.starts_with("# ") {
+        return None;
+    }
+
+    let parts: Vec<&str> = line.splitn(4, ':').collect();
+    if parts.len() >= 4 {
+        // 提取文件名，去掉可能的 "./" 前缀
+        let file_part = parts[0].trim_start_matches("./");
+
+        // 只处理与指定文件相关的错误
+        if !file_part.contains(
+            &std::path::Path::new(file_path)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        ) {
+            return None;
+        }
+
+        let line_num = parts[1].parse::<usize>().ok();
+        let column = parts[2].parse::<usize>().ok();
+        let message = parts[3].trim().to_string();
+
+        // 判断错误类型
+        let severity = if message.contains("error") {
+            IssueSeverity::Error
+        } else if message.contains("warning") {
+            IssueSeverity::Warning
+        } else {
+            IssueSeverity::Error // 默认为错误
+        };
+
+        Some(StaticAnalysisIssue {
+            tool: StaticAnalysisTool::GoBuild,
+            file_path: file_path.to_string(),
+            line_number: line_num,
+            column,
+            severity,
+            message,
+            rule: Some("go-build".to_string()),
+            suggestion: None,
+        })
+    } else {
+        None
+    }
+}
+
 impl StaticAnalysisTool {
     pub fn name(&self) -> &str {
         match self {
             StaticAnalysisTool::GoFmt => "gofmt",
             StaticAnalysisTool::GoVet => "go vet",
             StaticAnalysisTool::GoLint => "golint",
+            StaticAnalysisTool::GoBuild => "go build",
         }
     }
 
@@ -364,6 +468,7 @@ impl StaticAnalysisTool {
             StaticAnalysisTool::GoFmt => "Go 官方代码格式化工具，检查代码格式是否符合标准",
             StaticAnalysisTool::GoVet => "Go 官方静态分析工具，检查常见的编程错误",
             StaticAnalysisTool::GoLint => "Go 代码风格检查工具，检查代码是否符合 Go 编码规范",
+            StaticAnalysisTool::GoBuild => "Go 编译器检查，检测语法错误和类型错误",
         }
     }
 }

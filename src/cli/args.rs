@@ -99,6 +99,10 @@ pub struct Args {
     #[arg(long = "show-languages", default_value_t = false)]
     pub show_languages: bool,
 
+    /// 清空代码审查报告目录
+    #[arg(long = "review-clear", default_value_t = false)]
+    pub review_clear: bool,
+
     /// 启用 AI 代码审查
     #[arg(long = "ai-review", default_value_t = false)]
     pub ai_review: bool,
@@ -152,6 +156,10 @@ mod tests {
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
         assert!(!args.worktree_clear);
+        assert!(!args.code_review);
+        assert!(!args.show_languages);
+        assert!(!args.review_clear);
+        assert!(!args.ai_review);
     }
 
     #[test]

@@ -70,17 +70,42 @@ pub async fn git_push() -> anyhow::Result<()> {
 }
 
 pub async fn get_git_diff() -> anyhow::Result<String> {
-    let output = Command::new("git")
+    // 首先尝试暂存区的变更
+    let cached_output = Command::new("git")
         .args(["diff", "--cached"])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run git diff --cached: {}", e))?;
+
+    if !cached_output.status.success() {
+        anyhow::bail!(
+            "Git diff --cached failed with exit code: {:?}",
+            cached_output.status.code()
+        );
+    }
+
+    let cached_diff = String::from_utf8_lossy(&cached_output.stdout).to_string();
+
+    // 如果暂存区有变更，直接返回
+    if !cached_diff.trim().is_empty() {
+        return Ok(cached_diff);
+    }
+
+    // 如果暂存区没有变更，检查工作目录的变更
+    let working_output = Command::new("git")
+        .args(["diff"])
         .output()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to run git diff: {}", e))?;
 
-    if !output.status.success() {
-        anyhow::bail!("Git diff failed with exit code: {:?}", output.status.code());
+    if !working_output.status.success() {
+        anyhow::bail!(
+            "Git diff failed with exit code: {:?}",
+            working_output.status.code()
+        );
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    Ok(String::from_utf8_lossy(&working_output.stdout).to_string())
 }
 
 pub async fn git_commit_allow_empty(message: &str) -> anyhow::Result<()> {
