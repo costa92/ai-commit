@@ -1,5 +1,4 @@
 /// Rust 代码审查的 AI 提示词模板
-
 pub const RUST_CODE_REVIEW_PROMPT: &str = r#"
 你是一个专业的 Rust 代码审查专家。请对以下 Rust 代码变更进行详细审查，并提供建设性的反馈。
 
@@ -188,9 +187,15 @@ pub fn get_rust_prompt(review_type: &str) -> &'static str {
 pub fn suggest_review_type(code_content: &str) -> &'static str {
     if code_content.contains("unsafe") || code_content.contains("transmute") {
         "security"
-    } else if code_content.contains("async") || code_content.contains("Arc") || code_content.contains("Mutex") {
+    } else if code_content.contains("async")
+        || code_content.contains("Arc")
+        || code_content.contains("Mutex")
+    {
         "performance"
-    } else if code_content.contains("trait") || code_content.contains("impl") || code_content.contains("pub mod") {
+    } else if code_content.contains("trait")
+        || code_content.contains("impl")
+        || code_content.contains("pub mod")
+    {
         "architecture"
     } else {
         "general"
@@ -204,8 +209,14 @@ mod tests {
     #[test]
     fn test_prompt_selection() {
         assert_eq!(get_rust_prompt("security"), RUST_SECURITY_REVIEW_PROMPT);
-        assert_eq!(get_rust_prompt("performance"), RUST_PERFORMANCE_REVIEW_PROMPT);
-        assert_eq!(get_rust_prompt("architecture"), RUST_ARCHITECTURE_REVIEW_PROMPT);
+        assert_eq!(
+            get_rust_prompt("performance"),
+            RUST_PERFORMANCE_REVIEW_PROMPT
+        );
+        assert_eq!(
+            get_rust_prompt("architecture"),
+            RUST_ARCHITECTURE_REVIEW_PROMPT
+        );
         assert_eq!(get_rust_prompt("general"), RUST_CODE_REVIEW_PROMPT);
     }
 

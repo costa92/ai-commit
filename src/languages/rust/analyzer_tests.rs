@@ -1,7 +1,7 @@
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::languages::{Language, LanguageFeature};
+mod rust_analyzer_tests {
+    use crate::languages::{Language, LanguageFeature, LanguageAnalyzer};
+    use crate::languages::rust::RustAnalyzer;
 
     #[test]
     fn test_rust_analyzer_creation() {
@@ -11,7 +11,7 @@ mod tests {
 
     #[test]
     fn test_rust_analyzer_default() {
-        let analyzer = RustAnalyzer::default();
+        let analyzer = RustAnalyzer;
         assert_eq!(analyzer.language(), Language::Rust);
     }
 
@@ -400,7 +400,7 @@ mod tests {
         let features = analyzer.analyze_line("fn test_function() {", 1);
         
         // 如果函数名包含 test_，应该检测到两个特征
-        assert!(features.len() >= 1);
+        assert!(!features.is_empty());
         assert!(features.iter().any(|f| f.feature_type == "function"));
         assert!(features.iter().any(|f| f.feature_type == "test"));
     }

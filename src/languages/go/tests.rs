@@ -1,6 +1,7 @@
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod go_feature_tests {
+    use crate::languages::go::{extract_function_name, extract_go_feature, GoFeatureType};
+    use crate::languages::LanguageFeature;
 
     #[test]
     fn test_go_feature_type_as_str() {
@@ -65,7 +66,10 @@ mod tests {
             ("func (u *User) Save() error {", "Save"),
             ("func (s Service) Process() {", "Process"),
             ("func (c *Client) Connect() error {", "Connect"),
-            ("func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {", "ServeHTTP"),
+            (
+                "func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {",
+                "ServeHTTP",
+            ),
         ];
 
         for (line, expected_name) in test_cases {
@@ -99,7 +103,10 @@ mod tests {
             ("type Writer interface {", "Writer"),
             ("type Reader interface {", "Reader"),
             ("type Processor interface {", "Processor"),
-            ("type GenericInterface[T any] interface {", "GenericInterface"),
+            (
+                "type GenericInterface[T any] interface {",
+                "GenericInterface",
+            ),
         ];
 
         for (line, expected_name) in test_cases {
@@ -131,8 +138,14 @@ mod tests {
     fn test_extract_function_name() {
         let test_cases = vec![
             ("func main() {", Some("main".to_string())),
-            ("func processData(data []byte) error {", Some("processData".to_string())),
-            ("func   spacedFunction   (", Some("spacedFunction".to_string())),
+            (
+                "func processData(data []byte) error {",
+                Some("processData".to_string()),
+            ),
+            (
+                "func   spacedFunction   (",
+                Some("spacedFunction".to_string()),
+            ),
             ("func() {", Some("anonymous".to_string())), // 匿名函数
             ("not a function", None),
         ];
@@ -160,16 +173,20 @@ mod tests {
 
         for line in non_matching_lines {
             let feature = extract_go_feature(line, 1);
-            assert!(feature.is_none(), "Line '{}' should not match any pattern", line);
+            assert!(
+                feature.is_none(),
+                "Line '{}' should not match any pattern",
+                line
+            );
         }
     }
 
     #[test]
     fn test_extract_go_feature_edge_cases() {
-        let edge_cases = vec![
-            ("func", None), // 不完整的函数声明
-            ("type", None), // 不完整的类型声明
-            ("import", None), // 不完整的导入语句
+        let edge_cases: Vec<(&str, Option<LanguageFeature>)> = vec![
+            ("func", None),    // 不完整的函数声明
+            ("type", None),    // 不完整的类型声明
+            ("import", None),  // 不完整的导入语句
             ("package", None), // 不完整的包声明
             ("func ()", None), // 无效的函数语法
         ];
@@ -188,8 +205,14 @@ mod tests {
         // 测试 Go 1.18+ 泛型语法
         let generic_cases = vec![
             ("type Container[T any] struct {", "Container"),
-            ("func GenericFunc[T comparable](items []T) T {", "GenericFunc"),
-            ("type Processor[T any, U comparable] interface {", "Processor"),
+            (
+                "func GenericFunc[T comparable](items []T) T {",
+                "GenericFunc",
+            ),
+            (
+                "type Processor[T any, U comparable] interface {",
+                "Processor",
+            ),
             ("func (c *Container[T]) Add(item T) {", "Add"),
         ];
 
@@ -222,11 +245,7 @@ mod tests {
 
     #[test]
     fn test_extract_go_feature_line_numbers() {
-        let test_lines = vec![
-            "package main",
-            "func processData() {",
-            "type User struct {",
-        ];
+        let test_lines = ["package main", "func processData() {", "type User struct {"];
 
         for (index, line) in test_lines.iter().enumerate() {
             let line_number = index + 10;
@@ -241,7 +260,7 @@ mod tests {
     fn test_extract_go_feature_description_content() {
         let test_line = "func processData(data []byte) ([]byte, error) {";
         let feature = extract_go_feature(test_line, 1).unwrap();
-        
+
         assert!(feature.description.contains("Go function"));
         assert!(feature.description.contains(test_line.trim()));
     }
@@ -302,11 +321,7 @@ mod tests {
 
     #[test]
     fn test_extract_go_feature_anonymous_functions() {
-        let anonymous_cases = vec![
-            "func() {",
-            "func(x int) int {",
-            "func() error {",
-        ];
+        let anonymous_cases = vec!["func() {", "func(x int) int {", "func() error {"];
 
         for line in anonymous_cases {
             let feature = extract_go_feature(line, 1);
@@ -328,7 +343,7 @@ mod tests {
         ];
 
         for line in concurrent_lines {
-            let feature = extract_go_feature(line, 1);
+            let _feature = extract_go_feature(line, 1);
             // 这些可能不会被识别为特定特征，这是正常的
             // 这个测试主要确保不会出现意外错误
         }
@@ -343,7 +358,7 @@ mod tests {
         ];
 
         for line in error_handling_lines {
-            let feature = extract_go_feature(line, 1);
+            let _feature = extract_go_feature(line, 1);
             // 错误处理模式可能不会被识别为特定特征
             // 这个测试确保不会崩溃
         }
@@ -351,10 +366,7 @@ mod tests {
 
     #[test]
     fn test_extract_go_feature_embedded_types() {
-        let embedded_cases = vec![
-            "type Server struct {",
-            "type Client struct {",
-        ];
+        let embedded_cases = vec!["type Server struct {", "type Client struct {"];
 
         for line in embedded_cases {
             let feature = extract_go_feature(line, 1);
@@ -375,7 +387,7 @@ mod tests {
         ];
 
         for line in const_var_cases {
-            let feature = extract_go_feature(line, 1);
+            let _feature = extract_go_feature(line, 1);
             // 可能不识别，但不应该崩溃
         }
     }
@@ -391,7 +403,11 @@ mod tests {
 
         for line in build_tag_cases {
             let feature = extract_go_feature(line, 1);
-            assert!(feature.is_none(), "Build tag '{}' should not be recognized as a feature", line);
+            assert!(
+                feature.is_none(),
+                "Build tag '{}' should not be recognized as a feature",
+                line
+            );
         }
     }
 }

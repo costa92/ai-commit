@@ -31,13 +31,14 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
     // 执行代码审查或 AI 审查
     if args.code_review || args.ai_review {
         let start_time = Instant::now();
-        
+
         // 创建审查选项
         let options = ReviewOptions {
             enable_ai_review: args.ai_review,
             ai_review_types: vec![args.ai_review_type.clone()],
             include_static_analysis: args.ai_include_static,
-            detailed_feedback: args.ai_review_detail == "detailed" || args.ai_review_detail == "comprehensive",
+            detailed_feedback: args.ai_review_detail == "detailed"
+                || args.ai_review_detail == "comprehensive",
             language_specific_rules: args.ai_language_specific,
         };
 
@@ -51,7 +52,9 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
         let report = if let Some(files) = &args.review_files {
             // 审查指定文件
             let file_list: Vec<String> = files.split(',').map(|s| s.trim().to_string()).collect();
-            service.analyze_files_with_options(&file_list, &options).await
+            service
+                .analyze_files_with_options(&file_list, &options)
+                .await
         } else {
             // 审查 Git diff 中的变更
             let diff = git::get_git_diff().await?;
@@ -59,7 +62,9 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
                 println!("❌ 没有检测到代码变更，无法进行审查");
                 return Ok(true);
             }
-            service.review_git_changes_with_options(&diff, &options).await
+            service
+                .review_git_changes_with_options(&diff, &options)
+                .await
         };
 
         let elapsed_time = start_time.elapsed();
@@ -120,14 +125,23 @@ fn format_enhanced_report_as_text(report: &ai_commit::languages::CodeReviewRepor
     // 基本摘要
     output.push_str(&format!("总文件数: {}\n", report.summary.total_files));
     output.push_str(&format!("检测特征数: {}\n", report.summary.total_features));
-    output.push_str(&format!("静态分析问题: {}\n", report.static_analysis_summary.total_issues));
-    
+    output.push_str(&format!(
+        "静态分析问题: {}\n",
+        report.static_analysis_summary.total_issues
+    ));
+
     // AI 审查摘要
     if let Some(ref ai_summary) = report.ai_review_summary {
-        output.push_str(&format!("AI 审查文件数: {}\n", ai_summary.total_files_reviewed));
-        output.push_str(&format!("平均质量分数: {:.1}/10\n", ai_summary.average_score));
+        output.push_str(&format!(
+            "AI 审查文件数: {}\n",
+            ai_summary.total_files_reviewed
+        ));
+        output.push_str(&format!(
+            "平均质量分数: {:.1}/10\n",
+            ai_summary.average_score
+        ));
     }
-    
+
     output.push_str("检测到的语言:\n");
     for (language, count) in &report.summary.languages_detected {
         output.push_str(&format!("  - {}: {} 个文件\n", language.as_str(), count));
@@ -186,7 +200,7 @@ fn format_enhanced_report_as_text(report: &ai_commit::languages::CodeReviewRepor
         output.push_str(&format!("文件: {}\n", file.file_path));
         output.push_str(&format!("语言: {}\n", file.language.as_str()));
         output.push_str(&format!("特征数: {}\n", file.analysis.features.len()));
-        
+
         if let Some(ref ai_review) = file.ai_review {
             output.push_str(&format!("AI 评分: {:.1}/10\n", ai_review.overall_score));
             output.push_str(&format!("审查类型: {}\n", ai_review.review_type));
@@ -194,7 +208,7 @@ fn format_enhanced_report_as_text(report: &ai_commit::languages::CodeReviewRepor
                 output.push_str(&format!("摘要: {}\n", ai_review.summary));
             }
         }
-        
+
         output.push('\n');
     }
 

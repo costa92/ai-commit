@@ -1,8 +1,8 @@
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod rust_ai_reviewer_tests {
     use crate::config::Config;
-    use crate::languages::{Language, LanguageFeature};
+    use crate::languages::LanguageFeature;
+    use crate::languages::rust::RustAIReviewer;
 
     fn create_test_config() -> Config {
         Config {

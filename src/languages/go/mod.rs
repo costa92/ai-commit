@@ -1,4 +1,4 @@
-use crate::languages::{Language, LanguageAnalyzer, LanguageFeature, LanguageAnalysisResult};
+use crate::languages::LanguageFeature;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -19,7 +19,9 @@ static GO_STRUCT_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+struct").unwrap());
 static GO_INTERFACE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*type\s+(\w+)\s+interface").unwrap());
+#[allow(dead_code)]
 static GO_CONST_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*const\s+(\w+)").unwrap());
+#[allow(dead_code)]
 static GO_VAR_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*var\s+(\w+)").unwrap());
 static GO_IMPORT_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^\s*import\s+(?:"([^"]+)"|(\w+)\s+"([^"]+)")"#).unwrap());
@@ -69,7 +71,10 @@ pub fn extract_go_feature(line: &str, line_number: usize) -> Option<LanguageFeat
     if let Some(caps) = GO_PACKAGE_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: GoFeatureType::Package.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Go package: {}", line.trim()),
         });
@@ -88,7 +93,10 @@ pub fn extract_go_feature(line: &str, line_number: usize) -> Option<LanguageFeat
     if let Some(caps) = GO_METHOD_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: GoFeatureType::Method.as_str().to_string(),
-            name: caps.get(1).map(|m| format!("method {}", m.as_str())).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| format!("method {}", m.as_str()))
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Go method: {}", line.trim()),
         });
@@ -97,7 +105,10 @@ pub fn extract_go_feature(line: &str, line_number: usize) -> Option<LanguageFeat
     if let Some(caps) = GO_STRUCT_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: GoFeatureType::Struct.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Go struct: {}", line.trim()),
         });
@@ -106,14 +117,18 @@ pub fn extract_go_feature(line: &str, line_number: usize) -> Option<LanguageFeat
     if let Some(caps) = GO_INTERFACE_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: GoFeatureType::Interface.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Go interface: {}", line.trim()),
         });
     }
 
     if let Some(caps) = GO_IMPORT_REGEX.captures(line) {
-        let import_path = caps.get(1)
+        let import_path = caps
+            .get(1)
             .or_else(|| caps.get(3))
             .map(|m| m.as_str().to_string())
             .unwrap_or_default();
@@ -143,4 +158,3 @@ fn extract_function_name(line: &str) -> Option<String> {
         None
     }
 }
-

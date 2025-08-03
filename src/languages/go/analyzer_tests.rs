@@ -1,7 +1,7 @@
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::languages::{Language, LanguageFeature};
+mod go_analyzer_tests {
+    use crate::languages::{Language, LanguageFeature, LanguageAnalyzer};
+    use crate::languages::go::GoAnalyzer;
 
     #[test]
     fn test_go_analyzer_creation() {
@@ -11,7 +11,7 @@ mod tests {
 
     #[test]
     fn test_go_analyzer_default() {
-        let analyzer = GoAnalyzer::default();
+        let analyzer = GoAnalyzer;
         assert_eq!(analyzer.language(), Language::Go);
     }
 

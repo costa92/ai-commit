@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // 导入语言特定的 AI 审查器
-use crate::languages::rust::RustAIReviewer;
 use crate::languages::go::GoAIReviewer;
+use crate::languages::rust::RustAIReviewer;
 
 /// 增强的代码审查服务，支持 AI 审查和语言特定分析
 pub struct CodeReviewService {
@@ -185,7 +185,7 @@ impl CodeReviewService {
                 let result = reviewer
                     .review_code("comprehensive", &analysis.features, file_path)
                     .await?;
-                
+
                 Ok(AIReviewResult {
                     review_type: "rust_comprehensive".to_string(),
                     overall_score: result.overall_score,
@@ -203,7 +203,7 @@ impl CodeReviewService {
                 let result = reviewer
                     .review_code("comprehensive", &analysis.features, file_path)
                     .await?;
-                
+
                 Ok(result)
             }
             Language::TypeScript | Language::JavaScript => {
@@ -263,9 +263,10 @@ impl CodeReviewService {
             performance_score: 7.0,
             maintainability_score: 8.0,
             recommendations: vec!["建议进行更详细的代码审查".to_string()],
-            learning_resources: vec![
-                format!("https://developer.mozilla.org/docs/{}", language.as_str())
-            ],
+            learning_resources: vec![format!(
+                "https://developer.mozilla.org/docs/{}",
+                language.as_str()
+            )],
         })
     }
 
@@ -297,7 +298,10 @@ impl CodeReviewService {
             // 运行 AI 审查
             let ai_review = if options.enable_ai_review && self.enable_ai_review {
                 let code_content = added_lines.join("\n");
-                match self.perform_ai_review(&code_content, &file_path, &language, &analysis, options).await {
+                match self
+                    .perform_ai_review(&code_content, &file_path, &language, &analysis, options)
+                    .await
+                {
                     Ok(review) => {
                         ai_reviews.push(review.clone());
                         Some(review)
@@ -336,7 +340,8 @@ impl CodeReviewService {
     /// 兼容性方法：保持原有接口
     pub async fn review_git_changes(&self, diff_content: &str) -> CodeReviewReport {
         let options = ReviewOptions::default();
-        self.review_git_changes_with_options(diff_content, &options).await
+        self.review_git_changes_with_options(diff_content, &options)
+            .await
     }
 
     /// 分析指定文件列表
@@ -350,12 +355,14 @@ impl CodeReviewService {
 
         for file_path in file_paths {
             if let Ok(content) = tokio::fs::read_to_string(file_path).await {
-                let result = self.analyze_file_with_options(file_path, &content, options).await;
-                
+                let result = self
+                    .analyze_file_with_options(file_path, &content, options)
+                    .await;
+
                 if let Some(ref ai_review) = result.ai_review {
                     ai_reviews.push(ai_review.clone());
                 }
-                
+
                 files.push(result);
             }
         }
@@ -402,7 +409,7 @@ impl CodeReviewService {
             if review.performance_score < 7.0 {
                 critical_issues.push(format!("性能分数较低: {:.1}", review.performance_score));
             }
-            
+
             common_patterns.push(review.review_type.clone());
             recommended_actions.extend(review.recommendations.clone());
         }
@@ -447,7 +454,10 @@ impl CodeReviewService {
     }
 
     /// 生成静态分析摘要
-    fn generate_static_analysis_summary(&self, files: &[FileAnalysisResult]) -> StaticAnalysisSummary {
+    fn generate_static_analysis_summary(
+        &self,
+        files: &[FileAnalysisResult],
+    ) -> StaticAnalysisSummary {
         let start_time = std::time::Instant::now();
         let mut tools_used = std::collections::HashSet::new();
         let mut total_issues = 0;
@@ -458,15 +468,14 @@ impl CodeReviewService {
             for analysis in &file.static_analysis {
                 tools_used.insert(format!("{:?}", analysis.tool));
                 total_issues += analysis.issues.len();
-                
+
                 for issue in &analysis.issues {
                     let severity_str = format!("{:?}", issue.severity).to_lowercase();
                     *issues_by_severity.entry(severity_str).or_insert(0) += 1;
                 }
-                
+
                 let tool_str = format!("{:?}", analysis.tool);
                 *issues_by_tool.entry(tool_str).or_insert(0) += analysis.issues.len();
-                
             }
         }
 
@@ -492,7 +501,7 @@ impl CodeReviewService {
                     results.push((file_path, added_lines.clone()));
                     added_lines.clear();
                 }
-                
+
                 if let Some(path) = self.extract_file_path(line) {
                     current_file = Some(path);
                 }
@@ -510,11 +519,7 @@ impl CodeReviewService {
 
     /// 从 diff 行中提取文件路径
     fn extract_file_path(&self, line: &str) -> Option<String> {
-        if let Some(b_part) = line.split(" b/").nth(1) {
-            Some(b_part.to_string())
-        } else {
-            None
-        }
+        line.split(" b/").nth(1).map(|b_part| b_part.to_string())
     }
 
     /// 格式化报告（增强版本）
@@ -526,12 +531,24 @@ impl CodeReviewService {
         // 基本统计
         output.push_str("## 📊 审查统计\n\n");
         output.push_str(&format!("- **总文件数**: {}\n", report.summary.total_files));
-        output.push_str(&format!("- **代码特征数**: {}\n", report.summary.total_features));
-        output.push_str(&format!("- **静态分析问题**: {}\n", report.static_analysis_summary.total_issues));
+        output.push_str(&format!(
+            "- **代码特征数**: {}\n",
+            report.summary.total_features
+        ));
+        output.push_str(&format!(
+            "- **静态分析问题**: {}\n",
+            report.static_analysis_summary.total_issues
+        ));
 
         if let Some(ref ai_summary) = report.ai_review_summary {
-            output.push_str(&format!("- **AI 审查文件数**: {}\n", ai_summary.total_files_reviewed));
-            output.push_str(&format!("- **平均质量分数**: {:.1}/10\n", ai_summary.average_score));
+            output.push_str(&format!(
+                "- **AI 审查文件数**: {}\n",
+                ai_summary.total_files_reviewed
+            ));
+            output.push_str(&format!(
+                "- **平均质量分数**: {:.1}/10\n",
+                ai_summary.average_score
+            ));
         }
 
         output.push_str("\n## 🗣️ 检测到的编程语言\n\n");
@@ -542,7 +559,7 @@ impl CodeReviewService {
         // AI 审查摘要
         if let Some(ref ai_summary) = report.ai_review_summary {
             output.push_str("\n## 🤖 AI 审查摘要\n\n");
-            
+
             if !ai_summary.critical_issues.is_empty() {
                 output.push_str("### ⚠️ 关键问题\n\n");
                 for issue in &ai_summary.critical_issues {
@@ -566,16 +583,19 @@ impl CodeReviewService {
             output.push_str(&format!("### 📄 {}\n\n", file.file_path));
             output.push_str(&format!("- **语言**: {}\n", file.language.as_str()));
             output.push_str(&format!("- **特征数**: {}\n", file.analysis.features.len()));
-            
+
             if let Some(ref ai_review) = file.ai_review {
-                output.push_str(&format!("- **AI 评分**: {:.1}/10\n", ai_review.overall_score));
+                output.push_str(&format!(
+                    "- **AI 评分**: {:.1}/10\n",
+                    ai_review.overall_score
+                ));
                 output.push_str(&format!("- **审查类型**: {}\n", ai_review.review_type));
-                
+
                 if !ai_review.summary.is_empty() {
                     output.push_str(&format!("- **摘要**: {}\n", ai_review.summary));
                 }
             }
-            
+
             output.push('\n');
         }
 
@@ -635,19 +655,17 @@ mod tests {
     #[tokio::test]
     async fn test_ai_review_summary_generation() {
         let service = CodeReviewService::new();
-        let ai_reviews = vec![
-            AIReviewResult {
-                review_type: "rust_comprehensive".to_string(),
-                overall_score: 8.5,
-                summary: "Good code".to_string(),
-                detailed_feedback: "Detailed feedback".to_string(),
-                security_score: 9.0,
-                performance_score: 8.0,
-                maintainability_score: 8.5,
-                recommendations: vec!["Add tests".to_string()],
-                learning_resources: vec!["https://doc.rust-lang.org".to_string()],
-            },
-        ];
+        let ai_reviews = vec![AIReviewResult {
+            review_type: "rust_comprehensive".to_string(),
+            overall_score: 8.5,
+            summary: "Good code".to_string(),
+            detailed_feedback: "Detailed feedback".to_string(),
+            security_score: 9.0,
+            performance_score: 8.0,
+            maintainability_score: 8.5,
+            recommendations: vec!["Add tests".to_string()],
+            learning_resources: vec!["https://doc.rust-lang.org".to_string()],
+        }];
 
         let summary = service.generate_ai_review_summary(&ai_reviews);
         assert_eq!(summary.total_files_reviewed, 1);

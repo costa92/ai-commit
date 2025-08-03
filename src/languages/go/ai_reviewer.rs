@@ -1,8 +1,6 @@
 use crate::ai;
 use crate::config::Config;
-use crate::languages::{LanguageAnalysisResult, LanguageFeature};
-use super::prompts::{get_go_prompt, suggest_go_review_type, detect_concurrency_features, detect_performance_hotspots};
-use serde::{Deserialize, Serialize};
+use crate::languages::LanguageFeature;
 
 /// Go 专用的 AI 代码审查器
 pub struct GoAIReviewer {
@@ -34,8 +32,16 @@ impl GoAIReviewer {
         let features_summary = if features.is_empty() {
             "未检测到特定代码特征".to_string()
         } else {
-            features.iter()
-                .map(|f| format!("{}:{} (第{}行)", f.feature_type, f.name, f.line_number.unwrap_or(0)))
+            features
+                .iter()
+                .map(|f| {
+                    format!(
+                        "{}:{} (第{}行)",
+                        f.feature_type,
+                        f.name,
+                        f.line_number.unwrap_or(0)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -114,41 +120,53 @@ impl GoAIReviewer {
     ) -> anyhow::Result<crate::languages::review_service_v2::AIReviewResult> {
         // 尝试解析JSON响应
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(response) {
-            let overall_score = json_value.get("overall_score")
+            let overall_score = json_value
+                .get("overall_score")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(7.0) as f32;
-            let summary = json_value.get("summary")
+            let summary = json_value
+                .get("summary")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Go代码审查完成")
                 .to_string();
-            let detailed_feedback = json_value.get("detailed_feedback")
+            let detailed_feedback = json_value
+                .get("detailed_feedback")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let security_score = json_value.get("security_score")
+            let security_score = json_value
+                .get("security_score")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0) as f32;
-            let performance_score = json_value.get("performance_score")
+            let performance_score = json_value
+                .get("performance_score")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0) as f32;
-            let maintainability_score = json_value.get("maintainability_score")
+            let maintainability_score = json_value
+                .get("maintainability_score")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0) as f32;
-            
-            let recommendations = json_value.get("recommendations")
+
+            let recommendations = json_value
+                .get("recommendations")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default();
-            
-            let learning_resources = json_value.get("learning_resources")
+
+            let learning_resources = json_value
+                .get("learning_resources")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default();
 
             Ok(crate::languages::review_service_v2::AIReviewResult {
@@ -190,11 +208,11 @@ impl GoAIReviewer {
         file_path: &str,
     ) -> anyhow::Result<crate::languages::review_service_v2::AIReviewResult> {
         let prompt = self.generate_review_prompt(review_type, features, file_path);
-        
+
         // 这里应该调用AI服务，但为了测试目的，我们返回一个模拟响应
         // 在真实环境中，这会调用实际的AI API
         let ai_response = ai::generate_commit_message("", &self.config, &prompt).await?;
-        
+
         self.parse_ai_response(review_type, &ai_response)
     }
 }

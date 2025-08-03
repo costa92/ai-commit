@@ -1,8 +1,10 @@
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod rust_feature_tests {
     use crate::config::Config;
+    use crate::languages::rust::{extract_rust_feature, RustFeatureType};
+    use crate::languages::LanguageFeature;
 
+    #[allow(dead_code)]
     fn create_test_config() -> Config {
         Config {
             provider: "ollama".to_string(),
@@ -35,10 +37,19 @@ mod tests {
         let test_cases = vec![
             ("pub fn main() {", "main"),
             ("async fn process_data() -> Result<()> {", "process_data"),
-            ("pub async fn handle_request(req: Request) -> Response {", "handle_request"),
+            (
+                "pub async fn handle_request(req: Request) -> Response {",
+                "handle_request",
+            ),
             ("unsafe fn dangerous_operation() {", "dangerous_operation"),
-            ("pub unsafe async fn complex_function() {", "complex_function"),
-            ("const fn compile_time_function() -> i32 {", "compile_time_function"),
+            (
+                "pub unsafe async fn complex_function() {",
+                "complex_function",
+            ),
+            (
+                "const fn compile_time_function() -> i32 {",
+                "compile_time_function",
+            ),
         ];
 
         for (line, expected_name) in test_cases {
@@ -116,10 +127,16 @@ mod tests {
     #[test]
     fn test_extract_rust_feature_use() {
         let test_cases = vec![
-            ("use std::collections::HashMap;", "std::collections::HashMap"),
+            (
+                "use std::collections::HashMap;",
+                "std::collections::HashMap",
+            ),
             ("use crate::config::Config;", "crate::config::Config"),
             ("pub use super::*;", "super::*"),
-            ("use serde::{Serialize, Deserialize};", "serde::{Serialize, Deserialize}"),
+            (
+                "use serde::{Serialize, Deserialize};",
+                "serde::{Serialize, Deserialize}",
+            ),
         ];
 
         for (line, expected_name) in test_cases {
@@ -155,7 +172,11 @@ mod tests {
 
         for line in non_matching_lines {
             let feature = extract_rust_feature(line, 1);
-            assert!(feature.is_none(), "Line '{}' should not match any pattern", line);
+            assert!(
+                feature.is_none(),
+                "Line '{}' should not match any pattern",
+                line
+            );
         }
     }
 
@@ -171,18 +192,22 @@ mod tests {
         // 属性行本身不应该被识别为特征
         for line in lines_with_attributes {
             let feature = extract_rust_feature(line, 1);
-            assert!(feature.is_none(), "Attribute line '{}' should not be recognized as a feature", line);
+            assert!(
+                feature.is_none(),
+                "Attribute line '{}' should not be recognized as a feature",
+                line
+            );
         }
     }
 
     #[test]
     fn test_rust_feature_edge_cases() {
         // 测试边界情况
-        let edge_cases = vec![
-            ("fn", None), // 不完整的函数声明
+        let edge_cases: Vec<(&str, Option<LanguageFeature>)> = vec![
+            ("fn", None),     // 不完整的函数声明
             ("struct", None), // 不完整的结构体声明
-            ("use;", None), // 不完整的 use 语句
-            ("impl", None), // 不完整的 impl 块
+            ("use;", None),   // 不完整的 use 语句
+            ("impl", None),   // 不完整的 impl 块
         ];
 
         for (line, expected) in edge_cases {
@@ -199,9 +224,15 @@ mod tests {
         // 测试复杂的泛型语法
         let complex_cases = vec![
             ("pub struct HashMap<K: Hash + Eq, V> {", "HashMap"),
-            ("impl<T: Clone + Debug> Display for Wrapper<T> {", "impl_block"),
+            (
+                "impl<T: Clone + Debug> Display for Wrapper<T> {",
+                "impl_block",
+            ),
             ("pub trait Iterator<Item: Send + Sync> {", "Iterator"),
-            ("fn generic_function<T, U>() where T: Clone, U: Debug {", "generic_function"),
+            (
+                "fn generic_function<T, U>() where T: Clone, U: Debug {",
+                "generic_function",
+            ),
         ];
 
         for (line, expected_name) in complex_cases {
@@ -216,7 +247,10 @@ mod tests {
     fn test_rust_feature_with_lifetimes() {
         // 测试生命周期参数
         let lifetime_cases = vec![
-            ("fn with_lifetime<'a>(s: &'a str) -> &'a str {", "with_lifetime"),
+            (
+                "fn with_lifetime<'a>(s: &'a str) -> &'a str {",
+                "with_lifetime",
+            ),
             ("struct Wrapper<'a, T> {", "Wrapper"),
             ("impl<'a> Display for Ref<'a> {", "impl_block"),
         ];
@@ -236,7 +270,10 @@ mod tests {
             ("pub fn public_function() {", "public_function"),
             ("pub(crate) fn crate_function() {", "crate_function"),
             ("pub(super) fn super_function() {", "super_function"),
-            ("pub(in crate::module) fn scoped_function() {", "scoped_function"),
+            (
+                "pub(in crate::module) fn scoped_function() {",
+                "scoped_function",
+            ),
         ];
 
         for (line, expected_name) in visibility_cases {
@@ -271,7 +308,7 @@ mod tests {
     #[test]
     fn test_rust_feature_line_numbers() {
         // 测试行号是否正确设置
-        let test_lines = vec![
+        let test_lines = [
             "pub fn first_function() {",
             "struct SecondStruct {",
             "use third::module;",
@@ -291,7 +328,7 @@ mod tests {
         // 测试描述内容是否包含原始代码
         let test_line = "pub async fn complex_function(data: &[u8]) -> Result<String, Error> {";
         let feature = extract_rust_feature(test_line, 1).unwrap();
-        
+
         assert!(feature.description.contains("Rust function"));
         assert!(feature.description.contains(test_line.trim()));
     }
@@ -302,7 +339,7 @@ mod tests {
         // 例如：use std::collections::{HashMap, HashSet};
         let line = "use std::collections::{HashMap, HashSet};";
         let feature = extract_rust_feature(line, 1);
-        
+
         // 应该识别为一个 use 语句
         assert!(feature.is_some());
         let f = feature.unwrap();
@@ -316,8 +353,8 @@ mod tests {
         // 测试各种空白字符的处理
         let whitespace_cases = vec![
             ("    pub fn indented_function() {", "indented_function"), // 前导空格
-            ("\tpub fn tab_indented() {", "tab_indented"),              // 前导制表符
-            ("pub  fn  extra_spaces() {", "extra_spaces"),            // 额外空格
+            ("\tpub fn tab_indented() {", "tab_indented"),             // 前导制表符
+            ("pub  fn  extra_spaces() {", "extra_spaces"),             // 额外空格
             ("pub\tfn\ttab_separated() {", "tab_separated"),           // 制表符分隔
         ];
 

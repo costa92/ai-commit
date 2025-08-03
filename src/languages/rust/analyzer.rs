@@ -1,5 +1,5 @@
-use crate::languages::{Language, LanguageAnalyzer, LanguageFeature, LanguageAnalysisResult};
 use super::{extract_rust_feature, RustFeatureType};
+use crate::languages::{Language, LanguageAnalyzer, LanguageFeature};
 
 pub struct RustAnalyzer;
 
@@ -15,6 +15,7 @@ impl RustAnalyzer {
     }
 
     /// 检测函数的可见性和特殊属性
+    #[allow(dead_code)]
     fn analyze_function_attributes(&self, line: &str) -> Vec<String> {
         let mut attributes = Vec::new();
 
@@ -80,9 +81,18 @@ impl RustAnalyzer {
     fn analyze_rust_change_patterns(&self, features: &[LanguageFeature]) -> Vec<String> {
         let mut patterns = Vec::new();
 
-        let function_count = features.iter().filter(|f| f.feature_type == "function").count();
-        let struct_count = features.iter().filter(|f| f.feature_type == "struct").count();
-        let trait_count = features.iter().filter(|f| f.feature_type == "trait").count();
+        let function_count = features
+            .iter()
+            .filter(|f| f.feature_type == "function")
+            .count();
+        let struct_count = features
+            .iter()
+            .filter(|f| f.feature_type == "struct")
+            .count();
+        let trait_count = features
+            .iter()
+            .filter(|f| f.feature_type == "trait")
+            .count();
         let impl_count = features.iter().filter(|f| f.feature_type == "impl").count();
         let use_count = features.iter().filter(|f| f.feature_type == "use").count();
 
@@ -103,19 +113,21 @@ impl RustAnalyzer {
         }
 
         // 检测测试相关变更
-        let test_functions = features.iter().filter(|f| {
-            f.description.contains("#[test]") || f.name.starts_with("test_")
-        }).count();
-        
+        let test_functions = features
+            .iter()
+            .filter(|f| f.description.contains("#[test]") || f.name.starts_with("test_"))
+            .count();
+
         if test_functions > 0 {
             patterns.push(format!("新增 {} 个测试函数", test_functions));
         }
 
         // 检测异步相关变更
-        let async_functions = features.iter().filter(|f| {
-            f.description.contains("async")
-        }).count();
-        
+        let async_functions = features
+            .iter()
+            .filter(|f| f.description.contains("async"))
+            .count();
+
         if async_functions > 0 {
             patterns.push(format!("新增 {} 个异步函数", async_functions));
         }
@@ -163,7 +175,11 @@ impl RustAnalyzer {
 
         let has_unsafe = features.iter().any(|f| f.description.contains("unsafe"));
         let has_many_impl = features.iter().filter(|f| f.feature_type == "impl").count() > 3;
-        let has_many_traits = features.iter().filter(|f| f.feature_type == "trait").count() > 2;
+        let has_many_traits = features
+            .iter()
+            .filter(|f| f.feature_type == "trait")
+            .count()
+            > 2;
 
         if has_unsafe {
             risks.push("包含 unsafe 代码，需要额外的安全性审查".to_string());
@@ -176,28 +192,23 @@ impl RustAnalyzer {
         }
 
         // 检查生命周期和所有权相关风险
-        let has_lifetime_params = features.iter().any(|f| 
-            f.description.contains("'") && f.description.contains("<")
-        );
+        let has_lifetime_params = features
+            .iter()
+            .any(|f| f.description.contains("'") && f.description.contains("<"));
         if has_lifetime_params {
             risks.push("涉及生命周期参数，需要仔细检查所有权管理".to_string());
         }
 
         // 检查泛型相关风险
-        let has_generics = features.iter().any(|f| 
-            f.description.contains("<") && f.description.contains(">")
-        );
+        let has_generics = features
+            .iter()
+            .any(|f| f.description.contains("<") && f.description.contains(">"));
         if has_generics {
             risks.push("使用泛型，需要验证类型约束和编译时检查".to_string());
         }
 
         risks
     }
-}
-
-#[cfg(test)]
-mod tests {
-    include!("analyzer_tests.rs");
 }
 
 impl LanguageAnalyzer for RustAnalyzer {
@@ -250,4 +261,9 @@ impl LanguageAnalyzer for RustAnalyzer {
     fn assess_risks(&self, features: &[LanguageFeature]) -> Vec<String> {
         self.assess_rust_risks(features)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    include!("analyzer_tests.rs");
 }

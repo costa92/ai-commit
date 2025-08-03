@@ -1,5 +1,4 @@
 /// Go 代码审查的 AI 提示词模板
-
 pub const GO_CODE_REVIEW_PROMPT: &str = r#"
 你是一个专业的 Go 代码审查专家。请对以下 Go 代码变更进行详细审查，并提供建设性的反馈。
 
@@ -188,11 +187,20 @@ pub fn get_go_prompt(review_type: &str) -> &'static str {
 
 /// 根据代码特征选择最适合的审查类型
 pub fn suggest_go_review_type(code_content: &str) -> &'static str {
-    if code_content.contains("go ") || code_content.contains("chan ") || code_content.contains("sync.") {
+    if code_content.contains("go ")
+        || code_content.contains("chan ")
+        || code_content.contains("sync.")
+    {
         "concurrency"
-    } else if code_content.contains("benchmark") || code_content.contains("time.") || code_content.contains("make(") {
+    } else if code_content.contains("benchmark")
+        || code_content.contains("time.")
+        || code_content.contains("make(")
+    {
         "performance"
-    } else if code_content.contains("interface") || code_content.contains("type ") || code_content.contains("func (") {
+    } else if code_content.contains("interface")
+        || code_content.contains("type ")
+        || code_content.contains("func (")
+    {
         "api_design"
     } else {
         "general"
@@ -202,7 +210,7 @@ pub fn suggest_go_review_type(code_content: &str) -> &'static str {
 /// 检测 Go 代码中的并发特征
 pub fn detect_concurrency_features(code_content: &str) -> Vec<String> {
     let mut features = Vec::new();
-    
+
     if code_content.contains("go ") {
         features.push("Goroutine 启动".to_string());
     }
@@ -221,14 +229,14 @@ pub fn detect_concurrency_features(code_content: &str) -> Vec<String> {
     if code_content.contains("context.") {
         features.push("上下文管理".to_string());
     }
-    
+
     features
 }
 
 /// 检测性能热点
 pub fn detect_performance_hotspots(code_content: &str) -> Vec<String> {
     let mut hotspots = Vec::new();
-    
+
     if code_content.contains("make([]") && code_content.contains("append(") {
         hotspots.push("切片频繁扩容".to_string());
     }
@@ -244,7 +252,7 @@ pub fn detect_performance_hotspots(code_content: &str) -> Vec<String> {
     if code_content.contains("json.") || code_content.contains("xml.") {
         hotspots.push("序列化操作".to_string());
     }
-    
+
     hotspots
 }
 
@@ -262,10 +270,22 @@ mod tests {
 
     #[test]
     fn test_go_review_type_suggestion() {
-        assert_eq!(suggest_go_review_type("go func() { doWork() }()"), "concurrency");
-        assert_eq!(suggest_go_review_type("ch := make(chan int)"), "concurrency");
-        assert_eq!(suggest_go_review_type("func BenchmarkTest() {}"), "performance");
-        assert_eq!(suggest_go_review_type("type Writer interface {}"), "api_design");
+        assert_eq!(
+            suggest_go_review_type("go func() { doWork() }()"),
+            "concurrency"
+        );
+        assert_eq!(
+            suggest_go_review_type("ch := make(chan int)"),
+            "concurrency"
+        );
+        assert_eq!(
+            suggest_go_review_type("func BenchmarkTest() {}"),
+            "performance"
+        );
+        assert_eq!(
+            suggest_go_review_type("type Writer interface {}"),
+            "api_design"
+        );
         assert_eq!(suggest_go_review_type("func normal() {}"), "general");
     }
 
@@ -273,7 +293,7 @@ mod tests {
     fn test_concurrency_features_detection() {
         let code = "go func() { ch := make(chan int); sync.Mutex{} }()";
         let features = detect_concurrency_features(code);
-        
+
         assert!(features.contains(&"Goroutine 启动".to_string()));
         assert!(features.contains(&"Channel 使用".to_string()));
         assert!(features.contains(&"互斥锁".to_string()));
@@ -283,7 +303,7 @@ mod tests {
     fn test_performance_hotspots_detection() {
         let code = "arr := make([]int, 0); arr = append(arr, 1); str := str1 + str2";
         let hotspots = detect_performance_hotspots(code);
-        
+
         assert!(hotspots.contains(&"切片频繁扩容".to_string()));
         assert!(hotspots.contains(&"字符串拼接".to_string()));
     }

@@ -1,5 +1,5 @@
-use crate::languages::{Language, LanguageAnalyzer, LanguageFeature, LanguageAnalysisResult};
 use super::{extract_go_feature, GoFeatureType};
+use crate::languages::{Language, LanguageAnalyzer, LanguageFeature};
 
 pub struct GoAnalyzer;
 
@@ -46,7 +46,7 @@ impl GoAnalyzer {
         // 如果是在子目录中，添加目录名作为作用域
         let path_parts: Vec<&str> = file_path.split('/').collect();
         if path_parts.len() > 1 {
-            for part in &path_parts[..path_parts.len()-1] {
+            for part in &path_parts[..path_parts.len() - 1] {
                 if !["src", "cmd", "pkg", "internal"].contains(part) && !part.is_empty() {
                     scopes.push(part.to_string());
                 }
@@ -60,12 +60,30 @@ impl GoAnalyzer {
     fn analyze_go_change_patterns(&self, features: &[LanguageFeature]) -> Vec<String> {
         let mut patterns = Vec::new();
 
-        let function_count = features.iter().filter(|f| f.feature_type == "function").count();
-        let method_count = features.iter().filter(|f| f.feature_type == "method").count();
-        let struct_count = features.iter().filter(|f| f.feature_type == "struct").count();
-        let interface_count = features.iter().filter(|f| f.feature_type == "interface").count();
-        let import_count = features.iter().filter(|f| f.feature_type == "import").count();
-        let package_count = features.iter().filter(|f| f.feature_type == "package").count();
+        let function_count = features
+            .iter()
+            .filter(|f| f.feature_type == "function")
+            .count();
+        let method_count = features
+            .iter()
+            .filter(|f| f.feature_type == "method")
+            .count();
+        let struct_count = features
+            .iter()
+            .filter(|f| f.feature_type == "struct")
+            .count();
+        let interface_count = features
+            .iter()
+            .filter(|f| f.feature_type == "interface")
+            .count();
+        let import_count = features
+            .iter()
+            .filter(|f| f.feature_type == "import")
+            .count();
+        let package_count = features
+            .iter()
+            .filter(|f| f.feature_type == "package")
+            .count();
 
         if function_count > 0 {
             patterns.push(format!("新增 {} 个函数", function_count));
@@ -87,32 +105,36 @@ impl GoAnalyzer {
         }
 
         // 检测测试相关变更
-        let test_functions = features.iter().filter(|f| {
-            f.feature_type == "function" && (
-                f.name.starts_with("Test") || 
-                f.name.starts_with("Benchmark") ||
-                f.name.starts_with("Example")
-            )
-        }).count();
-        
+        let test_functions = features
+            .iter()
+            .filter(|f| {
+                f.feature_type == "function"
+                    && (f.name.starts_with("Test")
+                        || f.name.starts_with("Benchmark")
+                        || f.name.starts_with("Example"))
+            })
+            .count();
+
         if test_functions > 0 {
             patterns.push(format!("新增 {} 个测试函数", test_functions));
         }
 
         // 检测并发相关变更
-        let goroutine_usage = features.iter().filter(|f| {
-            f.description.contains("go ") || f.description.contains("chan ")
-        }).count();
-        
+        let goroutine_usage = features
+            .iter()
+            .filter(|f| f.description.contains("go ") || f.description.contains("chan "))
+            .count();
+
         if goroutine_usage > 0 {
             patterns.push("涉及并发编程变更".to_string());
         }
 
         // 检测错误处理变更
-        let error_handling = features.iter().filter(|f| {
-            f.description.contains("error") || f.description.contains("Error")
-        }).count();
-        
+        let error_handling = features
+            .iter()
+            .filter(|f| f.description.contains("error") || f.description.contains("Error"))
+            .count();
+
         if error_handling > 0 {
             patterns.push("错误处理相关变更".to_string());
         }
@@ -128,9 +150,9 @@ impl GoAnalyzer {
         let has_methods = features.iter().any(|f| f.feature_type == "method");
         let has_structs = features.iter().any(|f| f.feature_type == "struct");
         let has_interfaces = features.iter().any(|f| f.feature_type == "interface");
-        let has_concurrency = features.iter().any(|f| 
-            f.description.contains("go ") || f.description.contains("chan ")
-        );
+        let has_concurrency = features
+            .iter()
+            .any(|f| f.description.contains("go ") || f.description.contains("chan "));
 
         if has_functions {
             suggestions.push("为新增函数编写单元测试".to_string());
@@ -158,13 +180,13 @@ impl GoAnalyzer {
         suggestions.push("使用 go vet 进行静态分析".to_string());
 
         // 检查是否需要基准测试
-        let performance_critical = features.iter().any(|f|
-            f.description.contains("benchmark") || 
-            f.description.contains("performance") ||
-            f.name.contains("process") ||
-            f.name.contains("parse")
-        );
-        
+        let performance_critical = features.iter().any(|f| {
+            f.description.contains("benchmark")
+                || f.description.contains("performance")
+                || f.name.contains("process")
+                || f.name.contains("parse")
+        });
+
         if performance_critical {
             suggestions.push("编写基准测试衡量性能".to_string());
         }
@@ -178,8 +200,16 @@ impl GoAnalyzer {
 
         let has_goroutines = features.iter().any(|f| f.description.contains("go "));
         let has_channels = features.iter().any(|f| f.description.contains("chan "));
-        let has_many_interfaces = features.iter().filter(|f| f.feature_type == "interface").count() > 2;
-        let has_many_structs = features.iter().filter(|f| f.feature_type == "struct").count() > 3;
+        let has_many_interfaces = features
+            .iter()
+            .filter(|f| f.feature_type == "interface")
+            .count()
+            > 2;
+        let has_many_structs = features
+            .iter()
+            .filter(|f| f.feature_type == "struct")
+            .count()
+            > 3;
 
         if has_goroutines {
             risks.push("使用 goroutine，需要检查是否存在泄漏风险".to_string());
@@ -195,36 +225,27 @@ impl GoAnalyzer {
         }
 
         // 检查指针使用
-        let has_pointers = features.iter().any(|f| 
-            f.description.contains("*") && !f.description.contains("import")
-        );
+        let has_pointers = features
+            .iter()
+            .any(|f| f.description.contains("*") && !f.description.contains("import"));
         if has_pointers {
             risks.push("使用指针，需要注意 nil 指针引用".to_string());
         }
 
         // 检查反射使用
-        let has_reflection = features.iter().any(|f| 
-            f.description.contains("reflect")
-        );
+        let has_reflection = features.iter().any(|f| f.description.contains("reflect"));
         if has_reflection {
             risks.push("使用反射，可能影响性能和类型安全".to_string());
         }
 
         // 检查 unsafe 包使用
-        let has_unsafe = features.iter().any(|f| 
-            f.description.contains("unsafe")
-        );
+        let has_unsafe = features.iter().any(|f| f.description.contains("unsafe"));
         if has_unsafe {
             risks.push("使用 unsafe 包，需要额外的安全性审查".to_string());
         }
 
         risks
     }
-}
-
-#[cfg(test)]
-mod tests {
-    include!("analyzer_tests.rs");
 }
 
 impl LanguageAnalyzer for GoAnalyzer {
@@ -240,7 +261,10 @@ impl LanguageAnalyzer for GoAnalyzer {
         }
 
         // 检测测试函数
-        if line.contains("func Test") || line.contains("func Benchmark") || line.contains("func Example") {
+        if line.contains("func Test")
+            || line.contains("func Benchmark")
+            || line.contains("func Example")
+        {
             features.push(LanguageFeature {
                 feature_type: GoFeatureType::Test.as_str().to_string(),
                 name: "test_function".to_string(),
@@ -289,3 +313,7 @@ impl LanguageAnalyzer for GoAnalyzer {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    include!("analyzer_tests.rs");
+}

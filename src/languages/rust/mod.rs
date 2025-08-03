@@ -1,4 +1,4 @@
-use crate::languages::{Language, LanguageAnalyzer, LanguageFeature, LanguageAnalysisResult};
+use crate::languages::LanguageFeature;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -23,13 +23,17 @@ static RUST_TRAIT_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?trait\s+(\w+)").unwrap());
 static RUST_IMPL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*impl\s+(?:<[^>]*>\s+)?(?:(\w+)\s+for\s+)?(\w+)").unwrap());
+#[allow(dead_code)]
 static RUST_MOD_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?mod\s+(\w+)").unwrap());
 static RUST_USE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*use\s+([^;]+)").unwrap());
+#[allow(dead_code)]
 static RUST_CONST_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?const\s+(\w+)").unwrap());
+#[allow(dead_code)]
 static RUST_STATIC_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?static\s+(\w+)").unwrap());
+#[allow(dead_code)]
 static RUST_TYPE_ALIAS_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\s*(?:pub\s+)?type\s+(\w+)\s*=").unwrap());
 
@@ -76,7 +80,10 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
     if let Some(caps) = RUST_FN_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: RustFeatureType::Function.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Rust function: {}", line.trim()),
         });
@@ -85,7 +92,10 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
     if let Some(caps) = RUST_STRUCT_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: RustFeatureType::Struct.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Rust struct: {}", line.trim()),
         });
@@ -94,7 +104,10 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
     if let Some(caps) = RUST_ENUM_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: RustFeatureType::Enum.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Rust enum: {}", line.trim()),
         });
@@ -103,7 +116,10 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
     if let Some(caps) = RUST_TRAIT_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: RustFeatureType::Trait.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Rust trait: {}", line.trim()),
         });
@@ -121,7 +137,10 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
     if let Some(caps) = RUST_USE_REGEX.captures(line) {
         return Some(LanguageFeature {
             feature_type: RustFeatureType::Use.as_str().to_string(),
-            name: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
+            name: caps
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
             line_number: Some(line_number),
             description: format!("Rust use statement: {}", line.trim()),
         });
@@ -129,4 +148,3 @@ pub fn extract_rust_feature(line: &str, line_number: usize) -> Option<LanguageFe
 
     None
 }
-

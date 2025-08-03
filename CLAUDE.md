@@ -199,6 +199,14 @@ The tool includes a comprehensive code review system that analyzes Git changes a
 - `--review-files FILES`: Specify comma-separated file paths to review
 - `--show-languages`: Display detected programming languages statistics only
 
+**🤖 AI-Enhanced Code Review Commands:**
+- `--ai-review`: Enable AI-powered code review (combines static analysis + AI intelligence)
+- `--ai-review-type TYPE`: AI review type (general, security, performance, architecture) [default: general]
+- `--ai-review-detail LEVEL`: AI review detail level (brief, detailed, comprehensive) [default: detailed]
+- `--ai-language-specific`: Enable language-specific AI review rules [default: true]
+- `--ai-include-static`: Include static analysis results in AI review [default: true]
+- `--ai-review-lang LANG`: AI review output language (zh, en) [default: zh]
+
 **Supported Languages:**
 - **Rust**: Functions, structs, enums, traits, impl blocks, modules, use statements
 - **Go**: Packages, functions, methods, structs, interfaces, imports, constants
@@ -213,6 +221,14 @@ The tool includes a comprehensive code review system that analyzes Git changes a
 - **Risk assessment** focused on API compatibility and breaking changes
 - **Testing suggestions** tailored to each programming language
 
+**AI Review Features:**
+- **Multi-dimensional Quality Scoring**: Overall quality, security, performance, maintainability (1-10 scale)
+- **Language-specific Rules**: Professional review rules tailored for Rust, Go, JavaScript, TypeScript
+- **Security Vulnerability Detection**: Identify potential security risks and best practice violations
+- **Performance Optimization Suggestions**: Specific performance improvement recommendations
+- **Learning Resource Recommendations**: Relevant learning materials and documentation links
+- **Static Analysis Integration**: Incorporates static analysis tool results for comprehensive quality assessment
+
 **Output Features:**
 - **Default Output**: Saves to `code-review/review_YYYYMMDD_HHMMSS.{ext}` automatically
 - **Timestamp naming** prevents file conflicts
@@ -220,6 +236,11 @@ The tool includes a comprehensive code review system that analyzes Git changes a
 - **Smart content optimization**: Automatically detects long reports (>10,000 chars) and generates optimized versions
 - **Comprehensive reporting**: Summary statistics, change patterns, risk assessment, test suggestions
 - **File-level analysis** with detected features and line numbers
+- **AI Review Results** (when `--ai-review` enabled):
+  - Overall quality scores and dimensional ratings
+  - Critical issue identification and prioritization
+  - Specific improvement recommendations and best practices
+  - Learning resources and reference documentation links
 
 **Code Review Report Structure:**
 ```markdown

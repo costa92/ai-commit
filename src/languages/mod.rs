@@ -113,8 +113,8 @@ pub mod typescript;
 
 // 导出review_service_v2的主要类型
 pub use review_service_v2::{
-    CodeReviewReport, CodeReviewService, FileAnalysisResult, ReviewSummary,
-    AIReviewResult, AIReviewSummary, StaticAnalysisSummary, ReviewOptions
+    AIReviewResult, AIReviewSummary, CodeReviewReport, CodeReviewService, FileAnalysisResult,
+    ReviewOptions, ReviewSummary, StaticAnalysisSummary,
 };
 
 impl LanguageAnalyzerFactory {
