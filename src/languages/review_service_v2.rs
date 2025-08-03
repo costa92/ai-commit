@@ -519,7 +519,23 @@ impl CodeReviewService {
 
     /// 从 diff 行中提取文件路径
     fn extract_file_path(&self, line: &str) -> Option<String> {
-        line.split(" b/").nth(1).map(|b_part| b_part.to_string())
+        // 处理两种格式：
+        // 1. diff --git a/file.ext b/file.ext
+        // 2. diff --git "a/file with spaces.ext" "b/file with spaces.ext"
+        
+        if let Some(b_part) = line.split(" b/").nth(1) {
+            // 标准格式：a/file b/file
+            Some(b_part.to_string())
+        } else if let Some(quoted_part) = line.split(" \"b/").nth(1) {
+            // 带引号格式："a/file" "b/file"
+            if let Some(end_quote) = quoted_part.find('"') {
+                Some(quoted_part[..end_quote].to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     /// 格式化报告（增强版本）
