@@ -241,14 +241,15 @@ pub async fn generate_commit_message(
                         println!("提交信息格式不符合规范，启动智能优化...");
                     }
                 }
-                
+
                 // 进行二次生成，生成更简洁的版本
                 let optimized_message = generate_optimized_commit_message(
-                    &message, 
-                    config, 
+                    &message,
+                    config,
                     &optimized_prompt,
-                    &config.provider // 使用当前 provider
-                ).await?;
+                    &config.provider, // 使用当前 provider
+                )
+                .await?;
                 return Ok(optimized_message);
             }
 
@@ -336,14 +337,15 @@ pub async fn generate_commit_message(
                         println!("提交信息格式不符合规范，启动智能优化...");
                     }
                 }
-                
+
                 // 进行二次生成，生成更简洁的版本
                 let optimized_message = generate_optimized_commit_message(
-                    &message, 
-                    config, 
+                    &message,
+                    config,
                     &optimized_prompt,
-                    "ollama" // Ollama provider
-                ).await?;
+                    "ollama", // Ollama provider
+                )
+                .await?;
                 return Ok(optimized_message);
             }
 

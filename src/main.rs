@@ -3,7 +3,7 @@ use ai_commit::ai::prompt;
 use ai_commit::cli::args::Args;
 use ai_commit::config::Config;
 use ai_commit::git;
-use ai_commit::languages::CodeReviewService;
+use ai_commit::languages::{CodeReviewService, ReviewOptions};
 use chrono::Utc;
 use clap::Parser;
 use std::time::Instant;
@@ -15,7 +15,7 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
     if args.show_languages {
         let diff = git::get_git_diff().await?;
         let service = CodeReviewService::new();
-        let report = service.review_git_changes(&diff);
+        let report = service.review_git_changes(&diff).await;
 
         println!("🔍 检测到的编程语言:");
         for (language, count) in &report.summary.languages_detected {
@@ -28,15 +28,30 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
         return Ok(true);
     }
 
-    // 执行代码审查
-    if args.code_review {
+    // 执行代码审查或 AI 审查
+    if args.code_review || args.ai_review {
         let start_time = Instant::now();
-        let service = CodeReviewService::new();
+        
+        // 创建审查选项
+        let options = ReviewOptions {
+            enable_ai_review: args.ai_review,
+            ai_review_types: vec![args.ai_review_type.clone()],
+            include_static_analysis: args.ai_include_static,
+            detailed_feedback: args.ai_review_detail == "detailed" || args.ai_review_detail == "comprehensive",
+            language_specific_rules: args.ai_language_specific,
+        };
+
+        // 创建支持 AI 的代码审查服务
+        let service = if args.ai_review {
+            CodeReviewService::with_config(config.clone()).with_ai_review(true)
+        } else {
+            CodeReviewService::new()
+        };
 
         let report = if let Some(files) = &args.review_files {
             // 审查指定文件
             let file_list: Vec<String> = files.split(',').map(|s| s.trim().to_string()).collect();
-            service.analyze_files(&file_list)
+            service.analyze_files_with_options(&file_list, &options).await
         } else {
             // 审查 Git diff 中的变更
             let diff = git::get_git_diff().await?;
@@ -44,20 +59,24 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
                 println!("❌ 没有检测到代码变更，无法进行审查");
                 return Ok(true);
             }
-            service.review_git_changes(&diff)
+            service.review_git_changes_with_options(&diff, &options).await
         };
 
         let elapsed_time = start_time.elapsed();
 
         if config.debug {
-            println!("代码审查完成，耗时: {:.2?}", elapsed_time);
+            if args.ai_review {
+                println!("AI 代码审查完成，耗时: {:.2?}", elapsed_time);
+            } else {
+                println!("代码审查完成，耗时: {:.2?}", elapsed_time);
+            }
         }
 
-        // 格式化输出
+        // 格式化输出（使用增强的报告格式）
         let formatted_report = match args.review_format.as_str() {
             "json" => serde_json::to_string_pretty(&report)?,
-            "text" => format_report_as_text(&report),
-            _ => service.format_report(&report), // markdown (default)
+            "text" => format_enhanced_report_as_text(&report),
+            _ => service.format_enhanced_report(&report), // markdown (default)
         };
 
         // 输出到文件或控制台
@@ -93,20 +112,46 @@ async fn handle_code_review(args: &Args, config: &Config) -> anyhow::Result<bool
     Ok(false)
 }
 
-fn format_report_as_text(report: &ai_commit::languages::CodeReviewReport) -> String {
+fn format_enhanced_report_as_text(report: &ai_commit::languages::CodeReviewReport) -> String {
     let mut output = String::new();
 
-    output.push_str("=== 代码审查报告 ===\n\n");
+    output.push_str("=== 增强代码审查报告 ===\n\n");
 
-    // 摘要
+    // 基本摘要
     output.push_str(&format!("总文件数: {}\n", report.summary.total_files));
     output.push_str(&format!("检测特征数: {}\n", report.summary.total_features));
+    output.push_str(&format!("静态分析问题: {}\n", report.static_analysis_summary.total_issues));
+    
+    // AI 审查摘要
+    if let Some(ref ai_summary) = report.ai_review_summary {
+        output.push_str(&format!("AI 审查文件数: {}\n", ai_summary.total_files_reviewed));
+        output.push_str(&format!("平均质量分数: {:.1}/10\n", ai_summary.average_score));
+    }
+    
     output.push_str("检测到的语言:\n");
-
     for (language, count) in &report.summary.languages_detected {
         output.push_str(&format!("  - {}: {} 个文件\n", language.as_str(), count));
     }
     output.push('\n');
+
+    // AI 审查详情
+    if let Some(ref ai_summary) = report.ai_review_summary {
+        if !ai_summary.critical_issues.is_empty() {
+            output.push_str("关键问题:\n");
+            for issue in &ai_summary.critical_issues {
+                output.push_str(&format!("  - {}\n", issue));
+            }
+            output.push('\n');
+        }
+
+        if !ai_summary.recommended_actions.is_empty() {
+            output.push_str("推荐操作:\n");
+            for action in &ai_summary.recommended_actions {
+                output.push_str(&format!("  - {}\n", action));
+            }
+            output.push('\n');
+        }
+    }
 
     // 变更模式
     if !report.summary.common_patterns.is_empty() {
@@ -132,6 +177,24 @@ fn format_report_as_text(report: &ai_commit::languages::CodeReviewReport) -> Str
         for suggestion in &report.summary.test_suggestions {
             output.push_str(&format!("  - {}\n", suggestion));
         }
+        output.push('\n');
+    }
+
+    // 详细文件分析
+    output.push_str("=== 详细文件分析 ===\n\n");
+    for file in &report.files {
+        output.push_str(&format!("文件: {}\n", file.file_path));
+        output.push_str(&format!("语言: {}\n", file.language.as_str()));
+        output.push_str(&format!("特征数: {}\n", file.analysis.features.len()));
+        
+        if let Some(ref ai_review) = file.ai_review {
+            output.push_str(&format!("AI 评分: {:.1}/10\n", ai_review.overall_score));
+            output.push_str(&format!("审查类型: {}\n", ai_review.review_type));
+            if !ai_review.summary.is_empty() {
+                output.push_str(&format!("摘要: {}\n", ai_review.summary));
+            }
+        }
+        
         output.push('\n');
     }
 

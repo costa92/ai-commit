@@ -355,6 +355,12 @@ mod tests {
             review_output: None,
             review_files: None,
             show_languages: false,
+            ai_review: false,
+            ai_review_type: "general".to_string(),
+            ai_review_detail: "detailed".to_string(),
+            ai_language_specific: true,
+            ai_include_static: true,
+            ai_review_lang: "zh".to_string(),
         };
 
         config.update_from_args(&args);
@@ -397,6 +403,12 @@ mod tests {
             review_output: None,
             review_files: None,
             show_languages: false,
+            ai_review: false,
+            ai_review_type: "general".to_string(),
+            ai_review_detail: "detailed".to_string(),
+            ai_language_specific: true,
+            ai_include_static: true,
+            ai_review_lang: "zh".to_string(),
         };
 
         config.update_from_args(&args);
@@ -447,6 +459,12 @@ mod tests {
             review_output: None,
             review_files: None,
             show_languages: false,
+            ai_review: false,
+            ai_review_type: "general".to_string(),
+            ai_review_detail: "detailed".to_string(),
+            ai_language_specific: true,
+            ai_include_static: true,
+            ai_review_lang: "zh".to_string(),
         };
 
         config.update_from_args(&args);

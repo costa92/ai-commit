@@ -106,12 +106,16 @@ pub struct LanguageAnalyzerFactory;
 pub mod generic;
 pub mod go;
 pub mod javascript;
-pub mod review_service;
+pub mod review_service_v2;
 pub mod rust;
+pub mod static_analysis;
 pub mod typescript;
 
-// 导出review_service的主要类型
-pub use review_service::{CodeReviewReport, CodeReviewService, FileAnalysisResult, ReviewSummary};
+// 导出review_service_v2的主要类型
+pub use review_service_v2::{
+    CodeReviewReport, CodeReviewService, FileAnalysisResult, ReviewSummary,
+    AIReviewResult, AIReviewSummary, StaticAnalysisSummary, ReviewOptions
+};
 
 impl LanguageAnalyzerFactory {
     pub fn create_analyzer(language: &Language) -> Box<dyn LanguageAnalyzer> {

@@ -98,6 +98,30 @@ pub struct Args {
     /// 只显示检测到的语言统计
     #[arg(long = "show-languages", default_value_t = false)]
     pub show_languages: bool,
+
+    /// 启用 AI 代码审查
+    #[arg(long = "ai-review", default_value_t = false)]
+    pub ai_review: bool,
+
+    /// AI 审查类型 (general, security, performance, architecture)
+    #[arg(long = "ai-review-type", default_value = "general")]
+    pub ai_review_type: String,
+
+    /// AI 审查的详细程度 (brief, detailed, comprehensive)
+    #[arg(long = "ai-review-detail", default_value = "detailed")]
+    pub ai_review_detail: String,
+
+    /// 启用语言特定的 AI 审查规则
+    #[arg(long = "ai-language-specific", default_value_t = true)]
+    pub ai_language_specific: bool,
+
+    /// 包含静态分析结果在 AI 审查中
+    #[arg(long = "ai-include-static", default_value_t = true)]
+    pub ai_include_static: bool,
+
+    /// AI 审查的输出语言 (zh, en)
+    #[arg(long = "ai-review-lang", default_value = "zh")]
+    pub ai_review_lang: String,
 }
 
 #[cfg(test)]
