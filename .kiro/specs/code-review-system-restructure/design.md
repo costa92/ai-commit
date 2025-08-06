@@ -21,14 +21,18 @@ AI-Commit 代码审查系统采用分层模块化架构，通过 Rust 语言实�
 │  Layer          │  Layer          │  Layer                      │
 │  (多语言支持)    │  (工具集成)      │  (安全检测)                  │
 ├─────────────────┼─────────────────┼─────────────────────────────┤
-│  AI Services    │  Caching        │  Notification               │
-│  Layer          │  Layer          │  Layer                      │
-│  (智能分析)      │  (性能优化)      │  (团队协作)                  │
+│  AI Services    │  Caching        │  Storage                    │
+│  Layer          │  Layer          │  Middleware                 │
+│  (智能分析)      │  (性能优化)      │  (数据持久化)                │
+├─────────────────┼─────────────────┼─────────────────────────────┤
+│  Messaging      │  Notification   │  Quality Analysis           │
+│  Middleware     │  Layer          │  Layer                      │
+│  (消息队列)      │  (团队协作)      │  (质量分析)                  │
 ├─────────────────┴─────────────────┴─────────────────────────────┤
 │  Infrastructure Layer (src/infrastructure/)                    │
 │  - Configuration Management                                     │
 │  - Error Handling & Logging                                    │
-│  - Network & Storage                                            │
+│  - Network & Database Connections                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -57,50 +61,50 @@ pub struct Args {
     // 基础审查参数
     #[arg(long)]
     pub code_review: bool,
-    
+
     #[arg(long)]
     pub ai_review: bool,
-    
+
     #[arg(long)]
     pub static_analysis: bool,
-    
+
     // AI 配置参数
     #[arg(long)]
     pub ai_provider: Option<String>,
-    
+
     #[arg(long)]
     pub ai_model: Option<String>,
-    
+
     // 分析功能参数
     #[arg(long)]
     pub complexity_analysis: bool,
-    
+
     #[arg(long)]
     pub duplication_scan: bool,
-    
+
     #[arg(long)]
     pub dependency_scan: bool,
-    
+
     #[arg(long)]
     pub coverage_analysis: bool,
-    
+
     #[arg(long)]
     pub performance_analysis: bool,
-    
+
     #[arg(long)]
     pub trend_analysis: bool,
-    
+
     // 报告和输出参数
     #[arg(long)]
     pub report_format: Option<String>,
-    
+
     #[arg(long)]
     pub output: Option<String>,
-    
+
     // 通知参数
     #[arg(long)]
     pub enable_notifications: bool,
-    
+
     #[arg(long)]
     pub notify: Option<String>,
 }
@@ -130,6 +134,8 @@ pub struct ReviewOrchestrator {
     performance_analyzer: PerformanceAnalyzer,
     trend_analyzer: QualityTrendAnalyzer,
     cache_manager: CacheManager,
+    storage_manager: StorageManager,
+    messaging_manager: MessagingManager,
     notification_service: NotificationService,
 }
 
@@ -137,61 +143,89 @@ impl ReviewOrchestrator {
     pub async fn conduct_review(&self, request: ReviewRequest) -> anyhow::Result<ReviewResult> {
         // 1. 语言检测
         let languages = self.detect_languages(&request.files).await?;
-        
+
         // 2. 并行执行各种分析
         let mut analysis_futures = Vec::new();
-        
+
         if request.options.static_analysis {
             analysis_futures.push(self.run_static_analysis(&request.files, &languages));
         }
-        
+
         if request.options.ai_review {
             analysis_futures.push(self.run_ai_analysis(&request.files, &languages));
         }
-        
+
         if request.options.sensitive_scan {
             analysis_futures.push(self.run_sensitive_scan(&request.files));
         }
-        
+
         if request.options.complexity_analysis {
             analysis_futures.push(self.run_complexity_analysis(&request.files, &languages));
         }
-        
+
         if request.options.duplication_scan {
             analysis_futures.push(self.run_duplication_scan(&request.files));
         }
-        
+
         if request.options.dependency_scan {
             analysis_futures.push(self.run_dependency_scan(&request.project_path));
         }
-        
+
         if request.options.coverage_analysis {
             analysis_futures.push(self.run_coverage_analysis(&request.project_path, &languages));
         }
-        
+
         if request.options.performance_analysis {
             analysis_futures.push(self.run_performance_analysis(&request.files, &languages));
         }
-        
+
         // 3. 等待所有分析完成
         let results = futures::future::join_all(analysis_futures).await;
-        
+
         // 4. 聚合结果
         let aggregated_result = self.aggregate_results(results)?;
-        
+
         // 5. 生成报告
         let report = self.generate_report(&aggregated_result, &request.options)?;
-        
-        // 6. 发送通知
+
+        // 6. 存储报告到数据库
+        let report_id = if request.options.store_report {
+            Some(self.storage_manager.store_report(&report).await?)
+        } else {
+            None
+        };
+
+        // 7. 发送报告事件到消息队列
+        if request.options.enable_messaging {
+            let event = ReportEvent {
+                event_id: uuid::Uuid::new_v4().to_string(),
+                event_type: ReportEventType::ReportGenerated,
+                timestamp: Utc::now(),
+                project_path: request.project_path.clone(),
+                report_id: report_id.clone(),
+                metadata: EventMetadata {
+                    source: "ai-commit".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    correlation_id: request.correlation_id.clone(),
+                    user_id: request.user_id.clone(),
+                    tags: request.tags.clone(),
+                },
+                payload: serde_json::to_value(&report)?,
+            };
+
+            self.messaging_manager.send_report_event(event).await?;
+        }
+
+        // 8. 发送通知
         if request.options.enable_notifications {
             self.send_notifications(&report).await?;
         }
-        
-        // 7. 记录质量快照
+
+        // 9. 记录质量快照
         if request.options.record_snapshot {
             self.record_quality_snapshot(&request.project_path, &report).await?;
         }
-        
+
         Ok(ReviewResult {
             report,
             metadata: ReviewMetadata {
@@ -230,14 +264,14 @@ impl LanguageDetector {
         if let Some(lang) = Language::from_extension(file_path) {
             return LanguageDetectionResult::new(lang, 0.95, "extension-based");
         }
-        
+
         // 2. AI 增强检测
         if let Some(ai_detector) = &self.ai_detector {
             if let Ok(result) = ai_detector.detect(file_path, content).await {
                 return result;
             }
         }
-        
+
         // 3. 启发式检测
         self.heuristic_detector.detect(file_path, content)
     }
@@ -254,21 +288,21 @@ pub struct GoAnalyzer {
 impl LanguageAnalyzer for GoAnalyzer {
     fn analyze_features(&self, content: &str) -> Vec<LanguageFeature> {
         let mut features = Vec::new();
-        
+
         // Go 包声明检测
         if let Some(package) = self.extract_package_declaration(content) {
             features.push(LanguageFeature::Package(package));
         }
-        
+
         // Go 函数检测
         features.extend(self.extract_functions(content));
-        
+
         // Go 结构体检测
         features.extend(self.extract_structs(content));
-        
+
         // Go 接口检测
         features.extend(self.extract_interfaces(content));
-        
+
         features
     }
 }
@@ -305,17 +339,17 @@ pub struct GoFmtTool;
 #[async_trait]
 impl StaticAnalysisTool for GoFmtTool {
     fn name(&self) -> &str { "gofmt" }
-    
+
     fn supported_languages(&self) -> Vec<Language> {
         vec![Language::Go]
     }
-    
+
     async fn analyze(&self, file_path: &str, _content: &str) -> anyhow::Result<Vec<Issue>> {
         let output = tokio::process::Command::new("gofmt")
             .args(["-d", file_path])
             .output()
             .await?;
-            
+
         let mut issues = Vec::new();
         if !output.stdout.is_empty() {
             issues.push(Issue {
@@ -327,10 +361,10 @@ impl StaticAnalysisTool for GoFmtTool {
                 suggestion: Some("运行 'gofmt -w filename.go' 自动格式化代码".to_string()),
             });
         }
-        
+
         Ok(issues)
     }
-    
+
     fn is_available(&self) -> bool {
         std::process::Command::new("gofmt")
             .arg("--help")
@@ -374,7 +408,7 @@ pub struct DeepSeekProvider {
 #[async_trait]
 impl AIProvider for DeepSeekProvider {
     fn name(&self) -> &str { "deepseek" }
-    
+
     async fn analyze_code(&self, prompt: &str, config: &AIConfig) -> anyhow::Result<String> {
         let request = serde_json::json!({
             "model": config.model,
@@ -385,7 +419,7 @@ impl AIProvider for DeepSeekProvider {
             "temperature": config.temperature,
             "max_tokens": config.max_tokens
         });
-        
+
         let response = self.client
             .post(&config.deepseek_url)
             .header("Authorization", format!("Bearer {}", config.deepseek_api_key.as_ref().unwrap()))
@@ -393,20 +427,20 @@ impl AIProvider for DeepSeekProvider {
             .json(&request)
             .send()
             .await?;
-            
+
         if !response.status().is_success() {
             anyhow::bail!("DeepSeek API 请求失败: {}", response.status());
         }
-        
+
         let response_json: serde_json::Value = response.json().await?;
         let content = response_json["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")
             .to_string();
-            
+
         Ok(content)
     }
-    
+
     fn is_available(&self, config: &AIConfig) -> bool {
         config.deepseek_api_key.is_some() && !config.deepseek_api_key.as_ref().unwrap().is_empty()
     }
@@ -423,7 +457,7 @@ impl LanguageSpecificReviewer {
         let response = self.ai_service.analyze_code(&prompt).await?;
         self.parse_go_review_response(&response)
     }
-    
+
     pub async fn review_rust_code(&self, features: &[LanguageFeature], file_path: &str) -> anyhow::Result<AIReviewResult> {
         let prompt = self.build_rust_review_prompt(features, file_path);
         let response = self.ai_service.analyze_code(&prompt).await?;
@@ -454,22 +488,22 @@ impl SensitiveInfoDetector {
     pub fn detect(&self, file_path: &str, content: &str) -> SensitiveInfoResult {
         let mut items = Vec::new();
         let lines: Vec<&str> = content.lines().collect();
-        
+
         // 检测默认模式
         for pattern in &self.patterns {
             items.extend(self.detect_pattern(pattern, &lines, file_path));
         }
-        
+
         // 检测自定义模式
         for pattern in &self.custom_patterns {
             items.extend(self.detect_pattern(pattern, &lines, file_path));
         }
-        
+
         // 应用白名单过滤
         items.retain(|item| !self.is_whitelisted(&item.matched_text, file_path));
-        
+
         let summary = self.generate_summary(&items);
-        
+
         SensitiveInfoResult {
             file_path: file_path.to_string(),
             items,
@@ -532,14 +566,14 @@ impl ComplexityAnalyzer {
     pub fn analyze_file(&self, file_path: &str, content: &str, language: &Language) -> ComplexityResult {
         let ast = self.parse_ast(content, language);
         let functions = self.extract_functions(&ast);
-        
+
         let mut function_complexities = Vec::new();
         for function in functions {
             let cyclomatic = self.cyclomatic_calculator.calculate(&function);
             let cognitive = self.cognitive_calculator.calculate(&function);
             let length = self.function_analyzer.analyze(&function);
             let nesting = self.nesting_analyzer.analyze(&function);
-            
+
             function_complexities.push(FunctionComplexity {
                 name: function.name.clone(),
                 line_start: function.line_start,
@@ -551,11 +585,11 @@ impl ComplexityAnalyzer {
                 risk_level: self.calculate_risk_level(cyclomatic, cognitive, length, nesting),
             });
         }
-        
+
         let overall_metrics = self.calculate_overall_metrics(&function_complexities);
         let hotspots = self.identify_hotspots(&function_complexities);
         let recommendations = self.generate_recommendations(&function_complexities);
-        
+
         ComplexityResult {
             file_path: file_path.to_string(),
             functions: function_complexities,
@@ -598,7 +632,7 @@ impl CacheManager {
                 }
             }
         }
-        
+
         // 2. 尝试文件系统缓存
         if let Some(ref fs_cache) = self.fs_cache {
             if let Some(data) = fs_cache.get::<T>(key).await {
@@ -606,29 +640,29 @@ impl CacheManager {
                 return Some(data);
             }
         }
-        
+
         None
     }
-    
+
     pub async fn set<T>(&self, key: &str, data: T, ttl: Option<Duration>)
     where
         T: Clone + serde::Serialize,
     {
         let expires_at = ttl.map(|duration| Utc::now() + chrono::Duration::from_std(duration).unwrap());
-        
+
         let entry = CacheEntry {
             data: self.wrap_data(data.clone()),
             created_at: Utc::now(),
             expires_at,
             access_count: 0,
         };
-        
+
         // 设置内存缓存
         {
             let mut cache = self.memory_cache.lock().await;
             cache.put(key.to_string(), entry);
         }
-        
+
         // 设置文件系统缓存
         if let Some(ref fs_cache) = self.fs_cache {
             fs_cache.set(key, data).await;
@@ -637,7 +671,283 @@ impl CacheManager {
 }
 ```
 
-### 9. 通知系统层 (src/notification/)
+### 9. 存储中间件层 (src/storage/)
+
+**职责**: 报告数据持久化、多数据库支持、数据访问抽象
+
+**组件结构**:
+```rust
+// src/storage/mod.rs
+pub mod manager;
+pub mod providers;
+pub mod models;
+
+// src/storage/manager.rs
+pub struct StorageManager {
+    providers: HashMap<StorageType, Box<dyn StorageProvider>>,
+    config: StorageConfig,
+    connection_pool: Arc<ConnectionPool>,
+}
+
+#[async_trait]
+pub trait StorageProvider: Send + Sync {
+    fn storage_type(&self) -> StorageType;
+    async fn store_report(&mut self, report: &CodeReviewReport) -> anyhow::Result<String>;
+    async fn retrieve_report(&self, report_id: &str) -> anyhow::Result<Option<CodeReviewReport>>;
+    async fn list_reports(&self, filter: &ReportFilter) -> anyhow::Result<Vec<ReportSummary>>;
+    async fn delete_report(&mut self, report_id: &str) -> anyhow::Result<()>;
+    fn is_available(&self) -> bool;
+}
+
+// src/storage/providers/mongodb.rs
+pub struct MongoDBProvider {
+    client: mongodb::Client,
+    database: mongodb::Database,
+    collection: mongodb::Collection<Document>,
+}
+
+#[async_trait]
+impl StorageProvider for MongoDBProvider {
+    fn storage_type(&self) -> StorageType { StorageType::MongoDB }
+
+    async fn store_report(&mut self, report: &CodeReviewReport) -> anyhow::Result<String> {
+        let document = self.serialize_report(report)?;
+        let result = self.collection.insert_one(document, None).await?;
+
+        Ok(result.inserted_id.as_object_id()
+            .unwrap()
+            .to_hex())
+    }
+
+    async fn retrieve_report(&self, report_id: &str) -> anyhow::Result<Option<CodeReviewReport>> {
+        let object_id = mongodb::bson::oid::ObjectId::parse_str(report_id)?;
+        let filter = doc! { "_id": object_id };
+
+        if let Some(document) = self.collection.find_one(filter, None).await? {
+            let report = self.deserialize_report(&document)?;
+            Ok(Some(report))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_reports(&self, filter: &ReportFilter) -> anyhow::Result<Vec<ReportSummary>> {
+        let mongo_filter = self.build_mongo_filter(filter);
+        let mut cursor = self.collection.find(mongo_filter, None).await?;
+
+        let mut summaries = Vec::new();
+        while let Some(document) = cursor.try_next().await? {
+            let summary = self.extract_summary(&document)?;
+            summaries.push(summary);
+        }
+
+        Ok(summaries)
+    }
+}
+
+// src/storage/providers/mysql.rs
+pub struct MySQLProvider {
+    pool: sqlx::MySqlPool,
+    table_name: String,
+}
+
+#[async_trait]
+impl StorageProvider for MySQLProvider {
+    fn storage_type(&self) -> StorageType { StorageType::MySQL }
+
+    async fn store_report(&mut self, report: &CodeReviewReport) -> anyhow::Result<String> {
+        let report_json = serde_json::to_string(report)?;
+        let report_id = uuid::Uuid::new_v4().to_string();
+
+        sqlx::query(&format!(
+            "INSERT INTO {} (id, project_path, report_data, created_at, overall_score) VALUES (?, ?, ?, NOW(), ?)",
+            self.table_name
+        ))
+        .bind(&report_id)
+        .bind(&report.summary.project_path)
+        .bind(&report_json)
+        .bind(report.overall_score)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(report_id)
+    }
+
+    async fn retrieve_report(&self, report_id: &str) -> anyhow::Result<Option<CodeReviewReport>> {
+        let row: Option<(String,)> = sqlx::query_as(&format!(
+            "SELECT report_data FROM {} WHERE id = ?",
+            self.table_name
+        ))
+        .bind(report_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some((report_json,)) = row {
+            let report: CodeReviewReport = serde_json::from_str(&report_json)?;
+            Ok(Some(report))
+        } else {
+            Ok(None)
+        }
+    }
+}
+```
+
+### 10. 消息队列中间件层 (src/messaging/)
+
+**职责**: 异步报告处理、消息队列集成、事件驱动架构
+
+**组件结构**:
+```rust
+// src/messaging/mod.rs
+pub mod manager;
+pub mod producers;
+pub mod consumers;
+pub mod events;
+
+// src/messaging/manager.rs
+pub struct MessagingManager {
+    producers: HashMap<QueueType, Box<dyn MessageProducer>>,
+    consumers: HashMap<QueueType, Box<dyn MessageConsumer>>,
+    config: MessagingConfig,
+}
+
+#[async_trait]
+pub trait MessageProducer: Send + Sync {
+    fn queue_type(&self) -> QueueType;
+    async fn send_message(&mut self, topic: &str, message: &[u8]) -> anyhow::Result<MessageId>;
+    async fn send_report_event(&mut self, event: ReportEvent) -> anyhow::Result<MessageId>;
+    fn is_available(&self) -> bool;
+}
+
+#[async_trait]
+pub trait MessageConsumer: Send + Sync {
+    fn queue_type(&self) -> QueueType;
+    async fn consume_messages<F>(&mut self, topic: &str, handler: F) -> anyhow::Result<()>
+    where
+        F: Fn(Message) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> + Send + Sync + 'static;
+    async fn subscribe_to_events<F>(&mut self, handler: F) -> anyhow::Result<()>
+    where
+        F: Fn(ReportEvent) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> + Send + Sync + 'static;
+}
+
+// src/messaging/producers/kafka.rs
+pub struct KafkaProducer {
+    producer: rdkafka::producer::FutureProducer,
+    config: KafkaConfig,
+}
+
+#[async_trait]
+impl MessageProducer for KafkaProducer {
+    fn queue_type(&self) -> QueueType { QueueType::Kafka }
+
+    async fn send_message(&mut self, topic: &str, message: &[u8]) -> anyhow::Result<MessageId> {
+        let record = FutureRecord::to(topic)
+            .payload(message)
+            .key(&format!("report-{}", uuid::Uuid::new_v4()));
+
+        let delivery_status = self.producer.send(record, Duration::from_secs(10)).await;
+
+        match delivery_status {
+            Ok((partition, offset)) => {
+                Ok(MessageId::Kafka {
+                    topic: topic.to_string(),
+                    partition,
+                    offset
+                })
+            },
+            Err((kafka_error, _)) => {
+                anyhow::bail!("Failed to send message to Kafka: {}", kafka_error)
+            }
+        }
+    }
+
+    async fn send_report_event(&mut self, event: ReportEvent) -> anyhow::Result<MessageId> {
+        let message = serde_json::to_vec(&event)?;
+        let topic = match event.event_type {
+            ReportEventType::ReportGenerated => &self.config.report_generated_topic,
+            ReportEventType::AnalysisCompleted => &self.config.analysis_completed_topic,
+            ReportEventType::QualityThresholdExceeded => &self.config.quality_alert_topic,
+        };
+
+        self.send_message(topic, &message).await
+    }
+}
+
+// src/messaging/events.rs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportEvent {
+    pub event_id: String,
+    pub event_type: ReportEventType,
+    pub timestamp: DateTime<Utc>,
+    pub project_path: String,
+    pub report_id: Option<String>,
+    pub metadata: EventMetadata,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReportEventType {
+    ReportGenerated,
+    AnalysisCompleted,
+    QualityThresholdExceeded,
+    SecurityIssueDetected,
+    PerformanceRegressionDetected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventMetadata {
+    pub source: String,
+    pub version: String,
+    pub correlation_id: Option<String>,
+    pub user_id: Option<String>,
+    pub tags: HashMap<String, String>,
+}
+
+// src/messaging/consumers/kafka.rs
+pub struct KafkaConsumer {
+    consumer: rdkafka::consumer::StreamConsumer,
+    config: KafkaConfig,
+}
+
+#[async_trait]
+impl MessageConsumer for KafkaConsumer {
+    fn queue_type(&self) -> QueueType { QueueType::Kafka }
+
+    async fn consume_messages<F>(&mut self, topic: &str, handler: F) -> anyhow::Result<()>
+    where
+        F: Fn(Message) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> + Send + Sync + 'static,
+    {
+        self.consumer.subscribe(&[topic])?;
+
+        loop {
+            match self.consumer.recv().await {
+                Ok(message) => {
+                    let msg = Message {
+                        topic: message.topic().to_string(),
+                        partition: message.partition(),
+                        offset: message.offset(),
+                        key: message.key().map(|k| k.to_vec()),
+                        payload: message.payload().unwrap_or(&[]).to_vec(),
+                        timestamp: message.timestamp().to_millis(),
+                    };
+
+                    if let Err(e) = handler(msg).await {
+                        log::error!("Error processing message: {}", e);
+                    }
+
+                    self.consumer.commit_message(&message, CommitMode::Async)?;
+                },
+                Err(e) => {
+                    log::error!("Error receiving message: {}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+}
+```
+
+### 11. 通知系统层 (src/notification/)
 
 **职责**: 多平台通知、消息模板、重试机制
 
@@ -673,7 +983,7 @@ impl FeishuProvider {
     fn build_interactive_card(&self, message: &NotificationMessage) -> serde_json::Value {
         let color = self.get_severity_color(&message.severity);
         let score_emoji = self.get_score_emoji(message.score);
-        
+
         serde_json::json!({
             "msg_type": "interactive",
             "card": {
@@ -725,33 +1035,33 @@ impl ConfigManager {
     pub fn new() -> anyhow::Result<Self> {
         let mut config = Config::default();
         let config_paths = Self::discover_config_files();
-        
+
         // 按优先级加载配置
         Self::load_configurations(&mut config, &config_paths)?;
-        
+
         // 验证配置
         config.validate()?;
-        
+
         Ok(Self {
             config,
             config_paths,
             watchers: Vec::new(),
         })
     }
-    
+
     pub fn update_from_cli(&mut self, matches: &ArgMatches) -> anyhow::Result<()> {
         // 从 CLI 参数更新配置
         if let Some(provider) = matches.get_one::<String>("ai-provider") {
             self.config.ai.provider = provider.clone();
         }
-        
+
         if let Some(model) = matches.get_one::<String>("ai-model") {
             self.config.ai.model = model.clone();
         }
-        
+
         // 重新验证配置
         self.config.validate()?;
-        
+
         Ok(())
     }
 }
@@ -826,28 +1136,28 @@ pub struct CodeReviewReport {
 pub enum ReviewError {
     #[error("配置错误: {0}")]
     ConfigError(String),
-    
+
     #[error("语言检测失败: {0}")]
     LanguageDetectionError(String),
-    
+
     #[error("静态分析失败: {tool} - {message}")]
     StaticAnalysisError { tool: String, message: String },
-    
+
     #[error("AI 服务错误: {provider} - {message}")]
     AIServiceError { provider: String, message: String },
-    
+
     #[error("缓存错误: {0}")]
     CacheError(String),
-    
+
     #[error("通知发送失败: {platform} - {message}")]
     NotificationError { platform: String, message: String },
-    
+
     #[error("IO 错误: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[error("网络错误: {0}")]
     NetworkError(#[from] reqwest::Error),
-    
+
     #[error("序列化错误: {0}")]
     SerializationError(#[from] serde_json::Error),
 }
@@ -898,25 +1208,25 @@ impl ErrorRecoveryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_go_language_detection() {
         let detector = LanguageDetector::new();
         let go_code = r#"
             package main
-            
+
             import "fmt"
-            
+
             func main() {
                 fmt.Println("Hello, World!")
             }
         "#;
-        
+
         let result = detector.detect_language("main.go", go_code).await;
         assert_eq!(result.detected_language, Language::Go);
         assert!(result.confidence > 0.9);
     }
-    
+
     #[tokio::test]
     async fn test_rust_language_detection() {
         let detector = LanguageDetector::new();
@@ -925,7 +1235,7 @@ mod tests {
                 println!("Hello, World!");
             }
         "#;
-        
+
         let result = detector.detect_language("main.rs", rust_code).await;
         assert_eq!(result.detected_language, Language::Rust);
         assert!(result.confidence > 0.9);
@@ -941,24 +1251,24 @@ mod tests {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[tokio::test]
     async fn test_full_review_workflow() {
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path().to_str().unwrap();
-        
+
         // 创建测试文件
         let go_file = temp_dir.path().join("main.go");
         std::fs::write(&go_file, r#"
             package main
-            
+
             import "fmt"
-            
+
             func main() {
                 fmt.Println("Hello, World!")
             }
         "#).unwrap();
-        
+
         let orchestrator = ReviewOrchestrator::new_for_test();
         let request = ReviewRequest {
             project_path: project_path.to_string(),
@@ -979,9 +1289,9 @@ mod tests {
                 output_path: None,
             },
         };
-        
+
         let result = orchestrator.conduct_review(request).await.unwrap();
-        
+
         assert!(!result.report.static_analysis_results.is_empty());
         assert!(result.report.overall_score > 0.0);
         assert_eq!(result.metadata.files_analyzed, 1);
@@ -1008,19 +1318,19 @@ impl ParallelProcessor {
         R: Send + 'static,
     {
         let mut tasks = Vec::new();
-        
+
         for file_path in files {
             let semaphore = self.semaphore.clone();
             let processor = processor.clone();
-            
+
             let task = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
                 processor(file_path).await
             });
-            
+
             tasks.push(task);
         }
-        
+
         let results = futures::future::join_all(tasks).await;
         results.into_iter()
             .map(|result| result.unwrap_or_else(|e| Err(anyhow::anyhow!("Task failed: {}", e))))
@@ -1044,14 +1354,14 @@ impl MemoryManager {
         let current = self.current_usage.load(Ordering::Relaxed);
         current < self.memory_limit
     }
-    
+
     pub async fn cleanup_if_needed(&self) {
         let current = self.current_usage.load(Ordering::Relaxed);
         if current > self.cleanup_threshold {
             self.perform_cleanup().await;
         }
     }
-    
+
     async fn perform_cleanup(&self) {
         // 清理缓存
         // 释放不必要的内存
@@ -1080,7 +1390,7 @@ impl SensitiveDataProtector {
             _ => self.generic_mask(data),
         }
     }
-    
+
     pub fn secure_log(&self, message: &str) -> String {
         let mut secure_message = message.to_string();
         for rule in &self.masking_rules {
@@ -1107,19 +1417,19 @@ impl SecureHttpClient {
             .https_only(true)
             .timeout(Duration::from_secs(30))
             .build()?;
-            
+
         Ok(Self {
             client,
             certificate_validator: CertificateValidator::new(),
         })
     }
-    
+
     pub async fn secure_request(&self, request: RequestBuilder) -> anyhow::Result<Response> {
         let response = request.send().await?;
-        
+
         // 验证响应安全性
         self.validate_response(&response)?;
-        
+
         Ok(response)
     }
 }

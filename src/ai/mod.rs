@@ -342,7 +342,7 @@ fn create_summarized_prompt(
     let summarized_template = format!(
         r#"输出格式：<type>(<scope>): <subject>
 
-type: feat|fix|docs|style|refactor|test|chore  
+type: feat|fix|docs|style|refactor|test|chore
 subject: 中文，不超过50字，突出核心变更
 
 大型变更摘要指导：
@@ -358,7 +358,7 @@ subject: 中文，不超过50字，突出核心变更
 
 正确示例：
 feat(ai): 添加AI响应优化和配置管理
-refactor(core): 重构模块架构提升性能  
+refactor(core): 重构模块架构提升性能
 fix(auth): 修复用户认证流程问题
 
 变更详情：
@@ -588,3 +588,16 @@ mod tests {
 
 pub mod diff_analyzer;
 pub mod prompt;
+pub mod manager;
+pub mod providers;
+pub mod reviewers;
+pub mod result_processor;
+
+pub use manager::{
+    AIServiceManager, AIProvider, AIConfig, AIRequest, AIResponse,
+    AIRequestContext, AIRequestType, TokenUsage,
+    DeepSeekConfig, SiliconFlowConfig, OllamaConfig
+};
+pub use providers::{DeepSeekProvider, SiliconFlowProvider, OllamaProvider};
+pub use reviewers::{LanguageSpecificReviewer, GoAIReviewer, RustAIReviewer, TypeScriptAIReviewer};
+pub use result_processor::{AIReviewResultProcessor, StandardizedReviewResult, QualityScoringConfig};
