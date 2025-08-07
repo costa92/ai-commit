@@ -167,7 +167,7 @@ impl PredefinedPatterns {
             SensitivePattern::new(
                 "generic_password".to_string(),
                 SensitiveInfoType::Password,
-                r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"]([^'\"]{6,})['\"]".to_string(),
+                r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"]([^'"]{6,})['"]"#.to_string(),
                 0.85,
                 RiskLevel::High,
                 "通用密码字段".to_string(),
@@ -186,7 +186,7 @@ impl PredefinedPatterns {
             SensitivePattern::new(
                 "database_password".to_string(),
                 SensitiveInfoType::Password,
-                r"(?i)(db_password|database_password|mysql_password|postgres_password)\s*[:=]\s*['\"]([^'\"]{4,})['\"]".to_string(),
+                r#"(?i)(db_password|database_password|mysql_password|postgres_password)\s*[:=]\s*['"]([^'"]{4,})['"]"#.to_string(),
                 0.90,
                 RiskLevel::Critical,
                 "数据库密码".to_string(),
@@ -205,7 +205,7 @@ impl PredefinedPatterns {
             SensitivePattern::new(
                 "ssh_password".to_string(),
                 SensitiveInfoType::Password,
-                r"(?i)(ssh_password|sshpass)\s*[:=]\s*['\"]([^'\"]{4,})['\"]".to_string(),
+                r#"(?i)(ssh_password|sshpass)\s*[:=]\s*['"]([^'"]{4,})['"]"#.to_string(),
                 0.90,
                 RiskLevel::High,
                 "SSH 密码".to_string(),
@@ -267,7 +267,7 @@ impl PredefinedPatterns {
             SensitivePattern::new(
                 "api_token".to_string(),
                 SensitiveInfoType::Token,
-                r"(?i)(api_token|access_token|auth_token)\s*[:=]\s*['\"]([A-Za-z0-9_-]{20,})['\"]".to_string(),
+                r#"(?i)(api_token|access_token|auth_token)\s*[:=]\s*['"]([A-Za-z0-9_-]{20,})['"]"#.to_string(),
                 0.85,
                 RiskLevel::High,
                 "API 访问令牌".to_string(),

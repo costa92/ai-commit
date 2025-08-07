@@ -82,7 +82,7 @@ impl SensitivePattern {
         }
     }
 
-    pub fn find_matches(&self, text: &str) -> Vec<regex::Match> {
+    pub fn find_matches<'a>(&self, text: &'a str) -> Vec<regex::Match<'a>> {
         if let Some(ref regex) = self.compiled_regex {
             regex.find_iter(text).collect()
         } else {

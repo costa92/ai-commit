@@ -35,7 +35,7 @@ impl std::fmt::Display for SensitiveInfoType {
 }
 
 /// 风险等级
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RiskLevel {
     Critical,
     High,
