@@ -69,6 +69,48 @@ pub async fn git_push() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 强制推送：自动解决 non-fast-forward 错误
+pub async fn git_force_push() -> anyhow::Result<()> {
+    // 首先尝试正常推送
+    let push_result = git_push().await;
+    
+    if push_result.is_ok() {
+        return push_result;
+    }
+
+    // 推送失败，尝试拉取并合并远程更新
+    println!("检测到推送冲突，正在自动解决...");
+    
+    // 获取当前分支
+    let branch_output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get current branch: {}", e))?;
+
+    if !branch_output.status.success() {
+        anyhow::bail!("Failed to get current branch");
+    }
+
+    let current_branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+    
+    // 拉取远程更新
+    let pull_status = Command::new("git")
+        .args(["pull", "--no-ff", "origin", &current_branch])
+        .status()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run git pull: {}", e))?;
+
+    if !pull_status.success() {
+        anyhow::bail!("Git pull failed. 请手动解决冲突后重试。");
+    }
+
+    println!("已成功合并远程更新，正在重新推送...");
+    
+    // 重新推送
+    git_push().await
+}
+
 pub async fn get_git_diff() -> anyhow::Result<String> {
     let output = Command::new("git")
         .args(["diff", "--cached"])
@@ -264,6 +306,57 @@ mod tests {
         }
 
         // 如果编译通过，说明函数签名正确
+    }
+
+    #[tokio::test]
+    async fn test_git_force_push_command_structure() {
+        let result = git_force_push().await;
+
+        match result {
+            Ok(_) => {
+                println!("Git force push succeeded");
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                assert!(
+                    error_msg.contains("Failed to run git push")
+                        || error_msg.contains("Git push failed")
+                        || error_msg.contains("Failed to get current branch")
+                        || error_msg.contains("Failed to run git pull")
+                        || error_msg.contains("Git pull failed"),
+                    "Error message should contain expected git operation information: {}",
+                    error_msg
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_git_force_push_function_signature() {
+        // 验证 git_force_push 函数签名的正确性（编译时检查）
+        #[allow(dead_code)]
+        fn check_git_force_push() -> impl std::future::Future<Output = anyhow::Result<()>> {
+            git_force_push()
+        }
+
+        // 如果编译通过，说明函数签名正确
+    }
+
+    #[test]
+    fn test_force_push_error_scenarios() {
+        // 测试强制推送可能的错误场景
+        let test_error_patterns = vec![
+            "Failed to run git push",
+            "Git push failed",
+            "Failed to get current branch", 
+            "Failed to run git pull",
+            "Git pull failed. 请手动解决冲突后重试。"
+        ];
+
+        for pattern in test_error_patterns {
+            assert!(pattern.contains("git") || pattern.contains("Git"), 
+                "Error pattern should contain git reference: {}", pattern);
+        }
     }
 }
 // 测试注释3

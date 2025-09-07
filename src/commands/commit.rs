@@ -42,7 +42,11 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
 
     // 推送（如果需要）
     if args.push {
-        git::git_push().await?;
+        if args.force_push {
+            git::git_force_push().await?;
+        } else {
+            git::git_push().await?;
+        }
     }
 
     Ok(())
@@ -72,6 +76,10 @@ pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str
         println!("Created new tag: {}", &tag_name);
     }
     if args.push {
+        if args.force_push {
+            // 对于tag推送，先尝试强制推送commit，再推送tag
+            git::git_force_push().await?;
+        }
         git::push_tag(&tag_name, args.push_branches).await?;
         if config.debug {
             println!("Pushed tag {} to remote", &tag_name);

@@ -5,7 +5,7 @@ use clap::Parser;
     name = "ai-commit",
     version,
     about = "智能 Git 工具 - 使用 AI 生成提交消息，支持 Git Flow、历史查看和提交编辑",
-    long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。",
+    long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。支持自动解决推送冲突。",
 )]
 pub struct Args {
     /// AI provider to use (ollama, deepseek, or siliconflow)
@@ -212,6 +212,11 @@ pub struct Args {
     /// 撤销最后一次提交（保留文件修改）
     #[arg(long = "undo-commit", default_value_t = false)]
     pub undo_commit: bool,
+
+    // =============== Push 冲突解决相关参数 ===============
+    /// 强制解决推送冲突（自动执行 pull + push）
+    #[arg(long = "force-push", default_value_t = false)]
+    pub force_push: bool,
 }
 
 
@@ -243,6 +248,7 @@ mod tests {
         assert_eq!(args.worktree_remove, None);
         assert_eq!(args.worktree_path, None);
         assert!(!args.worktree_clear);
+        assert!(!args.force_push);
     }
 
     #[test]
@@ -812,6 +818,47 @@ mod tests {
         assert!(args.worktree_porcelain);
         assert!(args.worktree_z);
         assert!(!args.worktree_verbose); // 不应该同时使用 verbose 和 porcelain
+    }
+
+    #[test]
+    fn test_args_force_push() {
+        // 测试 force-push 参数
+        let args = Args::try_parse_from(["ai-commit", "--force-push"]).unwrap();
+        assert!(args.force_push);
+
+        // 测试默认值
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.force_push);
+    }
+
+    #[test]
+    fn test_args_force_push_with_push() {
+        // 测试 force-push 与 push 参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--force-push",
+            "--push",
+            "--provider", "ollama",
+        ]).unwrap();
+        
+        assert!(args.force_push);
+        assert!(args.push);
+        assert_eq!(args.provider, "ollama");
+    }
+
+    #[test]
+    fn test_args_force_push_with_tag() {
+        // 测试 force-push 与 tag 创建参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--force-push",
+            "--push",
+            "--new-tag", "v1.0.0",
+        ]).unwrap();
+        
+        assert!(args.force_push);
+        assert!(args.push);
+        assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
     }
 }
 // CLI参数修改
