@@ -148,7 +148,7 @@ The tool supports a debug mode that controls output verbosity through the `AI_CO
 - Ideal for production use and automation scripts
 
 **Debug Mode On:**
-- `AI_COMMIT_DEBUG=true` or `AI_COMMIT_DEBUG=1` 
+- `AI_COMMIT_DEBUG=true` or `AI_COMMIT_DEBUG=1`
 - Shows detailed operation process
 - Includes AI generation timing, large change detection, tag creation messages
 - Case-insensitive: accepts `TRUE`, `True`, `1`
@@ -156,7 +156,7 @@ The tool supports a debug mode that controls output verbosity through the `AI_CO
 
 **Debug Output Examples:**
 - AI generation timing: "AI 生成 commit message 耗时: 1.23s"
-- Large change detection: "检测到大型变更 (6个文件, 15967字符)，正在生成摘要..."  
+- Large change detection: "检测到大型变更 (6个文件, 15967字符)，正在生成摘要..."
 - Tag operations: "Created new tag: v1.0.1", "Pushed tag v1.0.1 to remote"
 - Empty changes: "No staged changes."
 
@@ -168,7 +168,7 @@ The tool supports Git worktree functionality for parallel development across mul
 
 **Worktree Management Commands:**
 - `--worktree-create BRANCH`: Create new worktree for specified branch
-- `--worktree-switch NAME`: Switch current working directory to specified worktree  
+- `--worktree-switch NAME`: Switch current working directory to specified worktree
 - `--worktree-list`: List all available worktrees with branch info
 - `--worktree-verbose, -v`: Enable verbose mode for worktree list (equivalent to `git worktree list -v`)
 - `--worktree-porcelain`: Enable machine-readable output for worktree list (equivalent to `git worktree list --porcelain`)
@@ -307,7 +307,7 @@ The original tag system supports intelligent version resolution:
   - New feature test coverage (Git Flow, history analysis, commit editing)
   - Performance optimization validation
   - Concurrent access and thread safety tests
-- **Performance Optimizations**: 
+- **Performance Optimizations**:
   - HTTP client singleton with connection reuse (50-80% faster connections)
   - Async/await conversion for Git operations
   - Stream processing with pre-allocated buffers
@@ -344,7 +344,7 @@ subject: 中文，不超过50字
 
 正确示例：
 feat(api): 添加用户认证功能
-fix(ui): 修复按钮显示问题  
+fix(ui): 修复按钮显示问题
 refactor(core): 重构数据处理逻辑
 
 git diff:
@@ -400,69 +400,40 @@ cargo test --test integration_tests
 
 # Run tests with output
 cargo test -- --nocapture
-
-# Run specific feature module tests
-cargo test git::flow::tests
-cargo test git::history::tests
-cargo test git::edit::tests
-cargo test commands::tests
 ```
 
-### CLI Command Reference
+## Recent Feature Updates & Requirements
 
-**Standard Commit Generation:**
-```bash
-ai-commit                    # Generate and commit with AI
-ai-commit --add              # Stage all files first, then commit
-ai-commit --push             # Also push after committing
-```
+**New Requirements Support:**
+- The application continuously evolves with new feature requests
+- When implementing new features, ensure backward compatibility with existing configuration
+- All new CLI arguments must include both help documentation and comprehensive test coverage
+- New AI providers should follow the existing pattern in `src/ai/mod.rs` and `src/config/mod.rs`
+- Worktree functionality expansions should maintain safety features and path validation
 
-**Tag Management:**
-```bash
-ai-commit --tag-list                      # List all tags
-ai-commit --tag-delete v1.0.0             # Delete specific tag
-ai-commit --tag-info v1.0.0               # Show tag information
-ai-commit --tag-compare v1.0.0 v1.0.1     # Compare two tags
-```
+**Feature Request Workflow:**
+1. Analyze existing architecture patterns before implementing new features
+2. Update CLI argument definitions in `src/cli/args.rs` with proper help text
+3. Add configuration support if needed in `src/config/mod.rs`
+4. Implement core functionality following async patterns
+5. Add comprehensive test coverage (unit + integration)
+6. Update CLAUDE.md if architectural changes are made
 
-**Git Flow Workflows:**
-```bash
-ai-commit --flow-init                     # Initialize Git Flow
-ai-commit --flow-feature-start auth       # Start feature branch
-ai-commit --flow-feature-finish auth      # Finish feature branch
-ai-commit --flow-hotfix-start security    # Start hotfix branch
-ai-commit --flow-hotfix-finish security   # Finish hotfix branch
-ai-commit --flow-release-start v1.1.0     # Start release branch
-ai-commit --flow-release-finish v1.1.0    # Finish release branch
-```
+**Help System Maintenance:**
+- Ensure all CLI parameters are properly documented in help output
+- Help text should list all supported options (e.g., all AI providers: ollama, deepseek, siliconflow)
+- Parameter descriptions should be concise but complete
+- Validate help output matches actual functionality
 
-**History and Log Analysis:**
-```bash
-ai-commit --history                       # Show commit history
-ai-commit --log-author "John Doe"         # Filter by author
-ai-commit --log-since "2024-01-01"        # Show commits since date
-ai-commit --log-graph --log-limit 20      # Show branch graph with limit
-ai-commit --log-file src/main.rs          # Show file history
-ai-commit --log-stats                     # Show change statistics
-ai-commit --log-contributors              # Show contributors
-ai-commit --log-search "bug fix"          # Search commit messages
-```
+**Quality Assurance for New Features:**
+- Run `make qa` after implementing new features
+- Ensure all tests pass and code formatting is correct
+- Test both positive and negative scenarios
+- Verify configuration priority system works with new options
+- Test integration with existing worktree and commit workflows
 
-**Commit Editing:**
-```bash
-ai-commit --amend                         # Amend last commit
-ai-commit --amend "New commit message"    # Amend with new message
-ai-commit --edit-commit abc1234           # Edit specific commit
-ai-commit --rebase-edit HEAD~3            # Interactive rebase
-ai-commit --reword-commit abc1234 "New"   # Change commit message
-ai-commit --undo-commit                   # Undo last commit
-ai-commit --show-editable 10              # Show recent editable commits
-```
-
-**Worktree Management:**
-```bash
-ai-commit --worktree-list                 # List worktrees
-ai-commit --worktree-create feature/auth  # Create new worktree
-ai-commit --worktree-remove auth          # Remove worktree
-ai-commit --worktree-clear                # Remove all other worktrees
-```
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

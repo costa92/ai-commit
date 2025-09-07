@@ -8,7 +8,7 @@ use clap::Parser;
     long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。",
 )]
 pub struct Args {
-    /// AI provider to use (ollama or deepseek)
+    /// AI provider to use (ollama, deepseek, or siliconflow)
     #[arg(short = 'P', long, default_value = "")] // 空字符串表示未指定
     pub provider: String,
 
