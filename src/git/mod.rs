@@ -1,7 +1,21 @@
 pub mod commit;
+pub mod core;
+pub mod diff_viewer;
+pub mod edit;
+pub mod flow;
+pub mod history;
+pub mod query;
 pub mod tag;
+pub mod watcher;
 pub mod worktree;
 
 pub use commit::*;
+pub use core::*;
+pub use diff_viewer::*;
+pub use edit::*;
+pub use flow::*;
+pub use history::*;
+pub use query::*;
 pub use tag::*;
+pub use watcher::*;
 pub use worktree::*;

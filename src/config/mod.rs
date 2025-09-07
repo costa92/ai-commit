@@ -331,26 +331,9 @@ mod tests {
         let mut config = Config::new();
 
         // 模拟命令行参数
-        let args = crate::cli::args::Args {
-            provider: "deepseek".to_string(),
-            model: "deepseek-chat".to_string(),
-            no_add: false,
-            push: false,
-            new_tag: None,
-            tag_note: String::new(),
-            show_tag: false,
-            push_branches: false,
-            worktree_create: None,
-            worktree_switch: None,
-            worktree_list: false,
-            worktree_verbose: false,
-            worktree_porcelain: false,
-            worktree_z: false,
-            worktree_expire: None,
-            worktree_remove: None,
-            worktree_path: None,
-            worktree_clear: false,
-        };
+        let mut args = crate::cli::args::Args::default();
+        args.provider = "deepseek".to_string();
+        args.model = "deepseek-chat".to_string();
 
         config.update_from_args(&args);
 
@@ -368,26 +351,7 @@ mod tests {
         let original_model = config.model.clone();
 
         // 空参数不应该覆盖默认值
-        let args = crate::cli::args::Args {
-            provider: String::new(),
-            model: String::new(),
-            no_add: false,
-            push: false,
-            new_tag: None,
-            tag_note: String::new(),
-            show_tag: false,
-            push_branches: false,
-            worktree_create: None,
-            worktree_switch: None,
-            worktree_list: false,
-            worktree_verbose: false,
-            worktree_porcelain: false,
-            worktree_z: false,
-            worktree_expire: None,
-            worktree_remove: None,
-            worktree_path: None,
-            worktree_clear: false,
-        };
+        let args = crate::cli::args::Args::default();
 
         config.update_from_args(&args);
 
@@ -413,26 +377,9 @@ mod tests {
         assert_eq!(config.model, "env_model");
 
         // 命令行参数应该覆盖环境变量
-        let args = crate::cli::args::Args {
-            provider: "cli_provider".to_string(),
-            model: "cli_model".to_string(),
-            no_add: false,
-            push: false,
-            new_tag: None,
-            tag_note: String::new(),
-            show_tag: false,
-            push_branches: false,
-            worktree_create: None,
-            worktree_switch: None,
-            worktree_list: false,
-            worktree_verbose: false,
-            worktree_porcelain: false,
-            worktree_z: false,
-            worktree_expire: None,
-            worktree_remove: None,
-            worktree_path: None,
-            worktree_clear: false,
-        };
+        let mut args = crate::cli::args::Args::default();
+        args.provider = "cli_provider".to_string();
+        args.model = "cli_model".to_string();
 
         config.update_from_args(&args);
 

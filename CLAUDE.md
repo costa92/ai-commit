@@ -83,9 +83,13 @@ make tag-changelog tag=v1.0.0
 - Regex-based cleanup to extract clean commit messages from AI responses
 
 **3. Git Operations (`src/git/`)**
+- `core.rs`: Common Git operations and utilities (branch management, status checks)
 - `commit.rs`: Standard git operations (add, commit, push, diff)
 - `tag.rs`: Advanced tag management with semantic versioning
 - `worktree.rs`: Git worktree management for parallel development
+- `flow.rs`: Git Flow workflow support (feature, hotfix, release branches)
+- `history.rs`: Git history viewing and analysis with filtering capabilities
+- `edit.rs`: Commit editing and modification (amend, rebase, reword, undo)
 - Automatic tag version resolution and conflict avoidance
 - Support for both commit and tag workflows
 
@@ -94,8 +98,19 @@ make tag-changelog tag=v1.0.0
 - Supports both short and long argument forms
 - Comprehensive tag creation and push options
 - Full worktree management commands
+- Git Flow workflow commands
+- History and log viewing options
+- Commit editing and modification commands
 
-**5. Internationalization (`src/internationalization.rs`)**
+**5. Command Routing (`src/commands/`)**
+- Modular command structure with dedicated handlers
+- `tag.rs`: Tag management command routing (list, delete, info, compare)
+- `flow.rs`: Git Flow command handlers (feature, hotfix, release workflows)
+- `history.rs`: History viewing command processing with advanced filtering
+- `edit.rs`: Commit editing command handlers (amend, rebase, reword, undo)
+- `mod.rs`: Central command routing system
+
+**6. Internationalization (`src/internationalization.rs`)**
 - Multi-language support (Chinese Simplified/Traditional, English)
 - Centralized message management system
 
@@ -145,7 +160,9 @@ The tool supports a debug mode that controls output verbosity through the `AI_CO
 - Tag operations: "Created new tag: v1.0.1", "Pushed tag v1.0.1 to remote"
 - Empty changes: "No staged changes."
 
-### Git Worktree Development Workflow
+### Advanced Git Features
+
+#### Git Worktree Development Workflow
 
 The tool supports Git worktree functionality for parallel development across multiple branches:
 
@@ -181,9 +198,95 @@ The tool supports Git worktree functionality for parallel development across mul
 - Bulk cleanup operations with detailed feedback
 - Current worktree protection (never removes active worktree)
 
-### Tag Management Logic
+#### Git Flow Workflow Support
 
-The tag system supports intelligent version resolution:
+The tool implements comprehensive Git Flow workflows for structured development:
+
+**Git Flow Initialization:**
+- `--flow-init`: Initialize Git Flow in repository with standard branch structure
+- Sets up main/develop branches and configures branch prefixes
+
+**Feature Workflow:**
+- `--flow-feature-start NAME`: Start new feature branch from develop
+- `--flow-feature-finish NAME`: Merge feature branch into develop and clean up
+- `--flow-feature-list`: List all active feature branches
+
+**Hotfix Workflow:**
+- `--flow-hotfix-start NAME`: Start hotfix branch from main for urgent fixes
+- `--flow-hotfix-finish NAME`: Merge hotfix into both main and develop
+- `--flow-hotfix-list`: List all active hotfix branches
+
+**Release Workflow:**
+- `--flow-release-start NAME`: Start release branch from develop
+- `--flow-release-finish NAME`: Merge release into main and develop, create tag
+- `--flow-release-list`: List all active release branches
+
+**Git Flow Benefits:**
+- Structured branching model for team collaboration
+- Automatic branch merging and cleanup
+- Version tagging for releases
+- Separation of features, fixes, and releases
+
+#### Tag Management System
+
+Enhanced tag management with semantic versioning support:
+
+**Tag Operations:**
+- `--tag-list`: List all repository tags with creation dates
+- `--tag-delete TAG`: Delete specified tag locally and remotely
+- `--tag-info TAG`: Show detailed tag information (author, date, message)
+- `--tag-compare TAG1 TAG2`: Compare changes between two tags
+
+**Automatic Version Resolution:**
+- Smart version incrementation from latest tags
+- Conflict resolution for duplicate versions
+- Support for semantic versioning patterns
+
+#### History and Log Analysis
+
+Comprehensive git history analysis with advanced filtering:
+
+**History Commands:**
+- `--history`: Show formatted commit history with colors and graphs
+- `--log-author AUTHOR`: Filter history by specific author
+- `--log-since DATE`: Show commits since specified date
+- `--log-until DATE`: Show commits until specified date
+- `--log-graph`: Display branch graph visualization
+- `--log-limit NUMBER`: Limit number of commits shown
+- `--log-file PATH`: Show history for specific file or path
+
+**Advanced Features:**
+- `--log-stats`: Display file change statistics
+- `--log-contributors`: Show contributor statistics with commit counts
+- `--log-search TERM`: Search commit messages for specific terms
+- `--log-branches`: Show branch graph with all branches
+
+#### Commit Editing and Modification
+
+Powerful commit editing capabilities for history management:
+
+**Commit Editing Commands:**
+- `--amend [MESSAGE]`: Modify the last commit message or add changes
+- `--edit-commit HASH`: Edit specific commit interactively
+- `--rebase-edit BASE`: Interactive rebase from base commit
+- `--reword-commit HASH MESSAGE`: Change commit message for specific commit
+- `--undo-commit`: Undo last commit (soft reset, keeps changes staged)
+
+**Advanced Editing:**
+- `--squash-commits FROM TO`: Squash multiple commits into one
+- `--show-editable [LIMIT]`: Display list of recent editable commits
+- Interactive rebase support with automatic editor setup
+- Rebase status checking and conflict resolution
+
+**Safety Features:**
+- Commit existence validation before operations
+- Automatic backup references for destructive operations
+- Clear instructions for multi-step operations
+- Status checking for ongoing rebase operations
+
+### Legacy Tag Management Logic
+
+The original tag system supports intelligent version resolution:
 - When no base version specified: increments patch version from latest tag
 - When major.minor specified: starts with .0 patch, finds next available
 - When full version specified: uses exact version if available, otherwise increments
@@ -198,9 +301,10 @@ The tag system supports intelligent version resolution:
 
 ### Development Notes
 
-- **Testing Strategy**: Comprehensive test suite with 99+ tests covering:
+- **Testing Strategy**: Comprehensive test suite with 150+ tests covering:
   - Unit tests for all modules (inline with `#[cfg(test)]`)
   - Integration tests in `tests/integration_tests.rs`
+  - New feature test coverage (Git Flow, history analysis, commit editing)
   - Performance optimization validation
   - Concurrent access and thread safety tests
 - **Performance Optimizations**: 
@@ -260,22 +364,28 @@ git diff:
 
 ### Test Coverage Summary
 
-**Unit Tests (89 tests):**
+**Unit Tests (150+ tests):**
 - AI Module: 17 tests (HTTP client, request/response handling, error scenarios)
-- Git Operations: 15 tests (async operations, command validation, error handling)
+- Git Core Operations: 12 tests (async operations, branch management, status checks)
+- Git Commit Operations: 15 tests (commit, push, diff, async command validation)
+- Git Tag Management: 18 tests (version parsing, caching, thread safety, comparison)
+- Git Flow Workflow: 16 tests (feature, hotfix, release workflows, branch operations)
+- Git History Analysis: 14 tests (filtering, formatting, contributor stats, file tracking)
+- Git Edit Operations: 18 tests (amend, rebase, reword, undo, interactive editing)
 - Configuration: 18 tests (environment loading, validation, priority handling)
 - Internationalization: 14 tests (language switching, message retrieval, concurrent access)
-- CLI Arguments: 15 tests (argument parsing, validation, edge cases)
-- Git Tag Management: 10 tests (version parsing, caching, thread safety)
+- CLI Arguments: 15 tests (argument parsing, validation, edge cases, new command options)
+- Command Routing: 8 tests (dispatch logic, error handling, command validation)
 
-**Integration Tests (10 tests):**
+**Integration Tests (12 tests):**
 - Configuration system workflows
 - CLI parsing and configuration integration
 - Internationalization system integration
+- Command routing integration
 - Error handling across modules
 - Performance optimization validation
 - Concurrent access testing
-- Full system integration scenarios
+- Full system integration scenarios with new features
 
 **Test Execution:**
 ```bash
@@ -290,4 +400,69 @@ cargo test --test integration_tests
 
 # Run tests with output
 cargo test -- --nocapture
+
+# Run specific feature module tests
+cargo test git::flow::tests
+cargo test git::history::tests
+cargo test git::edit::tests
+cargo test commands::tests
+```
+
+### CLI Command Reference
+
+**Standard Commit Generation:**
+```bash
+ai-commit                    # Generate and commit with AI
+ai-commit --add              # Stage all files first, then commit
+ai-commit --push             # Also push after committing
+```
+
+**Tag Management:**
+```bash
+ai-commit --tag-list                      # List all tags
+ai-commit --tag-delete v1.0.0             # Delete specific tag
+ai-commit --tag-info v1.0.0               # Show tag information
+ai-commit --tag-compare v1.0.0 v1.0.1     # Compare two tags
+```
+
+**Git Flow Workflows:**
+```bash
+ai-commit --flow-init                     # Initialize Git Flow
+ai-commit --flow-feature-start auth       # Start feature branch
+ai-commit --flow-feature-finish auth      # Finish feature branch
+ai-commit --flow-hotfix-start security    # Start hotfix branch
+ai-commit --flow-hotfix-finish security   # Finish hotfix branch
+ai-commit --flow-release-start v1.1.0     # Start release branch
+ai-commit --flow-release-finish v1.1.0    # Finish release branch
+```
+
+**History and Log Analysis:**
+```bash
+ai-commit --history                       # Show commit history
+ai-commit --log-author "John Doe"         # Filter by author
+ai-commit --log-since "2024-01-01"        # Show commits since date
+ai-commit --log-graph --log-limit 20      # Show branch graph with limit
+ai-commit --log-file src/main.rs          # Show file history
+ai-commit --log-stats                     # Show change statistics
+ai-commit --log-contributors              # Show contributors
+ai-commit --log-search "bug fix"          # Search commit messages
+```
+
+**Commit Editing:**
+```bash
+ai-commit --amend                         # Amend last commit
+ai-commit --amend "New commit message"    # Amend with new message
+ai-commit --edit-commit abc1234           # Edit specific commit
+ai-commit --rebase-edit HEAD~3            # Interactive rebase
+ai-commit --reword-commit abc1234 "New"   # Change commit message
+ai-commit --undo-commit                   # Undo last commit
+ai-commit --show-editable 10              # Show recent editable commits
+```
+
+**Worktree Management:**
+```bash
+ai-commit --worktree-list                 # List worktrees
+ai-commit --worktree-create feature/auth  # Create new worktree
+ai-commit --worktree-remove auth          # Remove worktree
+ai-commit --worktree-clear                # Remove all other worktrees
 ```

@@ -4,7 +4,8 @@ use clap::Parser;
 #[command(
     name = "ai-commit",
     version,
-    about = "Generate commit messages using AI and manage Git worktrees"
+    about = "智能 Git 工具 - 使用 AI 生成提交消息，支持 Git Flow、历史查看和提交编辑",
+    long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。",
 )]
 pub struct Args {
     /// AI provider to use (ollama or deepseek)
@@ -78,6 +79,194 @@ pub struct Args {
     /// 清空除当前外的所有其他 worktrees
     #[arg(long = "worktree-clear", default_value_t = false)]
     pub worktree_clear: bool,
+
+    // =============== Tag 管理相关参数 ===============
+    /// 列出所有 tags
+    #[arg(long = "tag-list", default_value_t = false)]
+    pub tag_list: bool,
+
+    /// 删除指定的 tag（本地和远程）
+    #[arg(long = "tag-delete", value_name = "TAG")]
+    pub tag_delete: Option<String>,
+
+    /// 显示指定 tag 的详细信息
+    #[arg(long = "tag-info", value_name = "TAG")]
+    pub tag_info: Option<String>,
+
+    /// 比较两个 tags 之间的差异
+    #[arg(long = "tag-compare", value_name = "TAG1..TAG2")]
+    pub tag_compare: Option<String>,
+
+    // =============== Git Flow 相关参数 ===============
+    /// 开始新的 feature 分支
+    #[arg(long = "flow-feature-start", value_name = "NAME")]
+    pub flow_feature_start: Option<String>,
+
+    /// 完成 feature 分支（合并到 develop）
+    #[arg(long = "flow-feature-finish", value_name = "NAME")]
+    pub flow_feature_finish: Option<String>,
+
+    /// 开始新的 hotfix 分支
+    #[arg(long = "flow-hotfix-start", value_name = "NAME")]
+    pub flow_hotfix_start: Option<String>,
+
+    /// 完成 hotfix 分支（合并到 main 和 develop）
+    #[arg(long = "flow-hotfix-finish", value_name = "NAME")]
+    pub flow_hotfix_finish: Option<String>,
+
+    /// 开始新的 release 分支
+    #[arg(long = "flow-release-start", value_name = "VERSION")]
+    pub flow_release_start: Option<String>,
+
+    /// 完成 release 分支（合并到 main 和 develop，创建 tag）
+    #[arg(long = "flow-release-finish", value_name = "VERSION")]
+    pub flow_release_finish: Option<String>,
+
+    /// 初始化 git flow 仓库结构
+    #[arg(long = "flow-init", default_value_t = false)]
+    pub flow_init: bool,
+
+    // =============== 历史日志相关参数 ===============
+    /// 显示提交历史（美化格式）
+    #[arg(long = "history", default_value_t = false)]
+    pub history: bool,
+
+    /// 按作者过滤历史记录
+    #[arg(long = "log-author", value_name = "AUTHOR")]
+    pub log_author: Option<String>,
+
+    /// 显示指定时间之后的历史记录
+    #[arg(long = "log-since", value_name = "DATE")]
+    pub log_since: Option<String>,
+
+    /// 显示指定时间之前的历史记录
+    #[arg(long = "log-until", value_name = "DATE")]
+    pub log_until: Option<String>,
+
+    /// 显示图形化分支历史
+    #[arg(long = "log-graph", default_value_t = false)]
+    pub log_graph: bool,
+
+    /// 限制显示的提交数量
+    #[arg(long = "log-limit", value_name = "N")]
+    pub log_limit: Option<u32>,
+
+    /// 按文件路径过滤历史记录
+    #[arg(long = "log-file", value_name = "PATH")]
+    pub log_file: Option<String>,
+
+    /// 显示提交统计信息
+    #[arg(long = "log-stats", default_value_t = false)]
+    pub log_stats: bool,
+
+    /// 显示贡献者统计
+    #[arg(long = "log-contributors", default_value_t = false)]
+    pub log_contributors: bool,
+
+    /// 搜索提交消息中的关键词
+    #[arg(long = "log-search", value_name = "TERM")]
+    pub log_search: Option<String>,
+
+    /// 显示所有分支的历史图
+    #[arg(long = "log-branches", default_value_t = false)]
+    pub log_branches: bool,
+
+    /// 查询过滤器（支持复合条件）
+    #[arg(long = "query", value_name = "QUERY")]
+    pub query: Option<String>,
+
+    /// 监控仓库变化
+    #[arg(long = "watch", default_value_t = false)]
+    pub watch: bool,
+
+    /// 显示增强的差异查看
+    #[arg(long = "diff-view", value_name = "COMMIT")]
+    pub diff_view: Option<String>,
+
+    /// 交互式历史浏览
+    #[arg(long = "interactive-history", default_value_t = false)]
+    pub interactive_history: bool,
+
+    // =============== Commit 修改相关参数 ===============
+    /// 修改最后一次提交
+    #[arg(long = "amend", default_value_t = false)]
+    pub amend: bool,
+
+    /// 交互式修改指定的提交（使用 rebase）
+    #[arg(long = "edit-commit", value_name = "COMMIT_HASH")]
+    pub edit_commit: Option<String>,
+
+    /// 交互式 rebase 修改多个提交
+    #[arg(long = "rebase-edit", value_name = "BASE_COMMIT")]
+    pub rebase_edit: Option<String>,
+
+    /// 重写提交消息（不改变内容）
+    #[arg(long = "reword-commit", value_name = "COMMIT_HASH")]
+    pub reword_commit: Option<String>,
+
+    /// 撤销最后一次提交（保留文件修改）
+    #[arg(long = "undo-commit", default_value_t = false)]
+    pub undo_commit: bool,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Args {
+            provider: String::new(),
+            model: String::new(),
+            no_add: false,
+            push: false,
+            new_tag: None,
+            tag_note: String::new(),
+            show_tag: false,
+            push_branches: false,
+            worktree_create: None,
+            worktree_switch: None,
+            worktree_list: false,
+            worktree_verbose: false,
+            worktree_porcelain: false,
+            worktree_z: false,
+            worktree_expire: None,
+            worktree_remove: None,
+            worktree_path: None,
+            worktree_clear: false,
+            // Tag 管理参数
+            tag_list: false,
+            tag_delete: None,
+            tag_info: None,
+            tag_compare: None,
+            // Git Flow 参数
+            flow_feature_start: None,
+            flow_feature_finish: None,
+            flow_hotfix_start: None,
+            flow_hotfix_finish: None,
+            flow_release_start: None,
+            flow_release_finish: None,
+            flow_init: false,
+            // 历史日志参数
+            history: false,
+            log_author: None,
+            log_since: None,
+            log_until: None,
+            log_graph: false,
+            log_limit: None,
+            log_file: None,
+            log_stats: false,
+            log_contributors: false,
+            log_search: None,
+            log_branches: false,
+            query: None,
+            watch: false,
+            diff_view: None,
+            interactive_history: false,
+            // Commit 修改参数
+            amend: false,
+            edit_commit: None,
+            rebase_edit: None,
+            reword_commit: None,
+            undo_commit: false,
+        }
+    }
 }
 
 #[cfg(test)]
