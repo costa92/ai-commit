@@ -7,7 +7,7 @@ use clap::Parser;
     about = "Generate commit messages using AI and manage Git worktrees"
 )]
 pub struct Args {
-    /// AI provider to use (ollama or deepseek)
+    /// AI provider to use (ollama, deepseek, or siliconflow)
     #[arg(short = 'P', long, default_value = "")] // 空字符串表示未指定
     pub provider: String,
 

@@ -291,3 +291,39 @@ cargo test --test integration_tests
 # Run tests with output
 cargo test -- --nocapture
 ```
+
+## Recent Feature Updates & Requirements
+
+**New Requirements Support:**
+- The application continuously evolves with new feature requests
+- When implementing new features, ensure backward compatibility with existing configuration
+- All new CLI arguments must include both help documentation and comprehensive test coverage
+- New AI providers should follow the existing pattern in `src/ai/mod.rs` and `src/config/mod.rs`
+- Worktree functionality expansions should maintain safety features and path validation
+
+**Feature Request Workflow:**
+1. Analyze existing architecture patterns before implementing new features
+2. Update CLI argument definitions in `src/cli/args.rs` with proper help text
+3. Add configuration support if needed in `src/config/mod.rs`
+4. Implement core functionality following async patterns
+5. Add comprehensive test coverage (unit + integration)
+6. Update CLAUDE.md if architectural changes are made
+
+**Help System Maintenance:**
+- Ensure all CLI parameters are properly documented in help output
+- Help text should list all supported options (e.g., all AI providers: ollama, deepseek, siliconflow)
+- Parameter descriptions should be concise but complete
+- Validate help output matches actual functionality
+
+**Quality Assurance for New Features:**
+- Run `make qa` after implementing new features
+- Ensure all tests pass and code formatting is correct
+- Test both positive and negative scenarios
+- Verify configuration priority system works with new options
+- Test integration with existing worktree and commit workflows
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
