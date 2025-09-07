@@ -1,6 +1,6 @@
 use crate::cli::args::Args;
 use crate::config::Config;
-use crate::{ai, git};
+use crate::{ai, git, ui};
 use std::time::Instant;
 
 /// 处理常规的 commit 相关命令
@@ -22,7 +22,7 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
     // 生成 AI commit message
     let prompt = crate::ai::prompt::get_prompt(&diff);
     let start_time = Instant::now();
-    let message = ai::generate_commit_message(&diff, config, &prompt).await?;
+    let ai_message = ai::generate_commit_message(&diff, config, &prompt).await?;
     let elapsed_time = start_time.elapsed();
 
     if config.debug {
@@ -32,13 +32,22 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
         }
     }
 
-    if message.is_empty() {
+    if ai_message.is_empty() {
         eprintln!("AI 生成 commit message 为空，请检查 AI 服务。");
         std::process::exit(1);
     }
 
+    // 用户确认 commit message
+    let final_message = match ui::confirm_commit_message(&ai_message, args.skip_confirm)? {
+        ui::ConfirmResult::Confirmed(message) => message,
+        ui::ConfirmResult::Rejected => {
+            println!("操作已取消。");
+            return Ok(());
+        }
+    };
+
     // 提交更改
-    git::git_commit(&message).await?;
+    git::git_commit(&final_message).await?;
 
     // 推送（如果需要）
     if args.push {
@@ -56,21 +65,45 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
 pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
     let tag_name = git::get_next_tag_name(args.new_tag.as_deref()).await?;
-    // note 优先用 tag_note，否则用 tag_name
-    let note = if !args.tag_note.is_empty() {
+    
+    // 决定 commit message
+    let commit_message = if !args.tag_note.is_empty() {
+        // 用户提供了 tag_note，直接使用
         args.tag_note.clone()
     } else {
-        tag_name.clone()
+        // 没有提供 tag_note，使用 AI 生成或默认使用 tag_name
+        if !diff.trim().is_empty() {
+            // 有代码变更，使用 AI 生成 commit message
+            let prompt = crate::ai::prompt::get_prompt(diff);
+            let ai_message = ai::generate_commit_message(diff, config, &prompt).await?;
+            
+            if !ai_message.is_empty() {
+                // 用户确认 AI 生成的消息
+                match ui::confirm_commit_message(&ai_message, args.skip_confirm)? {
+                    ui::ConfirmResult::Confirmed(message) => message,
+                    ui::ConfirmResult::Rejected => {
+                        println!("操作已取消。");
+                        return Ok(());
+                    }
+                }
+            } else {
+                // AI 生成失败，使用默认 tag name
+                tag_name.clone()
+            }
+        } else {
+            // 没有代码变更，直接使用 tag name
+            tag_name.clone()
+        }
     };
 
     if !diff.trim().is_empty() {
-        git::git_commit(&note).await?;
+        git::git_commit(&commit_message).await?;
     } else {
-        git::git_commit_allow_empty(&note).await?;
+        git::git_commit_allow_empty(&commit_message).await?;
     }
 
-    // 创建 tag，tag 名和 note 都用上面生成的
-    git::create_tag_with_note(&tag_name, &note).await?;
+    // 创建 tag，使用相同的 commit message 作为 tag note
+    git::create_tag_with_note(&tag_name, &commit_message).await?;
 
     if config.debug {
         println!("Created new tag: {}", &tag_name);

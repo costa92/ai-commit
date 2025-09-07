@@ -217,6 +217,11 @@ pub struct Args {
     /// 强制解决推送冲突（自动执行 pull + push）
     #[arg(long = "force-push", default_value_t = false)]
     pub force_push: bool,
+
+    // =============== Commit 确认相关参数 ===============
+    /// 跳过 AI 生成 commit message 的二次确认（默认需要确认）
+    #[arg(long = "yes", short = 'y', default_value_t = false)]
+    pub skip_confirm: bool,
 }
 
 
@@ -249,6 +254,7 @@ mod tests {
         assert_eq!(args.worktree_path, None);
         assert!(!args.worktree_clear);
         assert!(!args.force_push);
+        assert!(!args.skip_confirm);
     }
 
     #[test]
@@ -859,6 +865,69 @@ mod tests {
         assert!(args.force_push);
         assert!(args.push);
         assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_args_skip_confirm() {
+        // 测试 skip_confirm 参数
+        let args = Args::try_parse_from(["ai-commit", "--yes"]).unwrap();
+        assert!(args.skip_confirm);
+
+        let args = Args::try_parse_from(["ai-commit", "-y"]).unwrap();
+        assert!(args.skip_confirm);
+
+        // 测试默认值
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.skip_confirm);
+    }
+
+    #[test]
+    fn test_args_skip_confirm_with_other_flags() {
+        // 测试 skip_confirm 与其他参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--yes",
+            "--push",
+            "--provider", "ollama",
+        ]).unwrap();
+        
+        assert!(args.skip_confirm);
+        assert!(args.push);
+        assert_eq!(args.provider, "ollama");
+    }
+
+    #[test]
+    fn test_args_skip_confirm_with_force_push() {
+        // 测试 skip_confirm 与 force_push 参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "-y",
+            "--force-push",
+            "--push",
+        ]).unwrap();
+        
+        assert!(args.skip_confirm);
+        assert!(args.force_push);
+        assert!(args.push);
+    }
+
+    #[test]
+    fn test_args_all_new_features() {
+        // 测试所有新功能参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--force-push",
+            "--yes",
+            "--push",
+            "--new-tag", "v1.2.0",
+            "--provider", "deepseek",
+        ]).unwrap();
+        
+        assert!(args.force_push);
+        assert!(args.skip_confirm);
+        assert!(args.push);
+        assert_eq!(args.new_tag, Some("v1.2.0".to_string()));
+        assert_eq!(args.provider, "deepseek");
     }
 }
 // CLI参数修改

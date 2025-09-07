@@ -160,6 +160,37 @@ The tool supports a debug mode that controls output verbosity through the `AI_CO
 - Tag operations: "Created new tag: v1.0.1", "Pushed tag v1.0.1 to remote"
 - Empty changes: "No staged changes."
 
+### AI Content Safety and Confirmation
+
+**二次确认功能：**
+默认情况下，所有 AI 生成的 commit message 都需要用户确认，以确保生成的内容符合预期并避免不可控的提交。
+
+**确认选项：**
+- `(y)es` 或直接回车：确认使用 AI 生成的消息
+- `(n)o`：拒绝并取消操作  
+- `(e)dit`：编辑 commit message，支持格式验证
+
+**跳过确认参数：**
+- `--yes` 或 `-y`：跳过确认直接使用 AI 生成的消息
+
+**使用示例：**
+```bash
+# 默认需要确认（推荐）
+ai-commit --push
+
+# 跳过确认（适合自动化脚本）
+ai-commit --yes --push
+
+# 组合使用
+ai-commit -y --force-push --push --provider deepseek
+```
+
+**安全特性：**
+- Conventional Commits 格式验证
+- 编辑模式支持自定义消息
+- 空消息检测和警告
+- 格式不符合规范时的二次警告
+
 ### Advanced Git Features
 
 #### Git Worktree Development Workflow
