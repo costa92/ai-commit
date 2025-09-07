@@ -43,7 +43,8 @@ mod commit_workflow_tests {
                 // 验证错误消息包含预期的关键词
                 let expected_keywords = [
                     "No staged changes", "没有暂存", "staged", "diff", 
-                    "Failed to", "git", "AI", "服务", "生成"
+                    "Failed to", "git", "AI", "服务", "生成", "Ollama", 
+                    "响应错误", "502", "Bad Gateway", "Deepseek"
                 ];
                 
                 let contains_expected = expected_keywords.iter()
