@@ -7,9 +7,10 @@ pub struct GitFlow;
 impl GitFlow {
     /// 初始化 Git Flow 仓库结构
     pub async fn init() -> anyhow::Result<()> {
-        // 检查是否在 git 仓库中
+        // 检查是否在 git 仓库中，如果不是则先初始化
         if !GitCore::is_git_repo().await {
-            anyhow::bail!("Not in a Git repository");
+            println!("Not in a Git repository, initializing...");
+            GitCore::init_repository().await?;
         }
 
         // 确保 develop 分支存在
