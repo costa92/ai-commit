@@ -1,6 +1,6 @@
 use clap::Parser;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(
     name = "ai-commit",
     version,
@@ -25,7 +25,7 @@ pub struct Args {
     pub push: bool,
 
     /// 创建新的 tag（可指定版本号，如 --new-tag v1.2.0）
-    #[arg(short = 't', long = "new-tag", value_name = "VERSION", num_args = 0..=1, action = clap::ArgAction::Set)]
+    #[arg(short = 't', long = "new-tag", value_name = "VERSION", num_args = 0..=1, default_missing_value = "", action = clap::ArgAction::Set)]
     pub new_tag: Option<String>,
 
     /// tag 备注内容（如 --tag-note "发布说明"），如不指定则用 AI 生成
@@ -126,6 +126,11 @@ pub struct Args {
     #[arg(long = "flow-init", default_value_t = false)]
     pub flow_init: bool,
 
+    // =============== Git 初始化相关参数 ===============
+    /// 初始化新的 Git 仓库
+    #[arg(long = "git-init", default_value_t = false)]
+    pub git_init: bool,
+
     // =============== 历史日志相关参数 ===============
     /// 显示提交历史（美化格式）
     #[arg(long = "history", default_value_t = false)]
@@ -209,65 +214,6 @@ pub struct Args {
     pub undo_commit: bool,
 }
 
-impl Default for Args {
-    fn default() -> Self {
-        Args {
-            provider: String::new(),
-            model: String::new(),
-            no_add: false,
-            push: false,
-            new_tag: None,
-            tag_note: String::new(),
-            show_tag: false,
-            push_branches: false,
-            worktree_create: None,
-            worktree_switch: None,
-            worktree_list: false,
-            worktree_verbose: false,
-            worktree_porcelain: false,
-            worktree_z: false,
-            worktree_expire: None,
-            worktree_remove: None,
-            worktree_path: None,
-            worktree_clear: false,
-            // Tag 管理参数
-            tag_list: false,
-            tag_delete: None,
-            tag_info: None,
-            tag_compare: None,
-            // Git Flow 参数
-            flow_feature_start: None,
-            flow_feature_finish: None,
-            flow_hotfix_start: None,
-            flow_hotfix_finish: None,
-            flow_release_start: None,
-            flow_release_finish: None,
-            flow_init: false,
-            // 历史日志参数
-            history: false,
-            log_author: None,
-            log_since: None,
-            log_until: None,
-            log_graph: false,
-            log_limit: None,
-            log_file: None,
-            log_stats: false,
-            log_contributors: false,
-            log_search: None,
-            log_branches: false,
-            query: None,
-            watch: false,
-            diff_view: None,
-            interactive_history: false,
-            // Commit 修改参数
-            amend: false,
-            edit_commit: None,
-            rebase_edit: None,
-            reword_commit: None,
-            undo_commit: false,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -593,6 +539,32 @@ mod tests {
         assert!(debug_str.contains("Args"));
         assert!(debug_str.contains("provider"));
         assert!(debug_str.contains("model"));
+    }
+
+    #[test]
+    fn test_args_git_init() {
+        // 测试 git init 参数
+        let args = Args::try_parse_from(["ai-commit", "--git-init"]).unwrap();
+        assert!(args.git_init);
+
+        // 测试默认值
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.git_init);
+    }
+
+    #[test]
+    fn test_args_git_init_with_other_flags() {
+        // 测试 git init 与其他参数组合
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--git-init",
+            "--provider", "ollama",
+            "--model", "mistral",
+        ]).unwrap();
+        
+        assert!(args.git_init);
+        assert_eq!(args.provider, "ollama");
+        assert_eq!(args.model, "mistral");
     }
 
     #[test]
