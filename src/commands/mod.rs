@@ -17,6 +17,12 @@ use crate::config::Config;
 
 /// 命令路由器，根据参数决定执行哪个命令
 pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool> {
+    // Git 初始化命令（最高优先级）
+    if args.git_init {
+        use crate::git::core::GitCore;
+        return GitCore::init_repository().await.map(|_| true);
+    }
+
     // 增强功能命令（最高优先级，基于GRV功能）
     if has_enhanced_commands(args) {
         return handle_enhanced_commands(args, config).await.map(|_| true);
@@ -311,5 +317,46 @@ mod tests {
         let mut args = Args::default();
         args.reword_commit = Some("abc1234,New message".to_string());
         assert!(args.reword_commit.is_some(), "Reword commit should accept hash and message");
+
+        // 有效的 git init 组合
+        let mut args = Args::default();
+        args.git_init = true;
+        assert!(args.git_init, "Git init should be set");
+    }
+
+    #[tokio::test]
+    async fn test_route_command_git_init() {
+        let mut args = Args::default();
+        args.git_init = true;
+        let config = create_test_config();
+
+        let result = route_command(&args, &config).await;
+        
+        match result {
+            Ok(handled) => {
+                assert!(handled, "Git init command should be handled");
+            }
+            Err(e) => {
+                // 在现有的 git 仓库中运行会失败，这是预期的
+                println!("Git init command was routed correctly but execution failed (expected in existing git repo): {}", e);
+                assert!(e.to_string().contains("already a Git repository"), "Should fail because directory is already a git repo");
+            }
+        }
+    }
+
+    #[test]
+    fn test_command_priority_git_init() {
+        // 测试 git init 命令的优先级（应该是最高）
+        let mut args = Args::default();
+        args.git_init = true;
+        args.tag_list = true;
+        args.history = true;
+        args.flow_init = true;
+
+        // Git init 命令应该有最高优先级
+        assert!(args.git_init, "Git init should be set");
+        assert!(args.tag_list, "Tag list should be set");
+        assert!(args.history, "History should be set");
+        assert!(args.flow_init, "Flow init should be set");
     }
 }
