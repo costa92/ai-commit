@@ -36,7 +36,7 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
             "n" | "no" => return Ok(ConfirmResult::Rejected),
             "e" | "edit" => {
                 // 允许用户编辑 commit message
-                return edit_commit_message();
+                return edit_commit_message(message);
             }
             _ => {
                 println!("请输入 y/yes, n/no, 或 e/edit");
@@ -47,8 +47,86 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
 }
 
 /// 允许用户编辑 commit message
-fn edit_commit_message() -> anyhow::Result<ConfirmResult> {
+fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
+    use std::env;
+    use std::fs;
+    use std::process::Command;
+    
+    // 创建临时文件
+    let temp_dir = env::temp_dir();
+    let temp_file = temp_dir.join("ai_commit_message.txt");
+    
+    // 将初始消息写入临时文件
+    fs::write(&temp_file, initial_message)?;
+    
+    // 获取编辑器命令，优先使用环境变量，然后尝试 vim、vi、nano
+    let editor_result = env::var("EDITOR")
+        .or_else(|_| env::var("VISUAL"))
+        .unwrap_or_else(|_| {
+            // 检查系统中可用的编辑器
+            if Command::new("vim").arg("--version").output().is_ok() {
+                "vim".to_string()
+            } else if Command::new("vi").arg("-h").output().is_ok() {
+                "vi".to_string()
+            } else if Command::new("nano").arg("--version").output().is_ok() {
+                "nano".to_string()
+            } else {
+                // 无可用编辑器
+                "".to_string()
+            }
+        });
+    
+    // 如果没有找到编辑器，回退到命令行输入
+    if editor_result.is_empty() {
+        return edit_commit_message_fallback(initial_message);
+    }
+    
+    println!("正在启动编辑器 ({})...", editor_result);
+    println!("提示: 保存并退出编辑器以确认提交消息");
+    
+    // 启动编辑器
+    let status = Command::new(&editor_result)
+        .arg(&temp_file)
+        .status();
+    
+    match status {
+        Ok(status) if status.success() => {
+            // 读取编辑后的内容
+            let edited_content = fs::read_to_string(&temp_file)
+                .map_err(|e| anyhow::anyhow!("无法读取编辑后的内容: {}", e))?;
+            
+            // 清理临时文件
+            let _ = fs::remove_file(&temp_file);
+            
+            let edited_message = edited_content.trim().to_string();
+            
+            if edited_message.is_empty() {
+                println!("Commit message 为空，操作已取消。");
+                return Ok(ConfirmResult::Rejected);
+            }
+            
+            // 验证编辑的消息格式
+            validate_and_confirm_edited_message(&edited_message)
+        }
+        Ok(_) => {
+            // 用户取消了编辑器操作
+            let _ = fs::remove_file(&temp_file);
+            println!("编辑器操作已取消。");
+            Ok(ConfirmResult::Rejected)
+        }
+        Err(_) => {
+            // 编辑器启动失败，回退到命令行输入
+            let _ = fs::remove_file(&temp_file);
+            println!("无法启动编辑器 '{}'，回退到命令行输入模式...", editor_result);
+            edit_commit_message_fallback(initial_message)
+        }
+    }
+}
+
+/// 回退的命令行编辑模式
+fn edit_commit_message_fallback(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     println!("请输入您的 commit message:");
+    println!("当前内容: {}", initial_message);
     print!("> ");
     io::stdout().flush()?;
     
@@ -61,10 +139,16 @@ fn edit_commit_message() -> anyhow::Result<ConfirmResult> {
         return Ok(ConfirmResult::Rejected);
     }
     
+    validate_and_confirm_edited_message(&edited_message)
+}
+
+/// 验证并确认编辑后的消息
+fn validate_and_confirm_edited_message(edited_message: &str) -> anyhow::Result<ConfirmResult> {
     // 验证编辑的消息格式
-    if !is_valid_commit_message(&edited_message) {
+    if !is_valid_commit_message(edited_message) {
         println!("⚠️  警告: Commit message 格式可能不符合 Conventional Commits 规范");
         println!("   建议格式: type(scope): description");
+        println!("   实际内容: {}", edited_message);
         println!();
         
         print!("是否仍要使用此消息? (y/n): ");
@@ -80,7 +164,7 @@ fn edit_commit_message() -> anyhow::Result<ConfirmResult> {
     }
     
     println!("✓ 已使用编辑的 commit message: {}", edited_message);
-    Ok(ConfirmResult::Confirmed(edited_message))
+    Ok(ConfirmResult::Confirmed(edited_message.to_string()))
 }
 
 /// 简单验证 commit message 格式
