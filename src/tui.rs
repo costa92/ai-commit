@@ -199,6 +199,58 @@ impl App {
             .and_then(|i| self.entries.get(i))
             .map(|entry| entry.query.clone())
     }
+    
+    /// 执行选中的查询
+    async fn execute_selected_query(&mut self) {
+        if let Some(query) = self.get_selected_query() {
+            self.execute_query = Some(query.clone());
+            
+            // 执行查询并获取结果
+            use crate::config::Config;
+            use crate::git::GitQuery;
+            
+            let _config = Config::new();
+            match GitQuery::parse_query(&query) {
+                Ok(filters) => {
+                    match GitQuery::execute_query(&filters).await {
+                        Ok(results) => {
+                            let result_count = results.lines().count();
+                            if results.trim().is_empty() {
+                                self.execution_result = Some(format!("No results found for: {}", query));
+                            } else {
+                                self.execution_result = Some(format!(
+                                    "Query: {}\n{} results found\n\n{}",
+                                    query,
+                                    result_count,
+                                    results
+                                ));
+                            }
+                            
+                            // 更新历史记录
+                            let _ = self.history.add_entry(
+                                query,
+                                Some("execute".to_string()),
+                                Some(result_count),
+                                true
+                            );
+                        }
+                        Err(e) => {
+                            self.execution_result = Some(format!("Error executing query: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.execution_result = Some(format!("Error parsing query: {}", e));
+                }
+            }
+        }
+    }
+    
+    /// 清除执行结果
+    fn clear_execution_result(&mut self) {
+        self.execution_result = None;
+        self.execute_query = None;
+    }
 }
 
 /// 运行TUI应用
@@ -238,6 +290,17 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
 
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
+                // 如果正在显示执行结果，按任意键清除
+                if app.execution_result.is_some() {
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                            app.clear_execution_result();
+                        }
+                        _ => {}
+                    }
+                    continue;
+                }
+                
                 if app.search_mode {
                     match key.code {
                         KeyCode::Esc => {
@@ -259,14 +322,22 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                         }
                         _ => {}
                     }
+                } else if app.show_help {
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
+                            app.show_help = false;
+                        }
+                        _ => {}
+                    }
                 } else {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => {
                             app.should_quit = true;
                             return Ok(());
                         }
-                        KeyCode::Enter => {
-                            return Ok(());
+                        KeyCode::Enter | KeyCode::Char('x') => {
+                            // x 或 Enter 执行查询
+                            app.execute_selected_query().await;
                         }
                         KeyCode::Down | KeyCode::Char('j') => app.next(),
                         KeyCode::Up | KeyCode::Char('k') => app.previous(),
@@ -278,6 +349,18 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                         KeyCode::Char('/') => {
                             app.search_mode = true;
                             app.search_filter.clear();
+                        }
+                        KeyCode::Char('?') => {
+                            app.show_help = true;
+                        }
+                        KeyCode::Char('r') => {
+                            // 刷新历史记录
+                            app.history = QueryHistory::new(1000)?;
+                            app.entries = app.history.get_recent(1000)
+                                .into_iter()
+                                .map(|e| e.clone())
+                                .collect();
+                            app.apply_filter();
                         }
                         _ => {}
                     }
@@ -293,13 +376,79 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
 
 /// 绘制UI
 fn ui(f: &mut Frame, app: &App) {
+    // 显示执行结果弹窗
+    if let Some(ref result) = app.execution_result {
+        let area = centered_rect(90, 80, f.size());
+        f.render_widget(Clear, area);
+        
+        let block = Block::default()
+            .title(" Execution Result ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+            
+        let text = Paragraph::new(result.as_str())
+            .block(block)
+            .wrap(Wrap { trim: true })
+            .style(Style::default().fg(Color::White));
+            
+        f.render_widget(text, area);
+        
+        // 显示关闭提示
+        let hint = Paragraph::new("Press ESC/Enter/q to close")
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+        let hint_area = centered_rect(30, 3, area);
+        f.render_widget(hint, hint_area);
+        return;
+    }
+    
+    // 显示帮助弹窗
+    if app.show_help {
+        let area = centered_rect(60, 70, f.size());
+        f.render_widget(Clear, area);
+        
+        let help_text = vec![
+            Line::from(""),
+            Line::from(vec![Span::styled("Navigation", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
+            Line::from("  ↑/k      Move up"),
+            Line::from("  ↓/j      Move down"),
+            Line::from("  g        Go to first"),
+            Line::from("  G        Go to last"),
+            Line::from("  f/PgDn   Page down"),
+            Line::from("  b/PgUp   Page up"),
+            Line::from(""),
+            Line::from(vec![Span::styled("Actions", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
+            Line::from("  Enter/x  Execute selected query"),
+            Line::from("  /        Search/filter"),
+            Line::from("  d        Toggle details panel"),
+            Line::from("  r        Refresh history"),
+            Line::from("  ?        Show this help"),
+            Line::from("  q/ESC    Quit"),
+            Line::from(""),
+            Line::from(vec![Span::styled("Search Mode", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
+            Line::from("  Type     Filter entries"),
+            Line::from("  Enter    Apply filter"),
+            Line::from("  ESC      Cancel search"),
+        ];
+        
+        let help = Paragraph::new(help_text)
+            .block(Block::default()
+                .title(" Help ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green)))
+            .style(Style::default().fg(Color::White));
+            
+        f.render_widget(help, area);
+        return;
+    }
+    
     let chunks = if app.show_details {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),    // 标题
-                Constraint::Percentage(60), // 列表
-                Constraint::Percentage(35), // 详情
+                Constraint::Percentage(50), // 列表
+                Constraint::Min(10),       // 详情
                 Constraint::Length(3),    // 状态栏
             ])
             .split(f.size())
@@ -318,7 +467,7 @@ fn ui(f: &mut Frame, app: &App) {
     let title = if app.search_mode {
         format!("🔍 Search: {}_", app.search_filter)
     } else {
-        format!("📜 Query History - {} entries", app.entries.len())
+        format!("📜 Query History - {} entries (Press ? for help)", app.entries.len())
     };
     
     let title_block = Paragraph::new(title)
@@ -327,7 +476,7 @@ fn ui(f: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White)),
+                .border_style(Style::default().fg(Color::White)),
         );
     f.render_widget(title_block, chunks[0]);
 
@@ -341,13 +490,13 @@ fn ui(f: &mut Frame, app: &App) {
             let timestamp = entry.timestamp.format("%m-%d %H:%M");
             let query_type = entry.query_type.as_deref().unwrap_or("query");
             let result_info = if let Some(count) = entry.result_count {
-                format!(" ({} results)", count)
+                format!(" [{} results]", count)
             } else {
                 String::new()
             };
 
             let content = format!(
-                "{} {} [{}] {}{}",
+                "{} {} | {} | {}{}",
                 status_icon,
                 timestamp,
                 query_type,
@@ -357,6 +506,7 @@ fn ui(f: &mut Frame, app: &App) {
 
             let style = if Some(i) == app.list_state.selected() {
                 Style::default()
+                    .bg(Color::DarkGray)
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else if entry.success {
@@ -373,8 +523,8 @@ fn ui(f: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("History")
-                .style(Style::default().fg(Color::White)),
+                .title(" History (↑↓: Navigate | Enter: Execute | /: Search) ")
+                .border_style(Style::default().fg(Color::White)),
         )
         .highlight_style(
             Style::default()
@@ -389,12 +539,14 @@ fn ui(f: &mut Frame, app: &App) {
         if let Some(selected) = app.list_state.selected() {
             if let Some(entry) = app.entries.get(selected) {
                 let mut details = vec![
+                    Line::from(""),
                     Line::from(vec![
-                        Span::styled("Query: ", Style::default().fg(Color::Cyan)),
-                        Span::raw(&entry.query),
+                        Span::styled("Query: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        Span::styled(&entry.query, Style::default().fg(Color::White)),
                     ]),
+                    Line::from(""),
                     Line::from(vec![
-                        Span::styled("Time: ", Style::default().fg(Color::Cyan)),
+                        Span::styled("Timestamp: ", Style::default().fg(Color::Cyan)),
                         Span::raw(entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string()),
                     ]),
                     Line::from(vec![
@@ -406,44 +558,71 @@ fn ui(f: &mut Frame, app: &App) {
                 if let Some(count) = entry.result_count {
                     details.push(Line::from(vec![
                         Span::styled("Results: ", Style::default().fg(Color::Cyan)),
-                        Span::raw(count.to_string()),
+                        Span::styled(
+                            count.to_string(),
+                            if count > 0 {
+                                Style::default().fg(Color::Green)
+                            } else {
+                                Style::default().fg(Color::Yellow)
+                            }
+                        ),
                     ]));
                 }
 
                 details.push(Line::from(vec![
                     Span::styled("Status: ", Style::default().fg(Color::Cyan)),
                     if entry.success {
-                        Span::styled("Success", Style::default().fg(Color::Green))
+                        Span::styled("✅ Success", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
                     } else {
-                        Span::styled("Failed", Style::default().fg(Color::Red))
+                        Span::styled("❌ Failed", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                     },
+                ]));
+                
+                details.push(Line::from(""));
+                details.push(Line::from(vec![
+                    Span::styled("Press ", Style::default().fg(Color::Gray)),
+                    Span::styled("Enter", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(" or ", Style::default().fg(Color::Gray)),
+                    Span::styled("x", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(" to execute this query", Style::default().fg(Color::Gray)),
                 ]));
 
                 let details_paragraph = Paragraph::new(details)
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .title("Details")
-                            .style(Style::default().fg(Color::White)),
+                            .title(" Details ")
+                            .border_style(Style::default().fg(Color::White)),
                     )
                     .wrap(Wrap { trim: true });
 
                 f.render_widget(details_paragraph, chunks[2]);
             }
+        } else {
+            let no_selection = Paragraph::new("No query selected")
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Details ")
+                        .border_style(Style::default().fg(Color::White)),
+                );
+            f.render_widget(no_selection, chunks[2]);
         }
     }
 
     // 状态栏
     let status_bar_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
         .split(chunks[chunks.len() - 1]);
 
     // 左侧帮助信息
     let help_text = if app.search_mode {
-        "ESC: Cancel | Enter: Apply"
+        "ESC: Cancel | Enter: Apply | Backspace: Delete"
     } else {
-        "↑↓/jk: Navigate | Enter: Select | /: Search | d: Toggle details | q: Quit"
+        "Enter/x: Execute | /: Search | d: Details | r: Refresh | ?: Help | q: Quit"
     };
 
     let help = Paragraph::new(help_text)
@@ -451,17 +630,21 @@ fn ui(f: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::LEFT | Borders::BOTTOM)
-                .style(Style::default().fg(Color::White)),
+                .border_style(Style::default().fg(Color::White)),
         );
     f.render_widget(help, status_bar_chunks[0]);
 
     // 右侧统计信息
-    let stats = format!(
-        "Total: {} | Selected: {}/{}",
-        app.entries.len(),
-        app.selected_index + 1,
-        app.entries.len()
-    );
+    let stats = if !app.entries.is_empty() {
+        format!(
+            "Total: {} | Selected: {}/{}",
+            app.entries.len(),
+            app.selected_index + 1,
+            app.entries.len()
+        )
+    } else {
+        "No entries".to_string()
+    };
 
     let stats_widget = Paragraph::new(stats)
         .style(Style::default().fg(Color::Cyan))
@@ -469,22 +652,35 @@ fn ui(f: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::RIGHT | Borders::BOTTOM)
-                .style(Style::default().fg(Color::White)),
+                .border_style(Style::default().fg(Color::White)),
         );
     f.render_widget(stats_widget, status_bar_chunks[1]);
 }
 
+/// 计算居中矩形
+fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
 /// 显示查询历史的TUI界面
 pub async fn show_history_tui() -> Result<()> {
-    if let Some(selected_query) = run_tui().await? {
-        println!("Selected query: {}", selected_query);
-        // 执行选中的查询
-        use crate::config::Config;
-        use crate::commands::enhanced::query::handle_query_command;
-        
-        let config = Config::new();
-        handle_query_command(&selected_query, &config).await?;
-    }
+    run_tui().await?;
     Ok(())
 }
 
