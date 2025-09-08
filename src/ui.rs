@@ -13,6 +13,11 @@ pub enum ConfirmResult {
 }
 
 /// 显示 AI 生成的 commit message 并请求用户确认
+/// 
+/// 支持三种操作：
+/// - y/yes/回车: 确认使用 AI 生成的消息
+/// - n/no: 拒绝并取消操作
+/// - e/edit: 启动编辑器编辑消息（支持 vim、vi、nano 等）
 pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Result<ConfirmResult> {
     if skip_confirm {
         return Ok(ConfirmResult::Confirmed(message.to_string()));
@@ -46,7 +51,13 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
     }
 }
 
-/// 允许用户编辑 commit message
+/// 允许用户使用外部编辑器编辑 commit message
+/// 
+/// 功能特性：
+/// - 自动检测可用编辑器：EDITOR 环境变量 -> VISUAL 环境变量 -> vim -> vi -> nano
+/// - 预填充 AI 生成的内容到临时文件
+/// - 支持格式验证和二次确认
+/// - 编辑器不可用时自动回退到命令行输入模式
 fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     use std::env;
     use std::fs;
