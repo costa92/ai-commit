@@ -14,6 +14,42 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
+use chrono::{DateTime, Local};
+use tokio::process::Command;
+
+/// Git 提交记录
+#[derive(Clone, Debug)]
+pub struct GitCommit {
+    pub hash: String,
+    pub message: String,
+    pub author: String,
+    pub timestamp: DateTime<Local>,
+    pub refs: String, // 分支和标签信息
+}
+
+impl GitCommit {
+    /// 获取提交的 diff 内容
+    pub async fn get_diff(&self) -> Result<String> {
+        let output = Command::new("git")
+            .args([
+                "show", 
+                &self.hash, 
+                "--color=never",
+                "--stat",           // 显示文件统计
+                "--patch",          // 显示完整的差异内容
+                "--abbrev-commit"   // 使用短哈希
+            ])
+            .output()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get git diff: {}", e))?;
+
+        if !output.status.success() {
+            anyhow::bail!("Git show command failed with exit code: {:?}", output.status.code());
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
 
 /// 视图类型
 #[derive(Clone, Debug, PartialEq)]
@@ -37,8 +73,12 @@ pub struct App {
     history: QueryHistory,
     /// 历史记录列表
     entries: Vec<QueryHistoryEntry>,
+    /// Git 提交记录列表
+    pub git_commits: Vec<GitCommit>,
     /// 列表状态
     list_state: ListState,
+    /// Git 提交列表状态
+    pub git_list_state: ListState,
     /// 当前选中的条目索引
     selected_index: usize,
     /// 是否显示详情
@@ -56,9 +96,9 @@ pub struct App {
     /// 显示帮助
     show_help: bool,
     /// 标签页列表
-    tabs: Vec<Tab>,
+    pub tabs: Vec<Tab>,
     /// 当前标签页索引
-    current_tab: usize,
+    pub current_tab: usize,
     /// 分屏模式
     split_mode: SplitMode,
     /// 当前焦点窗口
@@ -71,6 +111,10 @@ pub struct App {
     result_scroll: u16,
     /// 高亮的查询语法
     syntax_highlight: bool,
+    /// 当前选中提交的 diff 内容
+    current_diff: Option<String>,
+    /// 当前已加载 diff 的提交哈希
+    diff_commit_hash: Option<String>,
 }
 
 /// 分屏模式
@@ -92,21 +136,29 @@ pub enum FocusedPane {
 
 impl App {
     /// 创建新的应用实例
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let history = QueryHistory::new(1000)?;
         let entries = history.get_recent(1000)
             .into_iter()
             .map(|e| e.clone())
             .collect::<Vec<_>>();
         
+        // 加载 Git 提交记录
+        let git_commits = Self::load_git_commits().await?;
+        
         let mut list_state = ListState::default();
         if !entries.is_empty() {
             list_state.select(Some(0));
         }
 
+        let mut git_list_state = ListState::default();
+        if !git_commits.is_empty() {
+            git_list_state.select(Some(0));
+        }
+
         let tabs = vec![
             Tab {
-                name: "History".to_string(),
+                name: "Git Log".to_string(),
                 view_type: ViewType::History,
                 content: String::new(),
             },
@@ -115,7 +167,9 @@ impl App {
         Ok(Self {
             history,
             entries,
+            git_commits,
             list_state,
+            git_list_state,
             selected_index: 0,
             show_details: true,
             search_filter: String::new(),
@@ -132,47 +186,279 @@ impl App {
             command_input: String::new(),
             result_scroll: 0,
             syntax_highlight: true,
+            current_diff: None,
+            diff_commit_hash: None,
         })
+    }
+
+    /// 加载 Git 提交记录
+    async fn load_git_commits() -> Result<Vec<GitCommit>> {
+        let output = Command::new("git")
+            .args([
+                "log",
+                "--pretty=format:%H|%s|%an|%ai|%D",
+                "-n", "100" // 限制100条记录
+            ])
+            .output()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get git log: {}", e))?;
+
+        if !output.status.success() {
+            anyhow::bail!("Git log command failed with exit code: {:?}", output.status.code());
+        }
+
+        let log_output = String::from_utf8_lossy(&output.stdout);
+        let mut commits = Vec::new();
+
+        // Debug: 输出原始 git log 数据
+        if std::env::var("AI_COMMIT_DEBUG").is_ok() {
+            eprintln!("Git log output ({} lines):", log_output.lines().count());
+            for (i, line) in log_output.lines().enumerate().take(3) {
+                eprintln!("  Line {}: {}", i + 1, line);
+            }
+        }
+
+        for line in log_output.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.splitn(5, '|').collect();
+            if parts.len() >= 4 {
+                let hash = parts[0].to_string();
+                let message = parts[1].to_string();
+                let author = parts[2].to_string();
+                let timestamp_str = parts[3];
+                let refs = parts.get(4).unwrap_or(&"").to_string();
+
+                // 解析时间戳 - Git %ai 格式: "2025-09-08 19:45:55 +0800"
+                match DateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S %z") {
+                    Ok(dt) => {
+                        let timestamp = dt.with_timezone(&Local);
+                        commits.push(GitCommit {
+                            hash,
+                            message,
+                            author,
+                            timestamp,
+                            refs,
+                        });
+                    }
+                    Err(_) => {
+                        // 如果解析失败，尝试使用当前时间作为备用
+                        eprintln!("Warning: Failed to parse timestamp '{}', using current time", timestamp_str);
+                        commits.push(GitCommit {
+                            hash,
+                            message,
+                            author,
+                            timestamp: Local::now(),
+                            refs,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Debug: 输出最终加载的提交数量
+        if std::env::var("AI_COMMIT_DEBUG").is_ok() {
+            eprintln!("Successfully loaded {} git commits", commits.len());
+            for (i, commit) in commits.iter().enumerate().take(3) {
+                eprintln!("  Commit {}: {} - {}", i + 1, &commit.hash[..8], commit.message);
+            }
+        }
+
+        Ok(commits)
+    }
+
+    /// 刷新 git 提交记录
+    async fn refresh_git_commits(&mut self) {
+        match Self::load_git_commits().await {
+            Ok(commits) => {
+                self.git_commits = commits;
+                if !self.git_commits.is_empty() {
+                    self.git_list_state.select(Some(0));
+                    self.selected_index = 0;
+                    self.load_selected_diff().await;
+                }
+            }
+            Err(_) => {
+                // 刷新失败，保持原有状态
+            }
+        }
+    }
+
+    /// 加载选中提交的 diff 内容
+    async fn load_selected_diff(&mut self) {
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if let Some(selected) = self.git_list_state.selected() {
+                if let Some(commit) = self.git_commits.get(selected) {
+                    // 检查是否已经加载了这个提交的 diff
+                    if self.diff_commit_hash.as_ref() != Some(&commit.hash) {
+                        match commit.get_diff().await {
+                            Ok(diff) => {
+                                self.current_diff = Some(diff);
+                                self.diff_commit_hash = Some(commit.hash.clone());
+                            }
+                            Err(e) => {
+                                self.current_diff = Some(format!("Failed to load diff: {}", e));
+                                self.diff_commit_hash = Some(commit.hash.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// 移动到下一个条目
     fn next(&mut self) {
-        if self.entries.is_empty() {
-            return;
-        }
-
-        let i = match self.list_state.selected() {
-            Some(i) => {
-                if i >= self.entries.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
+        // 根据当前标签页决定使用哪个列表
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if self.git_commits.is_empty() {
+                return;
             }
-            None => 0,
-        };
-        self.list_state.select(Some(i));
-        self.selected_index = i;
+
+            let i = match self.git_list_state.selected() {
+                Some(i) => {
+                    if i >= self.git_commits.len() - 1 {
+                        0
+                    } else {
+                        i + 1
+                    }
+                }
+                None => 0,
+            };
+            self.git_list_state.select(Some(i));
+            self.selected_index = i;
+        } else {
+            if self.entries.is_empty() {
+                return;
+            }
+
+            let i = match self.list_state.selected() {
+                Some(i) => {
+                    if i >= self.entries.len() - 1 {
+                        0
+                    } else {
+                        i + 1
+                    }
+                }
+                None => 0,
+            };
+            self.list_state.select(Some(i));
+            self.selected_index = i;
+        }
     }
 
     /// 移动到上一个条目
     fn previous(&mut self) {
-        if self.entries.is_empty() {
-            return;
-        }
-
-        let i = match self.list_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.entries.len() - 1
-                } else {
-                    i - 1
-                }
+        // 根据当前标签页决定使用哪个列表
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if self.git_commits.is_empty() {
+                return;
             }
-            None => 0,
-        };
-        self.list_state.select(Some(i));
-        self.selected_index = i;
+
+            let i = match self.git_list_state.selected() {
+                Some(i) => {
+                    if i == 0 {
+                        self.git_commits.len() - 1
+                    } else {
+                        i - 1
+                    }
+                }
+                None => 0,
+            };
+            self.git_list_state.select(Some(i));
+            self.selected_index = i;
+        } else {
+            if self.entries.is_empty() {
+                return;
+            }
+
+            let i = match self.list_state.selected() {
+                Some(i) => {
+                    if i == 0 {
+                        self.entries.len() - 1
+                    } else {
+                        i - 1
+                    }
+                }
+                None => 0,
+            };
+            self.list_state.select(Some(i));
+            self.selected_index = i;
+        }
+    }
+
+    /// 跳转到第一个条目
+    fn first(&mut self) {
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if !self.git_commits.is_empty() {
+                self.git_list_state.select(Some(0));
+                self.selected_index = 0;
+            }
+        } else {
+            if !self.entries.is_empty() {
+                self.list_state.select(Some(0));
+                self.selected_index = 0;
+            }
+        }
+    }
+
+    /// 跳转到最后一个条目
+    fn last(&mut self) {
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if !self.git_commits.is_empty() {
+                let last_index = self.git_commits.len() - 1;
+                self.git_list_state.select(Some(last_index));
+                self.selected_index = last_index;
+            }
+        } else {
+            if !self.entries.is_empty() {
+                let last_index = self.entries.len() - 1;
+                self.list_state.select(Some(last_index));
+                self.selected_index = last_index;
+            }
+        }
+    }
+
+    /// 向下翻页
+    fn page_down(&mut self) {
+        let page_size = 10;
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if !self.git_commits.is_empty() {
+                let current = self.git_list_state.selected().unwrap_or(0);
+                let new_index = std::cmp::min(current + page_size, self.git_commits.len() - 1);
+                self.git_list_state.select(Some(new_index));
+                self.selected_index = new_index;
+            }
+        } else {
+            if !self.entries.is_empty() {
+                let current = self.list_state.selected().unwrap_or(0);
+                let new_index = std::cmp::min(current + page_size, self.entries.len() - 1);
+                self.list_state.select(Some(new_index));
+                self.selected_index = new_index;
+            }
+        }
+    }
+
+    /// 向上翻页
+    fn page_up(&mut self) {
+        let page_size = 10;
+        if self.tabs[self.current_tab].view_type == ViewType::History {
+            if !self.git_commits.is_empty() {
+                let current = self.git_list_state.selected().unwrap_or(0);
+                let new_index = current.saturating_sub(page_size);
+                self.git_list_state.select(Some(new_index));
+                self.selected_index = new_index;
+            }
+        } else {
+            if !self.entries.is_empty() {
+                let current = self.list_state.selected().unwrap_or(0);
+                let new_index = current.saturating_sub(page_size);
+                self.list_state.select(Some(new_index));
+                self.selected_index = new_index;
+            }
+        }
     }
 
     /// 切换到下一个标签页
@@ -347,7 +633,22 @@ pub async fn run_tui() -> Result<Option<String>> {
     let mut terminal = Terminal::new(backend)?;
 
     // 创建应用并运行
-    let mut app = App::new()?;
+    let mut app = App::new().await?;
+    
+    // Debug: 输出应用状态
+    if std::env::var("AI_COMMIT_DEBUG").is_ok() {
+        eprintln!("TUI: Created app with {} commits and {} tabs", 
+            app.git_commits.len(), app.tabs.len());
+        if !app.tabs.is_empty() {
+            eprintln!("TUI: Current tab '{}' (type: {:?})", 
+                app.tabs[app.current_tab].name, 
+                app.tabs[app.current_tab].view_type);
+        }
+    }
+
+    // 初始加载第一个提交的 diff
+    app.load_selected_diff().await;
+    
     let res = run_app(&mut terminal, &mut app).await;
 
     // 恢复终端
@@ -466,6 +767,8 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                     (_, KeyCode::Down) | (_, KeyCode::Char('j')) => {
                         if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
                             app.next();
+                            // 选择改变后，加载新的 diff
+                            app.load_selected_diff().await;
                         } else {
                             app.result_scroll = app.result_scroll.saturating_add(1);
                         }
@@ -473,6 +776,8 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                     (_, KeyCode::Up) | (_, KeyCode::Char('k')) => {
                         if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
                             app.previous();
+                            // 选择改变后，加载新的 diff
+                            app.load_selected_diff().await;
                         } else {
                             app.result_scroll = app.result_scroll.saturating_sub(1);
                         }
@@ -486,6 +791,55 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                         app.show_help = true;
                     }
                     (_, KeyCode::Char('h')) => app.syntax_highlight = !app.syntax_highlight,
+                    (_, KeyCode::Char('r')) => {
+                        // 如果在历史视图中，刷新历史记录；否则重置滚动位置
+                        if app.tabs[app.current_tab].view_type == ViewType::History {
+                            // 刷新 git 提交记录
+                            app.refresh_git_commits().await;
+                        } else {
+                            app.result_scroll = 0;
+                        }
+                    }
+                    (_, KeyCode::Char('g')) => {
+                        // 跳转到开头
+                        if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
+                            app.first();
+                            app.load_selected_diff().await;
+                        }
+                    }
+                    (_, KeyCode::Char('G')) => {
+                        // 跳转到结尾
+                        if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
+                            app.last();
+                            app.load_selected_diff().await;
+                        }
+                    }
+                    (_, KeyCode::Char('f')) => {
+                        // 向下翻页
+                        if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
+                            app.page_down();
+                            app.load_selected_diff().await;
+                        } else {
+                            app.result_scroll = app.result_scroll.saturating_add(10);
+                        }
+                    }
+                    (_, KeyCode::Char('b')) => {
+                        // 向上翻页
+                        if app.focused_pane == FocusedPane::Left || app.split_mode == SplitMode::None {
+                            app.page_up();
+                            app.load_selected_diff().await;
+                        } else {
+                            app.result_scroll = app.result_scroll.saturating_sub(10);
+                        }
+                    }
+                    (_, KeyCode::PageUp) => {
+                        // 快速向上滚动
+                        app.result_scroll = app.result_scroll.saturating_sub(10);
+                    }
+                    (_, KeyCode::PageDown) => {
+                        // 快速向下滚动  
+                        app.result_scroll = app.result_scroll.saturating_add(10);
+                    }
                     _ => {}
                 }
             }
@@ -597,86 +951,250 @@ fn render_history_view(f: &mut Frame, app: &App, area: Rect, focused: bool) {
             .split(area)
     };
 
-    // 历史列表
-    let items: Vec<ListItem> = app
-        .entries
-        .iter()
-        .enumerate()
-        .map(|(i, entry)| {
-            let status_icon = if entry.success { "✅" } else { "❌" };
-            let timestamp = entry.timestamp.format("%H:%M:%S");
-            
-            let content = if app.syntax_highlight {
-                // 语法高亮
-                let parts: Vec<&str> = entry.query.split(':').collect();
-                if parts.len() == 2 {
-                    format!("{} {} {}:{}", 
-                        status_icon, 
+    // 根据当前标签页显示不同的内容
+    if app.tabs[app.current_tab].view_type == ViewType::History {
+        // Git 提交列表
+        let items: Vec<ListItem> = app
+            .git_commits
+            .iter()
+            .enumerate()
+            .map(|(i, commit)| {
+                let short_hash = &commit.hash[..8.min(commit.hash.len())];
+                let timestamp = commit.timestamp.format("%m-%d %H:%M");
+                
+                let content = if app.syntax_highlight {
+                    // 语法高亮 - 根据提交信息类型着色
+                    if commit.message.starts_with("feat") {
+                        format!("{} {} {} - {}", 
+                            short_hash, 
+                            timestamp,
+                            commit.message,
+                            commit.author
+                        )
+                    } else if commit.message.starts_with("fix") {
+                        format!("{} {} {} - {}", 
+                            short_hash, 
+                            timestamp,
+                            commit.message,
+                            commit.author
+                        )
+                    } else {
+                        format!("{} {} {} - {}", 
+                            short_hash, 
+                            timestamp,
+                            commit.message,
+                            commit.author
+                        )
+                    }
+                } else {
+                    format!("{} {} {} - {}", 
+                        short_hash, 
                         timestamp,
-                        parts[0],
-                        parts[1]
+                        commit.message,
+                        commit.author
                     )
+                };
+
+                let style = if Some(i) == app.git_list_state.selected() {
+                    Style::default()
+                        .bg(Color::DarkGray)
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else if commit.message.starts_with("feat") {
+                    Style::default().fg(Color::Green)
+                } else if commit.message.starts_with("fix") {
+                    Style::default().fg(Color::Red)
+                } else if commit.message.starts_with("docs") {
+                    Style::default().fg(Color::Blue)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                ListItem::new(content).style(style)
+            })
+            .collect();
+
+        // Debug: 检查 items 是否为空
+        if items.is_empty() && app.git_commits.len() > 0 {
+            // 如果 git_commits 有数据但 items 为空，添加一个调试项目
+            let debug_items = vec![
+                ListItem::new(format!("DEBUG: {} commits loaded but no items generated!", app.git_commits.len()))
+                    .style(Style::default().fg(Color::Red))
+            ];
+            let list = List::new(debug_items)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(" DEBUG: Git Log Issue ")
+                        .border_style(border_style),
+                );
+            f.render_widget(list, chunks[0]);
+            return;
+        }
+
+        let title = if app.search_mode {
+            format!(" Git Log [/{}] ({} commits) ", app.search_filter, app.git_commits.len())
+        } else {
+            format!(" Git Log ({} commits) ", app.git_commits.len())
+        };
+
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(border_style),
+            );
+
+        f.render_stateful_widget(list, chunks[0], &mut app.git_list_state.clone());
+
+        // 详情面板 - 显示提交详情和 diff
+        if app.show_details && chunks.len() > 1 {
+            if let Some(selected) = app.git_list_state.selected() {
+                if let Some(commit) = app.git_commits.get(selected) {
+                    // 分割详情区域：基本信息 + diff 内容
+                    let detail_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Length(7), Constraint::Min(0)])
+                        .split(chunks[1]);
+
+                    // 基本提交信息
+                    let basic_info = format!(
+                        "Hash: {}\nMessage: {}\nAuthor: {}\nTime: {}\nRefs: {}",
+                        commit.hash,
+                        commit.message,
+                        commit.author,
+                        commit.timestamp.format("%Y-%m-%d %H:%M:%S"),
+                        if commit.refs.is_empty() { "N/A" } else { &commit.refs }
+                    );
+
+                    let info_widget = Paragraph::new(basic_info)
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(" Commit Info ")
+                                .border_style(border_style),
+                        )
+                        .wrap(Wrap { trim: true });
+
+                    f.render_widget(info_widget, detail_chunks[0]);
+
+                    // diff 内容
+                    let diff_content = if let Some(diff) = &app.current_diff {
+                        // 处理和格式化 diff 内容
+                        let formatted_diff = format_diff_content(diff);
+                        // 如果 diff 太长，只显示前面部分
+                        if formatted_diff.len() > 8000 {
+                            format!("{}...\n\n[Diff too long, showing first 8000 characters. Use ↑↓ to scroll]", &formatted_diff[..8000])
+                        } else {
+                            formatted_diff
+                        }
+                    } else {
+                        "Loading diff...\n\nPress ↑↓ to navigate commits and view their diffs.".to_string()
+                    };
+
+                    let scroll_info = if app.result_scroll > 0 {
+                        format!(" Git Diff (scroll: {}) ", app.result_scroll)
+                    } else {
+                        " Git Diff ".to_string()
+                    };
+
+                    let diff_widget = Paragraph::new(diff_content)
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(scroll_info)
+                                .border_style(border_style),
+                        )
+                        .wrap(Wrap { trim: false })
+                        .scroll((app.result_scroll, 0));
+
+                    f.render_widget(diff_widget, detail_chunks[1]);
+                }
+            }
+        }
+    } else {
+        // 原来的查询历史列表
+        let items: Vec<ListItem> = app
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                let status_icon = if entry.success { "✅" } else { "❌" };
+                let timestamp = entry.timestamp.format("%H:%M:%S");
+                
+                let content = if app.syntax_highlight {
+                    // 语法高亮
+                    let parts: Vec<&str> = entry.query.split(':').collect();
+                    if parts.len() == 2 {
+                        format!("{} {} {}:{}", 
+                            status_icon, 
+                            timestamp,
+                            parts[0],
+                            parts[1]
+                        )
+                    } else {
+                        format!("{} {} {}", status_icon, timestamp, entry.query)
+                    }
                 } else {
                     format!("{} {} {}", status_icon, timestamp, entry.query)
+                };
+
+                let style = if Some(i) == app.list_state.selected() {
+                    Style::default()
+                        .bg(Color::DarkGray)
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else if entry.success {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::Red)
+                };
+
+                ListItem::new(content).style(style)
+            })
+            .collect();
+
+        let title = if app.search_mode {
+            format!(" Query History [/{}] ", app.search_filter)
+        } else {
+            " Query History ".to_string()
+        };
+
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(border_style),
+            );
+
+        f.render_stateful_widget(list, chunks[0], &mut app.list_state.clone());
+
+        // 详情面板
+        if app.show_details && chunks.len() > 1 {
+            if let Some(selected) = app.list_state.selected() {
+                if let Some(entry) = app.entries.get(selected) {
+                    let details_text = format!(
+                        "Query: {}\nTime: {}\nType: {}\nResults: {}\nStatus: {}",
+                        entry.query,
+                        entry.timestamp.format("%Y-%m-%d %H:%M:%S"),
+                        entry.query_type.as_deref().unwrap_or("unknown"),
+                        entry.result_count.map_or("N/A".to_string(), |c| c.to_string()),
+                        if entry.success { "Success" } else { "Failed" }
+                    );
+
+                    let details = Paragraph::new(details_text)
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(" Details ")
+                                .border_style(border_style),
+                        )
+                        .wrap(Wrap { trim: true });
+
+                    f.render_widget(details, chunks[1]);
                 }
-            } else {
-                format!("{} {} {}", status_icon, timestamp, entry.query)
-            };
-
-            let style = if Some(i) == app.list_state.selected() {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else if entry.success {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::Red)
-            };
-
-            ListItem::new(content).style(style)
-        })
-        .collect();
-
-    let title = if app.search_mode {
-        format!(" History [/{}] ", app.search_filter)
-    } else {
-        " History ".to_string()
-    };
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(border_style),
-        );
-
-    f.render_stateful_widget(list, chunks[0], &mut app.list_state.clone());
-
-    // 详情面板
-    if app.show_details && chunks.len() > 1 {
-        if let Some(selected) = app.list_state.selected() {
-            if let Some(entry) = app.entries.get(selected) {
-                let details_text = format!(
-                    "Query: {}\nTime: {}\nType: {}\nResults: {}\nStatus: {}",
-                    entry.query,
-                    entry.timestamp.format("%Y-%m-%d %H:%M:%S"),
-                    entry.query_type.as_deref().unwrap_or("unknown"),
-                    entry.result_count.map_or("N/A".to_string(), |c| c.to_string()),
-                    if entry.success { "Success" } else { "Failed" }
-                );
-
-                let details = Paragraph::new(details_text)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(" Details ")
-                            .border_style(border_style),
-                    )
-                    .wrap(Wrap { trim: true });
-
-                f.render_widget(details, chunks[1]);
             }
         }
     }
@@ -759,13 +1277,18 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled("Navigation", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
         Line::from("  ↑/k        Move up"),
         Line::from("  ↓/j        Move down"),
+        Line::from("  g          Go to first"),
+        Line::from("  G          Go to last"),
+        Line::from("  f/PgDn     Page down"),
+        Line::from("  b/PgUp     Page up"),
         Line::from("  Tab        Next tab"),
         Line::from("  Shift+Tab  Previous tab"),
         Line::from(""),
         Line::from(vec![Span::styled("Actions", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
-        Line::from("  Enter/x    Execute query"),
+        Line::from("  Enter/x    View commit diff"),
         Line::from("  /          Search"),
         Line::from("  d          Toggle details"),
+        Line::from("  r          Refresh git log"),
         Line::from("  h          Toggle syntax highlighting"),
         Line::from(""),
         Line::from(vec![Span::styled("Window Management", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))]),
@@ -779,6 +1302,7 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from("  :q         Quit"),
         Line::from("  :tab NAME  New tab"),
         Line::from("  ?          This help"),
+        Line::from("  q/ESC      Quit"),
     ];
     
     let help = Paragraph::new(help_text)
@@ -812,12 +1336,24 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         SplitMode::Vertical => " [V-SPLIT]",
     };
     
+    let entry_count = if app.tabs[app.current_tab].view_type == ViewType::History {
+        app.git_commits.len()
+    } else {
+        app.entries.len()
+    };
+
+    let selected_info = if entry_count > 0 {
+        format!(" | {}/{}", app.selected_index + 1, entry_count)
+    } else {
+        String::new()
+    };
+
     let status = format!(
-        " {} | Tab {}/{} | {} entries{}",
+        " {} | Tab {}/{}{} commits{}",
         mode,
         app.current_tab + 1,
         app.tabs.len(),
-        app.entries.len(),
+        selected_info,
         split_info
     );
     
@@ -825,6 +1361,70 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         .style(Style::default().fg(Color::Cyan).bg(Color::DarkGray));
     
     f.render_widget(status_bar, area);
+}
+
+/// 格式化 diff 内容，使其更易读
+fn format_diff_content(diff: &str) -> String {
+    let mut formatted = String::new();
+    let mut in_diff_section = false;
+    let mut commit_info_done = false;
+    
+    for line in diff.lines() {
+        // 检测不同的部分
+        if line.starts_with("commit ") {
+            formatted.push_str(&format!("🔖 {}\n", line));
+        } else if line.starts_with("Author: ") {
+            formatted.push_str(&format!("👤 {}\n", line));
+        } else if line.starts_with("Date: ") {
+            formatted.push_str(&format!("📅 {}\n", line));
+        } else if line.trim().is_empty() && !commit_info_done && !in_diff_section {
+            formatted.push_str("\n");
+        } else if line.starts_with("    ") && !commit_info_done {
+            // 提交消息
+            formatted.push_str(&format!("💬 {}\n", line.trim()));
+        } else if line == "---" {
+            formatted.push_str("═══════════════════════════════════════════════════════════\n");
+            commit_info_done = true;
+        } else if line.contains(" | ") && line.contains(" +++") || line.contains(" ---") {
+            // 文件统计行，如 " file.txt | 123 +++++++++"
+            formatted.push_str(&format!("📊 {}\n", line));
+        } else if line.contains(" files changed, ") {
+            // 总计统计行
+            formatted.push_str(&format!("📈 {}\n", line));
+        } else if line.starts_with("diff --git") {
+            formatted.push_str(&format!("\n📁 {}\n", line));
+            in_diff_section = true;
+        } else if line.starts_with("new file mode ") {
+            formatted.push_str(&format!("✨ {}\n", line));
+        } else if line.starts_with("deleted file mode ") {
+            formatted.push_str(&format!("🗑️  {}\n", line));
+        } else if line.starts_with("index ") {
+            formatted.push_str(&format!("🔍 {}\n", line));
+        } else if line.starts_with("--- ") {
+            formatted.push_str(&format!("📄 {}\n", line));
+        } else if line.starts_with("+++ ") {
+            formatted.push_str(&format!("📄 {}\n", line));
+        } else if line.starts_with("@@") {
+            formatted.push_str(&format!("📍 {}\n", line));
+        } else if line.starts_with('+') && !line.starts_with("+++") {
+            formatted.push_str(&format!("+ {}\n", &line[1..]));
+        } else if line.starts_with('-') && !line.starts_with("---") && in_diff_section {
+            formatted.push_str(&format!("- {}\n", &line[1..]));
+        } else if in_diff_section && !line.starts_with("diff --git") {
+            // 上下文行
+            formatted.push_str(&format!("  {}\n", line));
+        } else {
+            // 其他行
+            formatted.push_str(&format!("{}\n", line));
+        }
+    }
+    
+    // 如果内容为空，添加提示
+    if formatted.trim().is_empty() {
+        formatted = "No changes in this commit.".to_string();
+    }
+    
+    formatted
 }
 
 /// 计算居中矩形
@@ -851,5 +1451,22 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 /// 显示查询历史的TUI界面
 pub async fn show_history_tui() -> Result<()> {
     run_tui().await?;
+    Ok(())
+}
+
+
+/// 测试 Git 提交加载功能
+#[cfg(test)]
+pub async fn test_git_commits_loading() -> Result<()> {
+    let app = App::new().await?;
+    println!("Loaded {} git commits", app.git_commits.len());
+    for (i, commit) in app.git_commits.iter().enumerate().take(5) {
+        println!("Commit {}: {} - {} by {}", 
+            i + 1, 
+            &commit.hash[..8], 
+            commit.message, 
+            commit.author
+        );
+    }
     Ok(())
 }

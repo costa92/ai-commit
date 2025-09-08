@@ -44,12 +44,19 @@ struct DeepseekResponse {
 /// 选择结构
 #[derive(Deserialize)]
 struct Choice {
-    delta: Delta,
+    delta: Option<Delta>,
+    message: Option<MessageResponse>,
 }
 
-/// Delta 结构
+/// Delta 结构（用于流式响应）
 #[derive(Deserialize)]
 struct Delta {
+    content: Option<String>,
+}
+
+/// 完整消息响应（用于非流式响应）
+#[derive(Deserialize)]
+struct MessageResponse {
     content: String,
 }
 
@@ -125,10 +132,13 @@ impl DeepseekProvider {
                     
                     if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
                         if let Some(choice) = response.choices.first() {
-                            let content = &choice.delta.content;
-                            stdout_handle.write_all(content.as_bytes()).await?;
-                            stdout_handle.flush().await?;
-                            message.push_str(content);
+                            if let Some(delta) = &choice.delta {
+                                if let Some(content) = &delta.content {
+                                    stdout_handle.write_all(content.as_bytes()).await?;
+                                    stdout_handle.flush().await?;
+                                    message.push_str(content);
+                                }
+                            }
                         }
                     }
                 }
@@ -151,7 +161,15 @@ impl AIProvider for DeepseekProvider {
         
         let content = deepseek_response.choices
             .first()
-            .map(|c| c.delta.content.clone())
+            .and_then(|c| {
+                if let Some(delta) = &c.delta {
+                    delta.content.clone()
+                } else if let Some(message) = &c.message {
+                    Some(message.content.clone())
+                } else {
+                    None
+                }
+            })
             .unwrap_or_default();
         
         Ok(content)
@@ -181,7 +199,11 @@ impl AIProvider for DeepseekProvider {
                             if json_str != "[DONE]" {
                                 if let Ok(response) = serde_json::from_str::<DeepseekResponse>(json_str) {
                                     if let Some(choice) = response.choices.first() {
-                                        result.push_str(&choice.delta.content);
+                                        if let Some(delta) = &choice.delta {
+                                            if let Some(content) = &delta.content {
+                                                result.push_str(content);
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -239,7 +261,27 @@ mod tests {
         
         let response: DeepseekResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.choices.len(), 1);
-        assert_eq!(response.choices[0].delta.content, "test response");
+        assert!(response.choices[0].delta.is_some());
+        assert_eq!(
+            response.choices[0].delta.as_ref().unwrap().content.as_ref().unwrap(),
+            "test response"
+        );
+    }
+
+    #[test]
+    fn test_deepseek_non_streaming_response() {
+        let json = r#"{
+            "choices": [{
+                "message": {
+                    "content": "non-streaming response"
+                }
+            }]
+        }"#;
+        
+        let response: DeepseekResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.choices.len(), 1);
+        assert!(response.choices[0].message.is_some());
+        assert_eq!(response.choices[0].message.as_ref().unwrap().content, "non-streaming response");
     }
 
     #[test]

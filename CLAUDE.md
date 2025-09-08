@@ -76,20 +76,21 @@ make tag-changelog tag=v1.0.0
 - Configuration priority: CLI args > environment variables > .env files
 - Environment files loaded from: `~/.ai-commit/.env` or local `.env`
 
-**2. AI Integration (`src/ai/`)**
-- Supports multiple AI providers: Ollama (local), Deepseek, SiliconFlow
+**2. AI Integration (`src/core/ai/`)**
+- Supports multiple AI providers: Ollama (local), Deepseek, SiliconFlow, Kimi
+- Provider-specific modules in `providers/` (ollama.rs, deepseek.rs, siliconflow.rs, kimi.rs)
+- AI agents system with specialized agents for different tasks (`agents/` - commit, tag, refactor, review)
 - Streaming response processing for real-time output
 - Uses `commit-prompt.txt` for Conventional Commits prompt template
 - Regex-based cleanup to extract clean commit messages from AI responses
 
-**3. Git Operations (`src/git/`)**
-- `core.rs`: Common Git operations and utilities (branch management, status checks)
-- `commit.rs`: Standard git operations (add, commit, push, diff)
-- `tag.rs`: Advanced tag management with semantic versioning
-- `worktree.rs`: Git worktree management for parallel development
-- `flow.rs`: Git Flow workflow support (feature, hotfix, release branches)
-- `history.rs`: Git history viewing and analysis with filtering capabilities
-- `edit.rs`: Commit editing and modification (amend, rebase, reword, undo)
+**3. Git Operations (`src/core/git/`)**
+- `repository.rs`: Core Git repository operations and utilities
+- Advanced tag management with semantic versioning
+- Git worktree management for parallel development
+- Git Flow workflow support (feature, hotfix, release branches)
+- History viewing and analysis with filtering capabilities
+- Commit editing and modification (amend, rebase, reword, undo)
 - Automatic tag version resolution and conflict avoidance
 - Support for both commit and tag workflows
 
@@ -136,6 +137,10 @@ The tool loads configuration in this priority order:
 **SiliconFlow:**
 - Requires API key: `AI_COMMIT_SILICONFLOW_API_KEY`
 - Default URL: `https://api.siliconflow.cn/v1/chat/completions`
+
+**Kimi:**
+- Requires API key: `AI_COMMIT_KIMI_API_KEY`
+- Additional provider support for enhanced AI capabilities
 
 ### Debug Mode Configuration
 
@@ -439,7 +444,7 @@ cargo test -- --nocapture
 - The application continuously evolves with new feature requests
 - When implementing new features, ensure backward compatibility with existing configuration
 - All new CLI arguments must include both help documentation and comprehensive test coverage
-- New AI providers should follow the existing pattern in `src/ai/mod.rs` and `src/config/mod.rs`
+- New AI providers should follow the existing pattern in `src/core/ai/providers/` and `src/config/mod.rs`
 - Worktree functionality expansions should maintain safety features and path validation
 
 **Feature Request Workflow:**
@@ -452,7 +457,7 @@ cargo test -- --nocapture
 
 **Help System Maintenance:**
 - Ensure all CLI parameters are properly documented in help output
-- Help text should list all supported options (e.g., all AI providers: ollama, deepseek, siliconflow)
+- Help text should list all supported options (e.g., all AI providers: ollama, deepseek, siliconflow, kimi)
 - Parameter descriptions should be concise but complete
 - Validate help output matches actual functionality
 

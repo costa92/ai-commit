@@ -89,6 +89,7 @@ impl AIService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
 
     #[test]
     fn test_valid_commit_format() {
