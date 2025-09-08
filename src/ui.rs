@@ -109,10 +109,37 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     println!("正在启动编辑器 ({})...", editor_result);
     println!("提示: 保存并退出编辑器以确认提交消息");
     
+    // 显示临时文件信息
+    println!("临时文件路径: {}", temp_file.display());
+    println!("预填充内容: {}", initial_message);
+    
+    // 如果是调试模式，提供手动验证选项
+    if env::var("AI_COMMIT_DEBUG").is_ok() {
+        print!("按回车继续启动编辑器，或输入 'show' 查看临时文件内容: ");
+        io::stdout().flush().unwrap_or(());
+        let mut debug_input = String::new();
+        if io::stdin().read_line(&mut debug_input).is_ok() {
+            if debug_input.trim() == "show" {
+                if let Ok(content) = fs::read_to_string(&temp_file) {
+                    println!("=== 临时文件内容 ===");
+                    println!("{}", content);
+                    println!("==================");
+                }
+            }
+        }
+    }
+    
+    // 为不同编辑器准备特定参数
+    let mut cmd = Command::new(&editor_result);
+    cmd.arg(&temp_file);
+    
+    // 为 vim/vi 添加特定参数以确保正确显示
+    if editor_result == "vim" || editor_result == "vi" {
+        cmd.args(&["+set", "nobackup", "+set", "noswapfile"]);
+    }
+    
     // 启动编辑器
-    let status = Command::new(&editor_result)
-        .arg(&temp_file)
-        .status();
+    let status = cmd.status();
     
     match status {
         Ok(status) if status.success() => {
