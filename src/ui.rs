@@ -24,29 +24,21 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
     }
 
     // 显示生成的 commit message
-    println!("🤖 AI 生成的 commit message:");
-    println!("   {}", message);
-    println!();
+    println!("🤖 AI: {}", message);
+    print!("确认? [Y/n/e]: ");
+    io::stdout().flush()?;
     
-    loop {
-        print!("确认使用此 commit message? (y)es/(n)o/(e)dit: ");
-        io::stdout().flush()?;
-        
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-        
-        match input.as_str() {
-            "y" | "yes" | "" => return Ok(ConfirmResult::Confirmed(message.to_string())),  // 默认回车视为确认
-            "n" | "no" => return Ok(ConfirmResult::Rejected),
-            "e" | "edit" => {
-                // 允许用户编辑 commit message
-                return edit_commit_message(message);
-            }
-            _ => {
-                println!("请输入 y/yes, n/no, 或 e/edit");
-                continue;
-            }
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+    
+    match input.as_str() {
+        "y" | "yes" | "" => Ok(ConfirmResult::Confirmed(message.to_string())),  // 默认回车视为确认
+        "n" | "no" => Ok(ConfirmResult::Rejected),
+        "e" | "edit" => edit_commit_message(message),
+        _ => {
+            // 不认识的输入，默认为确认
+            Ok(ConfirmResult::Confirmed(message.to_string()))
         }
     }
 }
@@ -76,12 +68,10 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     }
     
     // 调试信息：显示临时文件路径和内容
-    if env::var("AI_COMMIT_DEBUG").is_ok() {
+    let debug_mode = env::var("AI_COMMIT_DEBUG").is_ok();
+    if debug_mode {
         println!("DEBUG: 临时文件路径: {}", temp_file.display());
         println!("DEBUG: 预填充内容: '{}'", initial_message);
-        if let Ok(content) = fs::read_to_string(&temp_file) {
-            println!("DEBUG: 文件实际内容: '{}'", content);
-        }
     }
     
     // 获取编辑器命令，优先使用环境变量，然后尝试 vim、vi、nano
@@ -111,52 +101,14 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     
     // 如果没有找到编辑器，回退到命令行输入
     if editor_result.is_empty() {
-        if env::var("AI_COMMIT_DEBUG").is_ok() {
+        if debug_mode {
             println!("DEBUG: 没有找到可用的编辑器，回退到命令行输入模式");
-            println!("DEBUG: 环境变量 EDITOR: {:?}", env::var("EDITOR"));
-            println!("DEBUG: 环境变量 VISUAL: {:?}", env::var("VISUAL"));
         }
         return edit_commit_message_fallback(initial_message);
     }
     
-    if env::var("AI_COMMIT_DEBUG").is_ok() {
-        println!("DEBUG: 选择的编辑器: {}", editor_result);
-    }
-    
-    println!("正在启动编辑器 ({})...", editor_result);
-    println!("提示: 保存并退出编辑器以确认提交消息");
-    
-    // 显示临时文件信息（仅在调试模式下显示完整信息）
-    if env::var("AI_COMMIT_DEBUG").is_ok() {
-        println!("临时文件路径: {}", temp_file.display());
-        println!("预填充内容: {}", initial_message);
-        
-        print!("按回车继续启动编辑器，或输入 'show' 查看临时文件内容: ");
-        io::stdout().flush().unwrap_or(());
-        let mut debug_input = String::new();
-        if io::stdin().read_line(&mut debug_input).is_ok() {
-            if debug_input.trim() == "show" {
-                if let Ok(content) = fs::read_to_string(&temp_file) {
-                    println!("=== 临时文件内容 ===");
-                    println!("{}", content);
-                    println!("==================");
-                }
-            }
-        }
-    } else {
-        println!("编辑器将打开预填充的提交消息，请编辑后保存退出");
-    }
-    
-    // 启动编辑器前，再次确认文件存在且可读
-    if let Ok(content) = fs::read_to_string(&temp_file) {
-        if content != initial_message {
-            println!("警告: 临时文件内容与预期不符!");
-            println!("预期: {}", initial_message);
-            println!("实际: {}", content);
-        }
-    } else {
-        return Err(anyhow::anyhow!("无法读取临时文件: {}", temp_file.display()));
-    }
+    // 直接启动编辑器，减少提示
+    println!("启动编辑器编辑 commit message...");
     
     // 为不同编辑器准备特定参数
     let mut cmd = Command::new(&editor_result);
@@ -211,93 +163,34 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
 
 /// 回退的命令行编辑模式
 fn edit_commit_message_fallback(initial_message: &str) -> anyhow::Result<ConfirmResult> {
-    println!("无法启动外部编辑器，进入命令行编辑模式");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("AI 生成的消息: {}", initial_message);
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!();
-    println!("编辑选项:");
-    println!("  1. 使用 AI 生成的消息（直接回车）");
-    println!("  2. 输入新的 commit message");
-    println!("  3. 基于 AI 消息修改（输入 'edit' 后手动输入修改版本）");
-    println!("  4. 取消（输入 'cancel'）");
-    println!();
-    print!("请选择 (回车使用AI消息/输入新消息/edit/cancel): ");
+    println!("编辑器不可用，使用简化输入模式");
+    println!("当前消息: {}", initial_message);
+    print!("输入新消息 (回车保持原消息): ");
     io::stdout().flush()?;
     
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let input = input.trim();
     
-    match input {
-        "" => {
-            // 用户直接回车，使用 AI 生成的消息
-            println!("✓ 使用 AI 生成的 commit message: {}", initial_message);
-            Ok(ConfirmResult::Confirmed(initial_message.to_string()))
-        }
-        "cancel" | "c" => {
-            println!("操作已取消。");
-            Ok(ConfirmResult::Rejected)
-        }
-        "edit" | "e" => {
-            // 提供手动编辑模式
-            println!();
-            println!("请基于以下消息进行修改:");
-            println!("原始: {}", initial_message);
-            println!();
-            println!("提示: 你可以复制上面的消息，修改后粘贴");
-            print!("修改后的消息: ");
-            io::stdout().flush()?;
-            
-            let mut edited = String::new();
-            io::stdin().read_line(&mut edited)?;
-            let edited_message = edited.trim().to_string();
-            
-            if edited_message.is_empty() {
-                println!("消息不能为空，使用原始消息。");
-                Ok(ConfirmResult::Confirmed(initial_message.to_string()))
-            } else {
-                validate_and_confirm_edited_message(&edited_message)
-            }
-        }
-        _ => {
-            // 用户输入了新的消息
-            if input.is_empty() {
-                println!("Commit message 不能为空，操作已取消。");
-                Ok(ConfirmResult::Rejected)
-            } else {
-                validate_and_confirm_edited_message(input)
-            }
-        }
+    if input.is_empty() {
+        // 用户直接回车，使用原消息
+        Ok(ConfirmResult::Confirmed(initial_message.to_string()))
+    } else if input == "cancel" || input == "c" {
+        Ok(ConfirmResult::Rejected)
+    } else {
+        // 使用用户输入的新消息
+        validate_and_confirm_edited_message(input)
     }
 }
 
 /// 验证并确认编辑后的消息
 fn validate_and_confirm_edited_message(edited_message: &str) -> anyhow::Result<ConfirmResult> {
-    // 验证编辑的消息格式
-    if !is_valid_commit_message(edited_message) {
-        println!("⚠️  警告: Commit message 格式可能不符合 Conventional Commits 规范");
-        println!("   建议格式: type(scope): description");
-        println!("   实际内容: {}", edited_message);
-        println!();
-        
-        print!("是否仍要使用此消息? (y/n): ");
-        io::stdout().flush()?;
-        
-        let mut confirm = String::new();
-        io::stdin().read_line(&mut confirm)?;
-        let confirm = confirm.trim().to_lowercase();
-        
-        if confirm != "y" && confirm != "yes" {
-            return Ok(ConfirmResult::Rejected);
-        }
-    }
-    
-    println!("✓ 已使用编辑的 commit message: {}", edited_message);
+    // 简化验证，如果不符合格式也接受，让用户自己负责
     Ok(ConfirmResult::Confirmed(edited_message.to_string()))
 }
 
 /// 简单验证 commit message 格式
+#[allow(dead_code)]
 fn is_valid_commit_message(message: &str) -> bool {
     // 检查是否符合 Conventional Commits 格式
     let conventional_commit_regex = regex::Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+").unwrap();
