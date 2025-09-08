@@ -28,6 +28,7 @@ pub fn has_enhanced_commands(args: &Args) -> bool {
         || args.query_clear
         || args.query_browse
         || args.query_tui
+        || args.query_tui_pro
         || args.diff_view.is_some()
         || args.watch
         || args.log_stats
@@ -39,7 +40,13 @@ pub fn has_enhanced_commands(args: &Args) -> bool {
 
 /// 处理增强的Git功能命令（基于GRV功能启发）
 pub async fn handle_enhanced_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
-    // TUI界面（最高优先级）
+    // 增强版TUI界面（最高优先级）
+    if args.query_tui_pro {
+        use crate::tui_enhanced::show_history_tui;
+        return show_history_tui().await;
+    }
+    
+    // TUI界面
     if args.query_tui {
         use crate::tui::show_history_tui;
         return show_history_tui().await;

@@ -200,6 +200,10 @@ pub struct Args {
     #[arg(long = "query-tui", default_value_t = false)]
     pub query_tui: bool,
 
+    /// 启动增强版TUI界面（GRV风格）
+    #[arg(long = "query-tui-pro", default_value_t = false)]
+    pub query_tui_pro: bool,
+
     /// 监控仓库变化
     #[arg(long = "watch", default_value_t = false)]
     pub watch: bool,
