@@ -78,16 +78,11 @@ mod tests {
     use crate::config::Config;
 
     fn create_test_config() -> Config {
-        Config {
-            provider: "test".to_string(),
-            model: "test-model".to_string(),
-            deepseek_api_key: Some("test-key".to_string()),
-            deepseek_url: "http://test.local".to_string(),
-            ollama_url: "http://localhost:11434/api/generate".to_string(),
-            siliconflow_api_key: None,
-            siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            debug: false,
-        }
+        let mut config = Config::default();
+        config.provider = "test".to_string();
+        config.model = "test-model".to_string();
+        config.debug = false;
+        config
     }
 
     #[tokio::test]

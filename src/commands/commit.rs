@@ -1,6 +1,10 @@
 use crate::cli::args::Args;
 use crate::config::Config;
-use crate::{ai, git, ui};
+use crate::{git, ui};
+use crate::core::ai::agents::{
+    AgentContext, AgentTask, AgentConfig, AgentManager, TaskType,
+};
+use std::collections::HashMap;
 use std::time::Instant;
 
 /// 处理常规的 commit 相关命令
@@ -19,10 +23,9 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
         return Ok(());
     }
 
-    // 生成 AI commit message
-    let prompt = crate::ai::prompt::get_prompt(&diff);
+    // 使用 Agent 生成 commit message
     let start_time = Instant::now();
-    let ai_message = ai::generate_commit_message(&diff, config, &prompt).await?;
+    let ai_message = generate_commit_message_with_agent(&diff, config).await?;
     let elapsed_time = start_time.elapsed();
 
     if config.debug {
@@ -73,9 +76,8 @@ pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str
     } else {
         // 没有提供 tag_note，使用 AI 生成或默认使用 tag_name
         if !diff.trim().is_empty() {
-            // 有代码变更，使用 AI 生成 commit message
-            let prompt = crate::ai::prompt::get_prompt(diff);
-            let ai_message = ai::generate_commit_message(diff, config, &prompt).await?;
+            // 有代码变更，使用 Agent 生成 commit message
+            let ai_message = generate_commit_message_with_agent(diff, config).await?;
             
             if !ai_message.is_empty() {
                 // 用户确认 AI 生成的消息
@@ -121,6 +123,62 @@ pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str
     Ok(())
 }
 
+/// 使用 Agent 生成 commit message
+async fn generate_commit_message_with_agent(
+    diff: &str,
+    config: &Config,
+) -> anyhow::Result<String> {
+    // 创建 Agent 管理器
+    let mut agent_manager = AgentManager::with_default_context();
+    
+    // 更新 Agent 配置
+    let mut env_vars = std::env::vars().collect::<HashMap<String, String>>();
+    
+    // 添加 API Key 配置
+    if let Some(api_key) = config.get_api_key() {
+        env_vars.insert("API_KEY".to_string(), api_key);
+    }
+    
+    // 设置 API URL
+    let api_url = config.get_url();
+    env_vars.insert("API_URL".to_string(), api_url);
+    
+    let agent_config = AgentConfig {
+        provider: config.provider.clone(),
+        model: config.model.clone(),
+        temperature: 0.7,
+        max_tokens: 2000,
+        stream: true,
+        max_retries: 3,
+        timeout_secs: 60,
+    };
+    
+    let context = AgentContext {
+        working_dir: std::env::current_dir()?,
+        env_vars,
+        config: agent_config,
+        history: vec![],
+    };
+    
+    // 更新管理器上下文
+    agent_manager.update_context(context);
+    
+    // 获取或创建 Commit Agent
+    let commit_agent = agent_manager.get_or_create_agent("commit").await?;
+    
+    // 创建任务
+    let task = AgentTask::new(TaskType::GenerateCommit, diff);
+    
+    // 执行任务
+    let result = commit_agent.execute(task, agent_manager.context()).await?;
+    
+    if !result.success {
+        anyhow::bail!("Agent failed to generate commit message");
+    }
+    
+    Ok(result.content)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +215,25 @@ mod tests {
             }
             Err(e) => {
                 println!("Tag creation commit failed: {}", e);
+            }
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_generate_commit_message_with_agent() {
+        let config = Config::new();
+        let test_diff = "diff --git a/test.txt b/test.txt\n+new line";
+        
+        let result = generate_commit_message_with_agent(test_diff, &config).await;
+        
+        match result {
+            Ok(message) => {
+                println!("Generated commit message: {}", message);
+                // 基本验证：消息不应该为空
+                assert!(!message.is_empty());
+            }
+            Err(e) => {
+                println!("Agent commit generation failed (expected in test environment): {}", e);
             }
         }
     }

@@ -16,6 +16,9 @@ mod force_push_tests {
             ollama_url: "http://localhost:11434/api/generate".to_string(),
             siliconflow_api_key: None,
             siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
             debug: true,
         }
     }

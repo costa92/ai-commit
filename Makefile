@@ -38,11 +38,19 @@ tag-changelog:
 	@git-cliff --config .git-cliff.toml --tag $(tag)
 	
 
-# 运行
+# 运行默认程序 (ai-commit)
+# 用法: make run ARGS="--help"
 .PHONY: run
 run:
-	@echo "Running..."
-	@cargo run 
+	@echo "Running ai-commit..."
+	@cargo run -- $(ARGS)
+
+# 运行简化版本  
+# 用法: make run-ac ARGS="--help"
+.PHONY: run-ac
+run-ac:
+	@echo "Running ac..."
+	@cargo run --bin ac -- $(ARGS) 
 
 
 # 运行测试
@@ -106,6 +114,13 @@ qa: test check
 	@echo "Quality assurance checks completed successfully"
 
 
+# 构建项目 (跳过测试用于快速安装)
+.PHONY: build-only
+build-only:
+	@echo "Building project..."
+	@cargo build --release
+	@echo "Build completed successfully"
+
 # 构建项目
 .PHONY: build
 build: test
@@ -113,14 +128,46 @@ build: test
 	@cargo build --release
 	@echo "Build completed successfully"
 
-# 安装到系统
+# 安装到系统 (跳过测试，快速安装)
 .PHONY: install
-install: build
+install: build-only
 	@echo "Installing to ~/.cargo/bin..."
 	@if [ ! -d ~/.cargo/bin ]; then \
 		mkdir -p ~/.cargo/bin; \
 	fi
 	@cp target/release/ai-commit ~/.cargo/bin/
+	@cp target/release/ac ~/.cargo/bin/
 	@echo "Installation completed successfully"
+	@echo "You can now use both 'ai-commit' and 'ac' commands"
+
+# 安装到系统 (包含完整测试)
+.PHONY: install-with-test
+install-with-test: build
+	@echo "Installing to ~/.cargo/bin..."
+	@if [ ! -d ~/.cargo/bin ]; then \
+		mkdir -p ~/.cargo/bin; \
+	fi
+	@cp target/release/ai-commit ~/.cargo/bin/
+	@cp target/release/ac ~/.cargo/bin/
+	@echo "Installation completed successfully"
+	@echo "You can now use both 'ai-commit' and 'ac' commands"
+
+# 仅安装简称
+.PHONY: install-alias
+install-alias:
+	@echo "Creating 'ac' alias..."
+	@if [ -f ~/.cargo/bin/ai-commit ]; then \
+		ln -sf ~/.cargo/bin/ai-commit ~/.cargo/bin/ac; \
+		echo "Alias 'ac' created successfully"; \
+	else \
+		echo "Error: ai-commit not found. Run 'make install' first"; \
+		exit 1; \
+	fi
+
+# 使用安装脚本安装
+.PHONY: install-with-script
+install-with-script:
+	@echo "Running installation script..."
+	@bash ./install.sh
 
 

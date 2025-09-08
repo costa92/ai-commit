@@ -134,7 +134,7 @@ pub async fn generate_commit_message(
 
     let client = &*HTTP_CLIENT;
     match config.provider.as_str() {
-        "siliconflow" | "deepseek" => {
+        "siliconflow" | "deepseek" | "kimi" => {
             let request = DeepseekRequest {
                 model: &config.model,
                 messages: vec![DeepseekMessage {
@@ -143,12 +143,9 @@ pub async fn generate_commit_message(
                 }],
                 stream: true,
             };
-            let (url, api_key) = if config.provider == "siliconflow" {
-                (&config.siliconflow_url, config.siliconflow_api_key.as_ref())
-            } else {
-                (&config.deepseek_url, config.deepseek_api_key.as_ref())
-            };
-            let res = make_request(client, url, api_key, &request).await?;
+            let url = config.get_url();
+            let api_key = config.get_api_key();
+            let res = make_request(client, &url, api_key.as_ref(), &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
@@ -250,7 +247,7 @@ pub async fn generate_commit_message(
                 prompt: &optimized_prompt,
                 stream: true,
             };
-            let res = make_request(client, &config.ollama_url, None, &request).await?;
+            let res = make_request(client, &config.get_url(), None, &request).await?;
             if !res.status().is_success() {
                 let status = res.status();
                 let text = res.text().await.unwrap_or_default();
@@ -525,11 +522,11 @@ mod tests {
     #[test]
     fn test_config_provider_matching() {
         // 测试配置提供商匹配逻辑
-        let providers = vec!["siliconflow", "deepseek", "ollama", "unknown"];
+        let providers = vec!["siliconflow", "deepseek", "kimi", "ollama", "unknown"];
 
         for provider in providers {
             match provider {
-                "siliconflow" | "deepseek" => {
+                "siliconflow" | "deepseek" | "kimi" => {
                     // 应该使用 DeepseekRequest 格式
                 }
                 _ => {

@@ -214,16 +214,10 @@ mod tests {
         // 测试查询命令的集成逻辑
         
         // 模拟配置
-        let _config = Config {
-            provider: "test".to_string(),
-            model: "test-model".to_string(),
-            deepseek_api_key: None,
-            deepseek_url: "test-url".to_string(),
-            ollama_url: "test-url".to_string(),
-            siliconflow_api_key: None,
-            siliconflow_url: "test-url".to_string(),
-            debug: false,
-        };
+        let mut _config = Config::default();
+        _config.provider = "test".to_string();
+        _config.model = "test-model".to_string();
+        _config.debug = false;
 
         // 测试不同的查询类型应该如何处理
         let query_scenarios = vec![

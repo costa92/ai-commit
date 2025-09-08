@@ -1,0 +1,97 @@
+# AI 提供商配置文件
+# 添加新的 AI 提供商只需要在此文件中添加相应配置即可
+
+# 本文件定义了所有支持的 AI 提供商的配置信息
+# 每个提供商包含以下字段：
+# - name: 提供商内部标识符
+# - display_name: 显示名称
+# - default_url: 默认 API URL
+# - requires_api_key: 是否需要 API Key
+# - default_model: 默认模型
+# - supported_models: 支持的模型列表
+# - api_format: API 格式 (openai/ollama/custom)
+# - description: 描述信息
+
+[[providers]]
+name = "ollama"
+display_name = "Ollama"
+default_url = "http://localhost:11434/api/generate"
+requires_api_key = false
+default_model = "mistral"
+supported_models = ["mistral", "llama3", "qwen2", "codellama", "gemma", "phi3"]
+api_format = "ollama"
+description = "本地 Ollama 服务，无需 API Key"
+env_prefix = "AI_COMMIT_OLLAMA"
+
+[[providers]]
+name = "deepseek"
+display_name = "Deepseek"
+default_url = "https://api.deepseek.com/v1/chat/completions"
+requires_api_key = true
+default_model = "deepseek-chat"
+supported_models = ["deepseek-chat", "deepseek-coder"]
+api_format = "openai"
+description = "深度求索 AI 服务，需要 API Key"
+env_prefix = "AI_COMMIT_DEEPSEEK"
+
+[[providers]]
+name = "siliconflow"
+display_name = "SiliconFlow"
+default_url = "https://api.siliconflow.cn/v1/chat/completions"
+requires_api_key = true
+default_model = "qwen/Qwen2-7B-Instruct"
+supported_models = [
+    "qwen/Qwen2-7B-Instruct",
+    "qwen/Qwen2-72B-Instruct",
+    "deepseek-ai/deepseek-coder-6.7b-instruct",
+    "01-ai/Yi-34B-Chat-4bits"
+]
+api_format = "openai"
+description = "硅基流动 AI 服务，需要 API Key"
+env_prefix = "AI_COMMIT_SILICONFLOW"
+
+[[providers]]
+name = "kimi"
+display_name = "Kimi"
+default_url = "https://api.moonshot.cn/v1/chat/completions"
+requires_api_key = true
+default_model = "moonshot-v1-8k"
+supported_models = ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]
+api_format = "openai"
+description = "月之暗面 Kimi AI 服务，需要 API Key"
+env_prefix = "AI_COMMIT_KIMI"
+
+# === 如何添加新的提供商 ===
+#
+# 只需要在此文件中添加新的 [[providers]] 配置段即可
+# 例如添加 Claude：
+#
+# [[providers]]
+# name = "claude"
+# display_name = "Anthropic Claude"
+# default_url = "https://api.anthropic.com/v1/messages"
+# requires_api_key = true
+# default_model = "claude-3-sonnet-20240229"
+# supported_models = ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+# api_format = "openai"
+# description = "Anthropic Claude AI 服务，需要 API Key"
+# env_prefix = "AI_COMMIT_CLAUDE"
+#
+# 添加后即可通过以下方式使用：
+# - 环境变量：AI_COMMIT_PROVIDER=claude
+# - 命令行：ai-commit --provider claude
+# - API Key：AI_COMMIT_CLAUDE_API_KEY=your-key
+# - 自定义URL：AI_COMMIT_CLAUDE_URL=your-custom-url
+
+# === 自定义本地服务 ===
+#
+# [[providers]]
+# name = "local_server"
+# display_name = "Local AI Server"
+# default_url = "http://localhost:8080/v1/chat/completions"
+# requires_api_key = false
+# default_model = "local-model"
+# supported_models = ["local-model", "custom-model"]
+# api_format = "openai"
+# description = "本地 AI 服务器"
+# env_prefix = "AI_COMMIT_LOCAL"

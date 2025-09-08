@@ -29,6 +29,9 @@ fn test_config_integration() {
         ollama_url: "http://localhost:11434/api/generate".to_string(),
         siliconflow_api_key: None,
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
         debug: false,
     };
 
@@ -218,6 +221,9 @@ fn test_configuration_priority_integration() {
         ollama_url: "http://localhost:11434/api/generate".to_string(),
         siliconflow_api_key: None,
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
         debug: false,
     };
     assert_eq!(config.provider, "ollama");
@@ -233,6 +239,9 @@ fn test_configuration_priority_integration() {
         ollama_url: "http://localhost:11434/api/generate".to_string(),
         siliconflow_api_key: None,
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
         debug: false,
     };
     let mut args = Args::default();
@@ -318,6 +327,9 @@ fn test_debug_mode_integration() {
         ollama_url: "http://localhost:11434/api/generate".to_string(),
         siliconflow_api_key: None,
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
         debug: false,
     };
     assert!(!config.debug);
@@ -494,6 +506,9 @@ async fn test_command_routing_integration() {
         ollama_url: "http://localhost:11434/api/generate".to_string(),
         siliconflow_api_key: None,
         siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
         debug: false,
     };
 

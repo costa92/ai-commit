@@ -16,6 +16,8 @@ mod commit_workflow_tests {
             ollama_url: "http://localhost:11434/api/generate".to_string(),
             siliconflow_api_key: None,
             siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
             debug: true, // 启用调试模式以获得更多测试信息
         }
     }
@@ -288,6 +290,9 @@ mod commit_workflow_tests {
             ollama_url: "invalid-url".to_string(),
             siliconflow_api_key: None,
             siliconflow_url: "invalid-url".to_string(),
+            kimi_api_key: None,
+            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+
             debug: false,
         };
         
