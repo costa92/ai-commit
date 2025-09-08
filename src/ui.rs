@@ -70,6 +70,20 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     // 将初始消息写入临时文件
     fs::write(&temp_file, initial_message)?;
     
+    // 验证文件写入成功
+    if !temp_file.exists() {
+        return Err(anyhow::anyhow!("无法创建临时文件: {}", temp_file.display()));
+    }
+    
+    // 调试信息：显示临时文件路径和内容
+    if env::var("AI_COMMIT_DEBUG").is_ok() {
+        println!("DEBUG: 临时文件路径: {}", temp_file.display());
+        println!("DEBUG: 预填充内容: '{}'", initial_message);
+        if let Ok(content) = fs::read_to_string(&temp_file) {
+            println!("DEBUG: 文件实际内容: '{}'", content);
+        }
+    }
+    
     // 获取编辑器命令，优先使用环境变量，然后尝试 vim、vi、nano
     let editor_result = env::var("EDITOR")
         .or_else(|_| env::var("VISUAL"))
