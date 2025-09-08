@@ -88,33 +88,49 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     let editor_result = env::var("EDITOR")
         .or_else(|_| env::var("VISUAL"))
         .unwrap_or_else(|_| {
-            // 检查系统中可用的编辑器
-            if Command::new("vim").arg("--version").output().is_ok() {
-                "vim".to_string()
-            } else if Command::new("vi").arg("-h").output().is_ok() {
-                "vi".to_string()
-            } else if Command::new("nano").arg("--version").output().is_ok() {
-                "nano".to_string()
-            } else {
-                // 无可用编辑器
-                "".to_string()
+            // 使用简单的 which 命令检查编辑器可用性
+            let editors = ["vim", "vi", "nano"];
+            for editor in &editors {
+                if Command::new("which").arg(editor).output()
+                    .map(|output| output.status.success())
+                    .unwrap_or(false)
+                {
+                    return editor.to_string();
+                }
             }
+            // 如果 which 不可用，直接尝试常见编辑器
+            for editor in &editors {
+                if Command::new(editor).arg("--help").output().is_ok() ||
+                   Command::new(editor).arg("--version").output().is_ok() {
+                    return editor.to_string();
+                }
+            }
+            // 无可用编辑器
+            "".to_string()
         });
     
     // 如果没有找到编辑器，回退到命令行输入
     if editor_result.is_empty() {
+        if env::var("AI_COMMIT_DEBUG").is_ok() {
+            println!("DEBUG: 没有找到可用的编辑器，回退到命令行输入模式");
+            println!("DEBUG: 环境变量 EDITOR: {:?}", env::var("EDITOR"));
+            println!("DEBUG: 环境变量 VISUAL: {:?}", env::var("VISUAL"));
+        }
         return edit_commit_message_fallback(initial_message);
+    }
+    
+    if env::var("AI_COMMIT_DEBUG").is_ok() {
+        println!("DEBUG: 选择的编辑器: {}", editor_result);
     }
     
     println!("正在启动编辑器 ({})...", editor_result);
     println!("提示: 保存并退出编辑器以确认提交消息");
     
-    // 显示临时文件信息
-    println!("临时文件路径: {}", temp_file.display());
-    println!("预填充内容: {}", initial_message);
-    
-    // 如果是调试模式，提供手动验证选项
+    // 显示临时文件信息（仅在调试模式下显示完整信息）
     if env::var("AI_COMMIT_DEBUG").is_ok() {
+        println!("临时文件路径: {}", temp_file.display());
+        println!("预填充内容: {}", initial_message);
+        
         print!("按回车继续启动编辑器，或输入 'show' 查看临时文件内容: ");
         io::stdout().flush().unwrap_or(());
         let mut debug_input = String::new();
@@ -127,15 +143,33 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
                 }
             }
         }
+    } else {
+        println!("编辑器将打开预填充的提交消息，请编辑后保存退出");
+    }
+    
+    // 启动编辑器前，再次确认文件存在且可读
+    if let Ok(content) = fs::read_to_string(&temp_file) {
+        if content != initial_message {
+            println!("警告: 临时文件内容与预期不符!");
+            println!("预期: {}", initial_message);
+            println!("实际: {}", content);
+        }
+    } else {
+        return Err(anyhow::anyhow!("无法读取临时文件: {}", temp_file.display()));
     }
     
     // 为不同编辑器准备特定参数
     let mut cmd = Command::new(&editor_result);
     cmd.arg(&temp_file);
     
+    // 确保编辑器在正确的工作目录中运行
+    if let Ok(current_dir) = env::current_dir() {
+        cmd.current_dir(current_dir);
+    }
+    
     // 为 vim/vi 添加特定参数以确保正确显示
     if editor_result == "vim" || editor_result == "vi" {
-        cmd.args(&["+set", "nobackup", "+set", "noswapfile"]);
+        cmd.args(&["+set", "nobackup", "+set", "noswapfile", "+set", "nowritebackup"]);
     }
     
     // 启动编辑器
