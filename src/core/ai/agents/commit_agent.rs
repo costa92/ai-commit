@@ -177,6 +177,10 @@ impl CommitAgent {
     fn validate_commit_message(&self, message: &str) -> Result<()> {
         let first_line = message.lines().next().unwrap_or("");
         
+        println!("DEBUG: 验证消息: '{}'", first_line);
+        println!("DEBUG: 消息长度: {}", first_line.len());
+        println!("DEBUG: 消息字符: {:?}", first_line.chars().collect::<Vec<_>>());
+        
         if !COMMIT_FORMAT_REGEX.is_match(first_line) {
             anyhow::bail!(
                 "提交消息格式不正确。期望格式：<type>(<scope>): <subject>\n实际：{}",
