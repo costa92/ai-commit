@@ -177,10 +177,6 @@ impl CommitAgent {
     fn validate_commit_message(&self, message: &str) -> Result<()> {
         let first_line = message.lines().next().unwrap_or("");
         
-        println!("DEBUG: 验证消息: '{}'", first_line);
-        println!("DEBUG: 消息长度: {}", first_line.len());
-        println!("DEBUG: 消息字符: {:?}", first_line.chars().collect::<Vec<_>>());
-        
         if !COMMIT_FORMAT_REGEX.is_match(first_line) {
             anyhow::bail!(
                 "提交消息格式不正确。期望格式：<type>(<scope>): <subject>\n实际：{}",
@@ -198,12 +194,19 @@ impl CommitAgent {
     
     /// 清理提交消息
     fn clean_commit_message(&self, message: &str) -> String {
-        // 只取第一行，去除多余空白
-        message.lines()
+        // 只取第一行，去除多余空白和引号
+        let cleaned = message.lines()
             .next()
             .unwrap_or("")
-            .trim()
-            .to_string()
+            .trim();
+            
+        // 去除首尾的引号（单引号或双引号）
+        if (cleaned.starts_with('"') && cleaned.ends_with('"')) ||
+           (cleaned.starts_with('\'') && cleaned.ends_with('\'')) {
+            cleaned[1..cleaned.len()-1].to_string()
+        } else {
+            cleaned.to_string()
+        }
     }
 }
 
