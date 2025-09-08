@@ -211,21 +211,65 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
 
 /// 回退的命令行编辑模式
 fn edit_commit_message_fallback(initial_message: &str) -> anyhow::Result<ConfirmResult> {
-    println!("请输入您的 commit message:");
-    println!("当前内容: {}", initial_message);
-    print!("> ");
+    println!("无法启动外部编辑器，进入命令行编辑模式");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("AI 生成的消息: {}", initial_message);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+    println!("编辑选项:");
+    println!("  1. 使用 AI 生成的消息（直接回车）");
+    println!("  2. 输入新的 commit message");
+    println!("  3. 基于 AI 消息修改（输入 'edit' 后手动输入修改版本）");
+    println!("  4. 取消（输入 'cancel'）");
+    println!();
+    print!("请选择 (回车使用AI消息/输入新消息/edit/cancel): ");
     io::stdout().flush()?;
     
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
-    let edited_message = input.trim().to_string();
+    let input = input.trim();
     
-    if edited_message.is_empty() {
-        println!("Commit message 不能为空，操作已取消。");
-        return Ok(ConfirmResult::Rejected);
+    match input {
+        "" => {
+            // 用户直接回车，使用 AI 生成的消息
+            println!("✓ 使用 AI 生成的 commit message: {}", initial_message);
+            Ok(ConfirmResult::Confirmed(initial_message.to_string()))
+        }
+        "cancel" | "c" => {
+            println!("操作已取消。");
+            Ok(ConfirmResult::Rejected)
+        }
+        "edit" | "e" => {
+            // 提供手动编辑模式
+            println!();
+            println!("请基于以下消息进行修改:");
+            println!("原始: {}", initial_message);
+            println!();
+            println!("提示: 你可以复制上面的消息，修改后粘贴");
+            print!("修改后的消息: ");
+            io::stdout().flush()?;
+            
+            let mut edited = String::new();
+            io::stdin().read_line(&mut edited)?;
+            let edited_message = edited.trim().to_string();
+            
+            if edited_message.is_empty() {
+                println!("消息不能为空，使用原始消息。");
+                Ok(ConfirmResult::Confirmed(initial_message.to_string()))
+            } else {
+                validate_and_confirm_edited_message(&edited_message)
+            }
+        }
+        _ => {
+            // 用户输入了新的消息
+            if input.is_empty() {
+                println!("Commit message 不能为空，操作已取消。");
+                Ok(ConfirmResult::Rejected)
+            } else {
+                validate_and_confirm_edited_message(input)
+            }
+        }
     }
-    
-    validate_and_confirm_edited_message(&edited_message)
 }
 
 /// 验证并确认编辑后的消息
