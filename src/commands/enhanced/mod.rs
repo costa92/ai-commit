@@ -23,6 +23,11 @@ use crate::config::Config;
 /// 检查是否有增强功能命令
 pub fn has_enhanced_commands(args: &Args) -> bool {
     args.query.is_some()
+        || args.query_history
+        || args.query_stats
+        || args.query_clear
+        || args.query_browse
+        || args.query_tui
         || args.diff_view.is_some()
         || args.watch
         || args.log_stats
@@ -34,6 +39,29 @@ pub fn has_enhanced_commands(args: &Args) -> bool {
 
 /// 处理增强的Git功能命令（基于GRV功能启发）
 pub async fn handle_enhanced_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
+    // TUI界面（最高优先级）
+    if args.query_tui {
+        use crate::tui::show_history_tui;
+        return show_history_tui().await;
+    }
+    
+    // 查询历史相关功能（优先处理）
+    if args.query_history {
+        return handle_query_command("history", config).await;
+    }
+    
+    if args.query_stats {
+        return handle_query_command("history-stats", config).await;
+    }
+    
+    if args.query_clear {
+        return handle_query_command("history-clear", config).await;
+    }
+    
+    if args.query_browse {
+        return handle_query_command("history-browse", config).await;
+    }
+    
     // 查询功能
     if let Some(query) = &args.query {
         return handle_query_command(query, config).await;

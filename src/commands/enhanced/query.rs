@@ -1,14 +1,73 @@
 use crate::config::Config;
 use crate::git::GitQuery;
+use crate::query_history::QueryHistory;
 
 /// 处理查询命令
 pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Result<()> {
+    // 初始化查询历史
+    let mut history = QueryHistory::new(1000)?;
+    
     if config.debug {
         println!("Executing query: {}", query);
     }
 
+    // 处理历史相关命令
+    if query == "history" || query == "--history" {
+        history.display_history(Some(20));
+        return Ok(());
+    }
+
+    if query == "history-stats" || query == "--stats" {
+        let stats = history.get_stats();
+        stats.display();
+        return Ok(());
+    }
+
+    if query == "history-clear" {
+        history.clear()?;
+        println!("Query history cleared.");
+        return Ok(());
+    }
+
+    if query == "history-browse" || query == "--browse" {
+        if let Some(selected_query) = history.interactive_browse()? {
+            println!("Executing selected query: {}", selected_query);
+            // Avoid recursion by directly executing the selected query
+            let filters = GitQuery::parse_query(&selected_query)?;
+            let results = GitQuery::execute_query(&filters).await?;
+            let result_count = results.lines().count();
+            
+            if results.trim().is_empty() {
+                println!("No results found for query: {}", selected_query);
+                history.add_entry(
+                    selected_query,
+                    Some("execute".to_string()),
+                    Some(0),
+                    true
+                )?;
+            } else {
+                println!("🔍 Query Results: {}", selected_query);
+                println!("{}", "─".repeat(60));
+                println!("{}", results);
+                
+                history.add_entry(
+                    selected_query,
+                    Some("execute".to_string()),
+                    Some(result_count),
+                    true
+                )?;
+            }
+        }
+        return Ok(());
+    }
+
     if query == "help" || query == "--help" {
         println!("{}", GitQuery::get_query_help());
+        println!("\nHistory Commands:");
+        println!("  history, --history      Show query history");
+        println!("  history-stats, --stats  Show history statistics");
+        println!("  history-clear           Clear query history");
+        println!("  history-browse, --browse Interactive history browser");
         return Ok(());
     }
 
@@ -24,24 +83,77 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
             let name = parts[1];
             let query_content = parts[2];
             GitQuery::save_query(name, query_content).await?;
+            
+            // 记录到历史
+            history.add_entry(
+                query.to_string(),
+                Some("save".to_string()),
+                None,
+                true
+            )?;
+            
             return Ok(());
         }
     }
 
     // 解析并执行查询
-    let filters = GitQuery::parse_query(query)?;
-    let results = GitQuery::execute_query(&filters).await?;
+    let filters = match GitQuery::parse_query(query) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to parse query: {}", e);
+            // 记录失败的查询
+            history.add_entry(
+                query.to_string(),
+                Some("execute".to_string()),
+                None,
+                false
+            )?;
+            return Err(e);
+        }
+    };
 
+    let results = match GitQuery::execute_query(&filters).await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to execute query: {}", e);
+            // 记录失败的查询
+            history.add_entry(
+                query.to_string(),
+                Some("execute".to_string()),
+                None,
+                false
+            )?;
+            return Err(e);
+        }
+    };
+
+    let result_count = results.lines().count();
+    
     if results.trim().is_empty() {
         println!("No results found for query: {}", query);
+        // 记录无结果的查询
+        history.add_entry(
+            query.to_string(),
+            Some("execute".to_string()),
+            Some(0),
+            true
+        )?;
     } else {
         println!("🔍 Query Results: {}", query);
         println!("{}", "─".repeat(60));
         println!("{}", results);
+        
+        // 记录成功的查询
+        history.add_entry(
+            query.to_string(),
+            Some("execute".to_string()),
+            Some(result_count),
+            true
+        )?;
     }
 
     if config.debug {
-        println!("\nQuery executed with {} filters", filters.len());
+        println!("\nQuery executed with {} filters, returned {} results", filters.len(), result_count);
     }
 
     Ok(())

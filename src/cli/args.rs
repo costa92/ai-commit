@@ -180,6 +180,26 @@ pub struct Args {
     #[arg(long = "query", value_name = "QUERY")]
     pub query: Option<String>,
 
+    /// 显示查询历史记录
+    #[arg(long = "query-history", default_value_t = false)]
+    pub query_history: bool,
+
+    /// 显示查询历史统计信息
+    #[arg(long = "query-stats", default_value_t = false)]
+    pub query_stats: bool,
+
+    /// 清空查询历史记录
+    #[arg(long = "query-clear", default_value_t = false)]
+    pub query_clear: bool,
+
+    /// 交互式浏览查询历史
+    #[arg(long = "query-browse", default_value_t = false)]
+    pub query_browse: bool,
+
+    /// 启动TUI界面查看查询历史
+    #[arg(long = "query-tui", default_value_t = false)]
+    pub query_tui: bool,
+
     /// 监控仓库变化
     #[arg(long = "watch", default_value_t = false)]
     pub watch: bool,

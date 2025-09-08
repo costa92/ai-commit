@@ -30,6 +30,8 @@ async-trait = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
 semver = "1.0"
 toml = "0.8"
+ratatui = "0.26"
+crossterm = "0.27"
 
 [dev-dependencies]
 tempfile = "3.8"

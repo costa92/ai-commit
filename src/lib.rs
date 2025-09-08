@@ -5,4 +5,6 @@ pub mod config;
 pub mod core;
 pub mod git;
 pub mod internationalization;
+pub mod query_history;
+pub mod tui;
 pub mod ui;
