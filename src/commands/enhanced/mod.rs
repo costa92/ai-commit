@@ -22,7 +22,8 @@ use crate::config::Config;
 
 /// 检查是否有增强功能命令
 pub fn has_enhanced_commands(args: &Args) -> bool {
-    args.query.is_some()
+    args.tui_new
+        || args.query.is_some()
         || args.query_history
         || args.query_stats
         || args.query_clear
@@ -40,7 +41,13 @@ pub fn has_enhanced_commands(args: &Args) -> bool {
 
 /// 处理增强的Git功能命令（基于GRV功能启发）
 pub async fn handle_enhanced_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
-    // 增强版TUI界面（最高优先级）
+    // 新的层级化 TUI（最高优先级）
+    if args.tui_new {
+        use crate::tui_hierarchical::run_hierarchical_tui;
+        return run_hierarchical_tui().await;
+    }
+    
+    // 增强版TUI界面（包含主界面功能）
     if args.query_tui_pro {
         use crate::tui_enhanced::show_history_tui;
         return show_history_tui().await;

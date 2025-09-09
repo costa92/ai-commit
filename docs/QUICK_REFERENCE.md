@@ -271,3 +271,146 @@ source ~/.ac_custom
 ---
 
 💡 **黄金法则**: 如果一个命令你每天用超过 3 次，就应该为它创建快捷键！
+
+## 🎨 GRV-Style TUI 功能（新增）
+
+### 查询历史系统
+
+#### 基础查询命令
+```bash
+# 查看查询历史
+ac --query-history          # 显示最近 20 条查询记录
+
+# 查看统计信息
+ac --query-stats            # 显示查询统计
+
+# 清空历史
+ac --query-clear            # 清空所有查询历史
+
+# 执行查询
+ac --query "author:costa"   # 按作者查询
+ac --query "message:feat"   # 按消息查询
+ac --query "since:2024-01-01" # 按日期查询
+```
+
+#### TUI 界面
+
+##### 标准 TUI (`--query-tui`)
+- 简洁的单窗口界面
+- 查询历史浏览和执行
+- 详情面板显示
+- 搜索和过滤功能
+
+##### 增强版 TUI (`--query-tui-pro`) 🆕
+基于 GRV (Git Repository Viewer) 的专业界面：
+
+**核心特性：**
+1. **多窗格布局**
+   - 支持水平/垂直分屏
+   - `Ctrl+s`: 循环切换分屏模式
+   - `Ctrl+w`: 切换焦点窗格
+
+2. **标签页系统**
+   - 多标签管理不同视图
+   - `Tab`: 下一个标签
+   - `Shift+Tab`: 上一个标签
+   - `:tab NAME`: 创建新标签
+
+3. **Vim 风格命令模式**
+   ```
+   :q, :quit    退出
+   :vsplit      垂直分屏
+   :hsplit      水平分屏
+   :tab NAME    新建标签
+   :help        显示帮助
+   ```
+
+4. **语法高亮**
+   - `h`: 切换高亮
+   - 自动着色查询类型
+   - 结果类型颜色编码
+
+5. **专业 UI 元素**
+   - 滚动条和位置指示器
+   - 焦点指示（黄色边框）
+   - 状态栏显示模式和统计
+   - 完整的帮助系统（`?`）
+
+### 快捷键对照表
+
+| 功能 | 标准 TUI | 增强版 TUI |
+|------|---------|-----------|
+| 移动 | ↑↓/jk | ↑↓/jk |
+| 执行 | Enter | Enter/x |
+| 搜索 | / | / |
+| 帮助 | ? | ? |
+| 退出 | q | q/:q |
+| 详情 | d | d |
+| 分屏 | - | Ctrl+s |
+| 切换焦点 | - | Ctrl+w |
+| 标签页 | - | Tab/Shift+Tab |
+| 命令模式 | - | : |
+| 语法高亮 | - | h |
+
+### 使用场景
+
+#### 场景 1: 查找特定作者的提交
+```bash
+# 命令行快速查询
+ac --query "author:张三"
+
+# 或使用 TUI 交互式查找
+ac --query-tui-pro
+# 然后按 / 搜索 author:张三
+```
+
+#### 场景 2: 分析最近的功能开发
+```bash
+# 查看所有 feat 类型的提交
+ac --query "message:feat"
+
+# 在增强版 TUI 中对比多个查询结果
+ac --query-tui-pro
+# 执行多个查询，每个在新标签中显示
+```
+
+#### 场景 3: 团队代码审查
+```bash
+# 查看今天的所有提交
+ac --query "since:$(date +%Y-%m-%d)"
+
+# 使用增强版 TUI 的分屏功能
+ac --query-tui-pro
+# Ctrl+s 启用分屏，同时查看历史和结果
+```
+
+### 配置快捷键
+
+```bash
+# 添加到 ~/.zshrc 或 ~/.bashrc
+alias acq='ai-commit --query'              # 快速查询
+alias acqh='ai-commit --query-history'     # 查看历史
+alias acqt='ai-commit --query-tui'         # 标准 TUI
+alias acqp='ai-commit --query-tui-pro'     # 增强版 TUI
+
+# 智能查询函数
+query-today() {
+    ac --query "since:$(date +%Y-%m-%d)"
+}
+
+query-my-commits() {
+    ac --query "author:$(git config user.name)"
+}
+```
+
+### 与 GRV 的对比
+
+| 特性 | GRV | ai-commit TUI |
+|------|-----|---------------|
+| 多标签 | ✅ | ✅ |
+| 分屏视图 | ✅ | ✅ |
+| Vim 命令 | ✅ | ✅ |
+| 语法高亮 | ✅ | ✅ |
+| Git 集成 | ✅ | ✅ |
+| AI 查询 | ❌ | ✅ |
+| 历史持久化 | ❌ | ✅ |

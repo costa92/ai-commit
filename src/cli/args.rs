@@ -204,6 +204,14 @@ pub struct Args {
     #[arg(long = "query-tui-pro", default_value_t = false)]
     pub query_tui_pro: bool,
 
+    /// 启动层级化TUI界面（新设计）
+    #[arg(long = "tui", default_value_t = false)]
+    pub tui_new: bool,
+
+    /// 启动统一TUI界面（整合版本）
+    #[arg(long = "tui-unified", default_value_t = false)]
+    pub tui_unified: bool,
+
     /// 监控仓库变化
     #[arg(long = "watch", default_value_t = false)]
     pub watch: bool,

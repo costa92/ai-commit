@@ -1,0 +1,6 @@
+pub struct DiffViewerComponent
+ pub struct StatusBarComponent
+ pub struct HelpPanel
+ pub struct SearchBox
+ pub struct ProgressBar
+

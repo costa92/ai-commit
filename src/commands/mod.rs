@@ -28,6 +28,12 @@ pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool>
         return handle_enhanced_commands(args, config).await.map(|_| true);
     }
 
+    // 统一TUI界面命令
+    if args.tui_unified {
+        use crate::tui_unified::TuiUnifiedApp;
+        return TuiUnifiedApp::run().await.map(|_| true).map_err(|e| anyhow::anyhow!("{}", e));
+    }
+
     // Tag 相关命令
     if args.tag_list || args.tag_delete.is_some() || args.tag_info.is_some() || args.tag_compare.is_some() {
         return handle_tag_commands(args, config).await.map(|_| true);
