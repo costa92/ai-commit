@@ -83,3 +83,6 @@ impl Stash {
         }
     }
 }
+
+// Re-export QueryHistoryEntry from the main query_history module
+pub use crate::query_history::QueryHistoryEntry;

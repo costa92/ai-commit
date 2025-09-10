@@ -50,7 +50,7 @@ impl ConflictResolver {
         }
     }
     
-    pub async fn resolve_conflict(&self, file: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn resolve_conflict(&self, _file: &str) -> Result<bool, Box<dyn std::error::Error>> {
         Ok(true)
     }
 }

@@ -1,5 +1,5 @@
 use crate::query_history::{QueryHistory, QueryHistoryEntry};
-use crate::diff_viewer::{DiffViewer, render_diff_viewer};
+use crate::diff_viewer::DiffViewer;
 use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -36,6 +36,7 @@ pub enum ViewType {
 pub struct ViewContext {
     view_type: ViewType,
     title: String,
+    #[allow(dead_code)]  // 保留用于未来功能
     context_data: Option<String>,
 }
 
@@ -165,6 +166,7 @@ pub struct App {
     diff_viewer: Option<DiffViewer>,
     
     /// 查询历史
+    #[allow(dead_code)]  // 保留用于未来功能
     query_history: QueryHistory,
     query_entries: Vec<QueryHistoryEntry>,
     query_list_state: ListState,
@@ -1238,6 +1240,7 @@ fn render_right_panel(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染主菜单
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_main_menu(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app.main_menu_items
         .iter()
@@ -1264,6 +1267,7 @@ fn render_main_menu(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染分支列表
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_branch_list(f: &mut Frame, app: &App, area: Rect) {
     // 分割区域：左侧分支列表，右侧提交历史
     let chunks = Layout::default()
@@ -1308,6 +1312,7 @@ fn render_branch_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染标签列表
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_tag_list(f: &mut Frame, app: &App, area: Rect) {
     // 分割区域：左侧标签列表，右侧提交历史
     let chunks = Layout::default()
@@ -1352,6 +1357,7 @@ fn render_tag_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染远程仓库列表
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_remote_list(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app.remotes
         .iter()
@@ -1375,6 +1381,7 @@ fn render_remote_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染提交列表
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_commit_list(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app.commits
         .iter()
@@ -1405,6 +1412,7 @@ fn render_commit_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染查询历史
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_query_history(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app.query_entries
         .iter()
@@ -1438,6 +1446,7 @@ fn render_query_history(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// 渲染提交列表面板（用于分支和标签视图的右侧）
+#[allow(dead_code)]  // 保留用于未来功能
 fn render_commit_list_panel(f: &mut Frame, app: &App, area: Rect) {
     // 获取当前选中的分支或标签名称
     let title = match app.view_stack.current().view_type {

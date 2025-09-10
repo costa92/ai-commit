@@ -111,7 +111,14 @@ make tag-changelog tag=v1.0.0
 - `edit.rs`: Commit editing command handlers (amend, rebase, reword, undo)
 - `mod.rs`: Central command routing system
 
-**6. Internationalization (`src/internationalization.rs`)**
+**6. TUI System (`src/tui_unified/`)**
+- Modern Terminal User Interface with component-based architecture
+- Interactive Git repository browsing and management
+- Real-time diff viewing with modal dialog system
+- Multi-panel layout with focus management and keyboard navigation
+- Support for Git log, branches, tags, remotes, stashes, and query history views
+
+**7. Internationalization (`src/internationalization.rs`)**
 - Multi-language support (Chinese Simplified/Traditional, English)
 - Centralized message management system
 
@@ -195,6 +202,108 @@ ai-commit -y --force-push --push --provider deepseek
 - 编辑模式支持自定义消息
 - 空消息检测和警告
 - 格式不符合规范时的二次警告
+
+### Terminal User Interface (TUI)
+
+The tool provides a modern, interactive Terminal User Interface for comprehensive Git repository management and visualization.
+
+#### TUI Launch Command
+
+```bash
+# Start the TUI interface
+ai-commit --tui-unified
+
+# The TUI provides visual Git repository browsing and management
+```
+
+#### TUI Features and Navigation
+
+**Main Interface Layout:**
+- **Sidebar Panel** (Left): Repository status and navigation menu
+- **Content Panel** (Middle): Interactive lists and data views  
+- **Status Bar** (Bottom): Current mode, focus, and keyboard shortcuts
+
+**View Navigation:**
+- **Keyboard Shortcuts**: `1-6` to switch between different views
+- **Menu Navigation**: Use arrow keys in sidebar + `Enter` to select
+- **Tab Navigation**: `Tab` key to cycle between panels
+
+**Available Views:**
+1. **Git Log** (`1`): Commit history with interactive diff viewer
+2. **Branches** (`2`): Local and remote branch management
+3. **Tags** (`3`): Repository tags with detailed information
+4. **Remotes** (`4`): Remote repository management
+5. **Stash** (`5`): Git stash entries and operations
+6. **Query History** (`6`): Previous search and query history
+
+#### Interactive Diff Viewer
+
+**New Feature**: Modal diff viewer for commit details
+
+**Usage:**
+- Navigate to **Git Log** view (`1`)
+- Use `↑`/`↓` or `j`/`k` to select a commit
+- Press `Enter` to open **diff modal** for the selected commit
+
+**Diff Modal Features:**
+- **Full-screen diff display** with syntax highlighting
+- **Scrollable content** with keyboard navigation
+- **Line-by-line diff** showing additions, deletions, and context
+- **Commit information** in modal title
+- **Easy dismissal** with `Esc` or `q` keys
+
+**Diff Modal Controls:**
+- `↑`/`↓` or `j`/`k`: Scroll line by line
+- `PgUp`/`PgDn` or `u`/`d`: Page up/down
+- `Home`/`End` or `g`/`G`: Go to start/end
+- `Esc` or `q`: Close the diff modal
+
+#### Search and Filtering
+
+**Global Search:**
+- Press `/` from any view to enter search mode
+- Type search query and press `Enter` to filter results
+- `Esc` to cancel search and return to normal mode
+
+**View-Specific Search:**
+- Each view supports contextual searching:
+  - **Git Log**: Search by commit message, author, or hash
+  - **Branches**: Search by branch name or upstream
+  - **Tags**: Search by tag name, commit hash, or message
+  - **Remotes**: Search by remote name or URL
+  - **Stash**: Search by stash message or branch
+
+#### Keyboard Shortcuts Summary
+
+**Global Navigation:**
+- `1-6`: Switch between views
+- `Tab`: Cycle panel focus
+- `/`: Enter search mode
+- `q`: Quit application
+
+**List Navigation:**
+- `↑`/`↓` or `j`/`k`: Navigate items
+- `PgUp`/`PgDn` or `u`/`d`: Page navigation
+- `Home`/`End` or `g`/`G`: Jump to start/end
+- `Enter`: Activate/view details (opens diff modal in Git Log)
+
+**Modal Controls:**
+- `Esc` or `q`: Close modal dialogs
+- Navigation keys work within modals for scrolling
+
+#### Repository Status Display
+
+**Real-time Information:**
+- Current branch and repository name
+- Commit, branch, tag, remote, and stash counts
+- Repository cleanliness status
+- Current view and focus indicators
+
+**Visual Indicators:**
+- 🔄 Active focus highlighting
+- ► Selection indicators in sidebar
+- 📊📋🏷️📡💾📜 View type icons
+- Color-coded diff syntax highlighting
 
 ### Advanced Git Features
 

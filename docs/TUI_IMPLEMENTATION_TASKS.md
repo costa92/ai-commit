@@ -1,318 +1,550 @@
 # TUI 统一界面实现任务清单
 
-基于技术设计文档创建的完整实现任务列表，确保每个功能点都被覆盖，避免遗漏或处理方式偏差。
+## 🎯 执行优先级（P0-P4）
 
-## 🚀 Phase 1: 基础架构 (必需功能) 
+### P0 - 紧急阻塞（必须立即解决）
+让 `--tui-unified` 能基本运行并显示真实数据
 
-### Task 1: 创建项目基础结构和依赖配置
-**功能覆盖**: 项目骨架、依赖管理、基础配置
-- [ ] **1.1 创建模块文件结构**
-  - 创建 `src/tui_unified/` 目录结构
-  - 按照 `TUI_CORE_MODULES.md` 创建所有子模块目录
-  - 创建各模块的 `mod.rs` 文件和基础文件
-- [ ] **1.2 配置项目依赖**
-  - 更新 `Cargo.toml` 添加必需依赖: `ratatui`, `crossterm`, `tokio`, `async-trait`
-  - 添加其他依赖: `serde`, `uuid`, `anyhow`, `lru`, `chrono`
-  - 配置 feature flags 和条件编译选项
-- [ ] **1.3 基础 CLI 集成**
-  - 在 `src/cli/args.rs` 添加 `--tui-unified` 参数
-  - 更新命令路由以支持统一TUI模式
-  - 创建TUI模式的入口函数
+### P1 - 核心功能（MVP必需）
+基础的 Git 仓库浏览功能
 
-### Task 2: 实现核心状态管理系统
-**功能覆盖**: AppState、状态更新、持久化
-- [ ] **2.1 应用状态结构**
-  - 实现 `AppState` 结构体 (UI状态、Git状态、配置状态)
-  - 实现 `LayoutState`, `FocusState`, `GitRepoState`
-  - 实现 `SelectionState`, `SearchState` 结构
-- [ ] **2.2 状态管理方法**
-  - 实现状态更新方法: `set_current_view()`, `select_commit()`, `add_loading_task()`
-  - 实现状态查询方法: `is_loading()`, `get_current_selection()`
-  - 实现通知系统: `add_notification()`
-- [ ] **2.3 状态持久化**
-  - 实现状态序列化/反序列化
-  - 实现状态备份和恢复机制
-  - 实现状态变化监听器
+### P2 - 重要功能（提升可用性）
+Git 操作和搜索功能
 
-### Task 3: 实现布局管理和焦点系统
-**功能覆盖**: 三栏布局、分屏模式、焦点切换
-- [ ] **3.1 布局管理器**
-  - 实现 `LayoutManager` 结构体
-  - 实现布局模式: Normal, SplitHorizontal, SplitVertical, FullScreen
-  - 实现 `calculate_layout()` 方法进行动态布局计算
-- [ ] **3.2 焦点管理系统**  
-  - 实现 `FocusManager` 结构体
-  - 实现焦点环: `next_focus()`, `prev_focus()`, `direct_focus()`
-  - 实现焦点历史和面板间导航
-- [ ] **3.3 响应式布局**
-  - 实现终端大小变化处理
-  - 实现面板大小调节功能
-  - 实现布局约束和最小尺寸检查
+### P3 - AI 集成（核心价值）
+集成 AI Commit 功能
 
-### Task 4: 实现事件处理和路由系统
-**功能覆盖**: 按键绑定、事件路由、异步事件
-- [ ] **4.1 事件路由器**
-  - 实现 `EventRouter` 结构体
-  - 实现全局按键处理和组件级按键处理
-  - 实现事件优先级和冒泡机制
-- [ ] **4.2 按键绑定系统**
-  - 实现 `KeyBindings` 配置
-  - 支持自定义按键映射: 导航、Git操作、视图切换
-  - 实现上下文相关的按键提示
-- [ ] **4.3 异步事件处理**
-  - 实现异步事件队列
-  - 实现事件订阅和发布机制
-  - 实现事件历史和调试功能
+### P4 - 优化增强（用户体验）
+高级功能和性能优化
 
-## 🔧 Phase 2: Git 集成与核心组件
+---
 
-### Task 5: 实现Git接口和异步操作
-**功能覆盖**: Git命令、异步执行、数据解析
-- [ ] **5.1 Git接口定义**
-  - 实现 `GitRepositoryAPI` trait
-  - 定义所有Git操作接口: commits, branches, tags, remotes, stash
-  - 实现查询选项结构: `CommitListOptions`, `DiffOptions`
-- [ ] **5.2 异步Git实现**
-  - 实现 `AsyncGitImpl` 结构体
-  - 实现 `execute_git_command()` 异步方法
-  - 实现命令缓存: `execute_git_command_with_cache()`
-- [ ] **5.3 数据解析器**
-  - 实现 `parse_commit_output()`, `parse_branch_output()` 方法
-  - 实现Git数据模型: `Commit`, `Branch`, `Tag`, `Remote`, `Stash`
-  - 实现错误处理和数据验证
+## 🚀 P0 - 紧急阻塞任务（今天必须完成）
 
-### Task 6: 实现基础组件系统框架
-**功能覆盖**: 组件trait、生命周期、事件处理
-- [ ] **6.1 组件基础trait**
-  - 实现 `Component` trait 定义
-  - 实现组件生命周期: `mount()`, `unmount()`, `update()`
-  - 实现事件处理: `handle_key_event()`, `handle_mouse_event()`
-- [ ] **6.2 组件工厂**
-  - 实现 `ComponentFactory` 和 `ComponentRegistry`
-  - 实现组件创建和注册机制
-  - 实现组件Props系统和状态注入
-- [ ] **6.3 基础Widget库**
-  - 实现 `ListWidget`, `TableWidget`, `TreeWidget`
-  - 实现 `SearchBox`, `ProgressBar`, `ModalDialog`
-  - 实现通用组件属性和样式系统
+### Task 0.1: Git 数据加载 🚨
+**阻塞问题**: 所有数据都是硬编码，无法显示真实 Git 信息
+**解决方案**: 实现真实的 Git 命令执行
 
-### Task 7: 实现侧边栏面板组件  
-**功能覆盖**: 菜单导航、快捷键、状态显示
-- [ ] **7.1 侧边栏面板结构**
-  - 实现 `SidebarPanel` 组件
-  - 实现 `MenuItem` 结构和菜单配置
-  - 实现菜单项图标、快捷键、状态标记
-- [ ] **7.2 菜单交互功能**
-  - 实现菜单选择和高亮显示
-  - 实现快捷键导航 (1-6数字键)
-  - 实现子菜单展开/收缩功能
-- [ ] **7.3 菜单项配置**
-  - 配置Git Log, Branches, Tags, Remotes, Stash, Query History 菜单项
-  - 实现菜单项状态更新 (如分支数量badge)
-  - 实现菜单项的动态启用/禁用
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 自动提交信息生成，需要Git数据
+- **NFR-001** (系统需求文档.md) - 性能需求，异步处理
 
-### Task 8: 实现主内容面板组件
-**功能覆盖**: 视图切换、列表显示、虚拟滚动
-- [ ] **8.1 内容面板路由**
-  - 实现 `ContentPanel` 组件
-  - 实现视图路由器: `ViewRouter` 和动态视图切换
-  - 实现各个视图组件的生命周期管理
-- [ ] **8.2 Git视图组件**
-  - 实现 `GitLogView`: 提交历史显示，语法高亮
-  - 实现 `BranchesView`: 分支列表，状态指示器
-  - 实现 `TagsView`: 标签列表和信息显示
-  - 实现 `RemotesView`: 远程仓库状态显示
-- [ ] **8.3 虚拟滚动优化**
-  - 实现 `VirtualScrollManager` 用于大量数据显示
-  - 实现滚动缓冲区和预加载机制
-  - 实现平滑滚动和快速跳转功能
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §Git操作异步流程
+- **TUI_API_DESIGN.md** §Git操作接口
+- **参考实现**: `src/tui_hierarchical.rs:285-426` load_git_data()
 
-### Task 9: 实现详情面板和Diff查看器
-**功能覆盖**: 信息显示、专业diff、多种视图模式
-- [ ] **9.1 详情面板结构**
-  - 实现 `DetailPanel` 组件 (上下分割: InfoPanel + DiffPanel)
-  - 实现 `InfoPanel`: 显示提交、分支、标签等详细信息  
-  - 实现面板大小调节和分割比例控制
-- [ ] **9.2 专业Diff查看器**
-  - 实现 `DiffViewerComponent` 组件
-  - 支持多种diff模式: Unified, SideBySide, TreeView
-  - 实现语法高亮和差异标记显示
-- [ ] **9.3 全屏模式**
-  - 实现全屏diff查看模式
-  - 实现diff导航: 文件间跳转、搜索功能
-  - 实现diff操作: 复制、导出、打印
+#### 立即修改（可直接复制）：
+**文件**: `src/tui_unified/git/interface.rs`
 
-## ⚡ Phase 3: 高级功能与优化
+```rust
+// 替换第 27-37 行的 get_commits 方法
+async fn get_commits(&self, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    use tokio::process::Command;
 
-### Task 10: 实现缓存系统和性能优化
-**功能覆盖**: 多级缓存、LRU策略、异步任务管理
-- [ ] **10.1 缓存管理器**
-  - 实现 `CacheManager`: Git缓存、UI缓存、文件缓存
-  - 实现 `GitCache` 结构体和LRU策略
-  - 实现缓存TTL和失效策略
-- [ ] **10.2 异步任务管理**
-  - 实现 `AsyncTaskManager` 用于Git操作
-  - 实现任务进度跟踪和状态更新
-  - 实现任务取消和错误恢复机制
-- [ ] **10.3 性能监控**
-  - 实现渲染性能监控
-  - 实现内存使用监控和优化
-  - 实现Git命令执行时间统计
+    let limit = limit.unwrap_or(50);
+    let output = Command::new("git")
+        .args(&["log", "--pretty=format:%H|%h|%an|%ae|%ad|%s", "--date=iso", "-n", &limit.to_string()])
+        .output()
+        .await?;
 
-### Task 11: 实现配置管理和主题系统  
-**功能覆盖**: 设置管理、主题定制、按键配置
-- [ ] **11.1 配置管理API**
-  - 实现 `ConfigAPI` trait和配置读写方法
-  - 实现配置文件格式和持久化
-  - 实现配置变化监听和热重载
-- [ ] **11.2 主题系统**
-  - 实现 `ThemeAPI` trait和主题管理
-  - 实现 `Theme`, `ColorScheme`, `StyleScheme` 结构
-  - 支持主题导入导出和自定义配色
-- [ ] **11.3 用户偏好设置**
-  - 实现UI配置: 面板大小、显示选项、自动刷新
-  - 实现Git配置: diff上下文行数、默认分支
-  - 实现按键绑定自定义和配置重置
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let commits = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 6 {
+                Some(Commit {
+                    hash: parts[0].to_string(),
+                    short_hash: parts[1].to_string(),
+                    author: parts[2].to_string(),
+                    author_email: parts[3].to_string(),
+                    date: chrono::DateTime::parse_from_rfc3339(parts[4]).ok()?,
+                    message: parts[5..].join("|"),
+                    // 其他字段先用默认值
+                    ..Default::default()
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
 
-### Task 12: 实现智能Git操作功能
-**功能覆盖**: 一键操作、分支健康度、冲突检测
-- [ ] **12.1 智能分支操作**
-  - 实现 `SmartBranchManager`: 智能切换+拉取
-  - 实现 `calculate_branch_health()`: 分支健康度评估
-  - 实现分支状态指示器和操作建议
-- [ ] **12.2 冲突检测和解决**
-  - 实现合并前冲突预览功能
-  - 实现冲突解决建议系统
-  - 实现三方合并界面和冲突标记
-- [ ] **12.3 批量操作**
-  - 实现批量分支操作: 创建、删除、重命名
-  - 实现批量标签操作: 创建、删除、推送
-  - 实现操作结果汇总和错误处理
+    Ok(commits)
+}
 
-### Task 13: 实现搜索和过滤系统
-**功能覆盖**: 全局搜索、复合过滤、搜索历史
-- [ ] **13.1 智能搜索引擎**
-  - 实现 `SmartSearchEngine` 结构体
-  - 实现搜索索引: commit_messages, authors, files
-  - 支持正则表达式和模糊匹配
-- [ ] **13.2 复合过滤器**
-  - 实现 `SearchQuery` 结构支持多条件搜索
-  - 实现时间范围、作者、文件路径过滤
-  - 实现搜索结果排序和相关性评分
-- [ ] **13.3 搜索UI组件**
-  - 实现搜索框组件和实时搜索
-  - 实现搜索历史和查询保存功能
-  - 实现搜索结果高亮和导航
+// 添加 get_branches 实现
+async fn get_branches(&self) -> Result<Vec<Branch>, Box<dyn std::error::Error>> {
+    use tokio::process::Command;
 
-### Task 14: 实现Stash管理功能  
-**功能覆盖**: Stash列表、预览、分类管理
-- [ ] **14.1 Stash列表组件**
-  - 实现 `StashView` 显示所有stash条目
-  - 显示stash描述、时间、分支信息
-  - 实现stash选择和多选功能
-- [ ] **14.2 Stash操作功能**
-  - 实现stash内容预览和diff显示
-  - 实现stash应用、删除、重命名操作
-  - 实现智能stash应用和冲突处理
-- [ ] **14.3 Stash分类管理**
-  - 实现stash描述编辑和分类标记
-  - 实现stash搜索和过滤功能
-  - 实现stash导出和批量操作
+    let output = Command::new("git")
+        .args(&["branch", "-a", "--format=%(refname:short)|%(HEAD)"])
+        .output()
+        .await?;
 
-## 🧪 Phase 4: 测试与部署
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let branches = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 1 {
+                let name = parts[0].trim().to_string();
+                let is_current = parts.get(1).map_or(false, |&h| h == "*");
+                Some(Branch::new(name, is_current))
+            } else {
+                None
+            }
+        })
+        .collect();
 
-### Task 15: 集成测试和UI测试
-**功能覆盖**: 组件测试、交互测试、回归测试
-- [ ] **15.1 单元测试**
-  - 为所有核心模块编写单元测试
-  - 测试状态管理、布局计算、事件处理
-  - 测试Git操作、缓存机制、配置管理
-- [ ] **15.2 集成测试**
-  - 测试组件间交互和数据流
-  - 测试完整的用户操作流程
-  - 测试异步操作和错误处理
-- [ ] **15.3 UI测试**
-  - 测试键盘导航和焦点管理
-  - 测试布局响应和界面渲染
-  - 测试主题切换和配置更新
-
-### Task 16: 性能测试和优化调优
-**功能覆盖**: 性能基准、内存优化、响应时间
-- [ ] **16.1 性能基准测试**
-  - 建立渲染性能基准测试
-  - 测试大仓库加载性能
-  - 测试内存使用和泄漏检测
-- [ ] **16.2 性能优化**
-  - 优化虚拟滚动和渲染性能
-  - 优化Git命令执行和缓存策略
-  - 优化异步任务调度和并发控制
-- [ ] **16.3 用户体验优化**  
-  - 优化启动时间和响应速度
-  - 优化大数据集的加载体验
-  - 优化错误处理和用户反馈
-
-### Task 17: 文档完善和部署准备
-**功能覆盖**: 用户手册、开发文档、发布准备
-- [ ] **17.1 用户文档**
-  - 编写用户使用手册和快捷键指南
-  - 创建功能演示和最佳实践文档
-  - 编写常见问题解答和故障排除指南
-- [ ] **17.2 开发者文档**
-  - 完善API文档和代码注释
-  - 编写组件开发指南和扩展说明
-  - 创建架构决策记录(ADR)
-- [ ] **17.3 发布准备**
-  - 版本管理和变更日志更新
-  - CI/CD配置和自动化测试
-  - 发布包构建和分发准备
-
-## 📋 任务依赖关系
-
-```
-Task 1 (基础结构) 
-    └─► Task 2 (状态管理) 
-        └─► Task 3 (布局焦点) ──┐
-        └─► Task 4 (事件处理) ──┤
-        └─► Task 5 (Git接口) ───┤
-                               ▼
-                        Task 6 (组件框架)
-                               ▼
-            ┌──────────────────┼──────────────────┐
-            ▼                  ▼                  ▼
-       Task 7 (侧边栏)   Task 8 (内容面板)  Task 9 (详情面板)
-            │                  │                  │
-            └──────────────────┼──────────────────┘
-                               ▼
-                   Task 10 (缓存性能) ──┐
-                   Task 11 (配置主题) ──┤
-                   Task 12 (智能Git) ──┤
-                   Task 13 (搜索过滤) ──┤
-                   Task 14 (Stash) ────┤
-                                       ▼
-                             Task 15 (集成测试)
-                                       ▼  
-                             Task 16 (性能优化)
-                                       ▼
-                             Task 17 (文档发布)
+    Ok(branches)
+}
 ```
 
-## 🎯 质量检查清单
+### Task 0.2: 组件渲染系统 🚨
+**阻塞问题**: Component trait 是空的，无法渲染任何内容
+**解决方案**: 定义基础 Component trait
 
-每个任务完成后需要检查：
+**📋 需求依据:**
+- **需求文档.md** §用户界面 - 直观的TUI界面设计
+- **NFR-004** (系统需求文档.md) - 可维护性需求，模块化设计
 
-**功能完整性**:
-- ✅ 是否实现了技术文档中定义的所有接口
-- ✅ 是否覆盖了所有边界情况和错误处理  
-- ✅ 是否符合API设计文档的规范
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §组件系统架构
+- **TUI_CORE_MODULES.md** §components/ - 组件模块设计
+- **参考实现**: `src/tui_enhanced.rs` 的组件实现模式
 
-**代码质量**:
-- ✅ 代码注释和文档是否完整
-- ✅ 单元测试覆盖率是否达标
-- ✅ 性能是否满足要求
+**文件**: `src/tui_unified/components/base/component.rs`
 
-**用户体验**:
-- ✅ 交互是否直观流畅
-- ✅ 错误提示是否清晰有用  
-- ✅ 响应时间是否在可接受范围
+```rust
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use crossterm::event::KeyEvent;
+use crate::tui_unified::state::AppState;
+use crate::tui_unified::Result;
 
-这个任务清单确保了技术文档中的每个功能点都有对应的实现任务，避免了开发过程中的遗漏或处理方式偏差。
+/// 组件基础 trait
+pub trait Component {
+    /// 渲染组件
+    fn render(&mut self, f: &mut Frame, area: Rect, state: &AppState);
+
+    /// 处理按键事件
+    fn handle_key_event(&mut self, key: KeyEvent, state: &mut AppState) -> Result<bool>;
+
+    /// 组件挂载时调用
+    fn mount(&mut self, _state: &mut AppState) {}
+
+    /// 组件卸载时调用
+    fn unmount(&mut self, _state: &mut AppState) {}
+
+    /// 更新组件状态
+    fn update(&mut self, _state: &mut AppState) {}
+}
+```
+
+### Task 0.3: 连接视图渲染 🚨
+**阻塞问题**: app.rs 只显示静态文本
+**解决方案**: 根据 AppState 显示真实数据
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 显示Git仓库信息
+- **NFR-001** (系统需求文档.md) - 性能需求，响应式界面
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §渲染流程
+- **TUI_COMPONENT_RELATIONSHIPS.md** - 组件数据流
+- **参考实现**: `src/tui_hierarchical.rs:1378-1405` render_commit_list()
+
+**文件**: `src/tui_unified/app.rs` 的 `render` 方法
+
+```rust
+// 修改 render 方法中的主内容区（约第 132-140 行）
+fn render(&mut self, frame: &mut ratatui::Frame) {
+    // ... 前面的代码保持不变 ...
+
+    // 主内容区 - 显示真实的 Git 提交列表
+    let state = self._state.blocking_read(); // 获取状态
+
+    let content_text = if state.repo_state.commits.is_empty() {
+        "Loading commits...".to_string()
+    } else {
+        state.repo_state.commits
+            .iter()
+            .take(10)
+            .map(|c| format!("{} - {}", &c.short_hash, &c.message))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let content = Paragraph::new(Text::raw(content_text))
+        .block(Block::default().title("Git Log").borders(Borders::ALL).border_style(content_style));
+    frame.render_widget(content, layout.content);
+
+    // ... 后面的代码保持不变 ...
+}
+```
+
+### Task 0.4: 初始化 Git 数据 🚨
+**阻塞问题**: AppState 创建时不加载 Git 数据
+**解决方案**: 在初始化时加载数据
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 自动提交信息生成，需要Git数据
+- **NFR-002** (系统需求文档.md) - 可靠性需求，数据完整性
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §状态管理系统 - 数据初始化流程
+- **TUI_API_DESIGN.md** §状态管理接口
+- **参考实现**: `src/tui_hierarchical.rs:238-284` run() 方法的初始化逻辑
+
+**文件**: `src/tui_unified/app.rs` 的 `run_loop` 方法
+
+```rust
+// 取消注释第 87-88 行，添加实现
+async fn run_loop<B>(&mut self, terminal: &mut Terminal<B>) -> Result<()>
+where
+    B: ratatui::backend::Backend,
+{
+    // 初始化Git数据
+    self.load_initial_git_data().await?;
+
+    // ... 后续代码不变 ...
+}
+
+// 添加新方法
+impl TuiUnifiedApp {
+    async fn load_initial_git_data(&mut self) -> Result<()> {
+        use crate::tui_unified::git::interface::{GitRepositoryAPI, AsyncGitImpl};
+
+        let git = AsyncGitImpl::new(std::env::current_dir()?);
+
+        // 加载提交历史
+        if let Ok(commits) = git.get_commits(Some(50)).await {
+            let mut state = self._state.write().await;
+            state.repo_state.update_commits(commits);
+        }
+
+        // 加载分支列表
+        if let Ok(branches) = git.get_branches().await {
+            let mut state = self._state.write().await;
+            state.repo_state.update_branches(branches);
+        }
+
+        Ok(())
+    }
+}
+```
+
+---
+
+## 📊 P1 - 核心功能任务（本周完成）
+
+### Task 1.1: 完善 Git 数据模型
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 自动提交信息生成，需要完整Git数据
+- **FR-004** (系统需求文档.md) - Tag 管理功能
+- **NFR-001** (系统需求文档.md) - 性能需求，数据结构优化
+
+**🏗️ 技术指导:**
+- **TUI_CORE_MODULES.md** §git/models.rs - Git数据模型定义
+- **TUI_API_DESIGN.md** §Git数据结构
+- **参考实现**: `src/git/commit.rs` 和 `src/git/tag.rs`
+
+**任务清单:**
+- [ ] 实现完整的 Commit 结构体字段解析
+- [ ] 实现 Branch 的 upstream 和 ahead/behind 信息
+- [ ] 实现 Tag 列表获取和解析
+- [ ] 实现 git status 解析
+
+### Task 1.2: 实现基础组件
+
+**📋 需求依据:**
+- **需求文档.md** §用户界面 - 直观的TUI界面设计
+- **NFR-004** (系统需求文档.md) - 可维护性需求，组件化设计
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §组件系统架构
+- **TUI_CORE_MODULES.md** §components/base/ - 基础组件设计
+- **参考实现**: `src/tui_enhanced.rs` 的组件实现
+
+**任务清单:**
+- [ ] 实现 ListWidget 通用列表组件
+- [ ] 实现 SidebarPanel 菜单组件
+- [ ] 实现 GitLogView 提交列表视图
+- [ ] 实现 BranchesView 分支列表视图
+
+### Task 1.3: 完善事件处理
+
+**📋 需求依据:**
+- **FR-005** (系统需求文档.md) - 多层级配置系统，自定义按键绑定
+- **NFR-001** (系统需求文档.md) - 性能需求，响应时间
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §事件处理流程
+- **TUI_CORE_MODULES.md** §events/ - 事件系统模块
+- **参考实现**: `src/tui_hierarchical.rs:859-1083` handle_key_event()
+
+**任务清单:**
+- [ ] 实现数字键 1-6 切换视图
+- [ ] 实现 j/k 列表导航
+- [ ] 实现 Enter 选择操作
+- [ ] 实现 / 进入搜索模式
+
+### Task 1.4: 实现 Diff 查看器
+
+**📋 需求依据:**
+- **FR-003** (系统需求文档.md) - 智能大文件与多文件变更处理
+- **需求文档.md** §用户界面 - 代码差异展示
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §Diff查看器设计
+- **TUI_CORE_MODULES.md** §components/widgets/diff_viewer.rs
+- **参考实现**: `src/diff_viewer.rs` 完整的DiffViewer实现
+
+**任务清单:**
+- [ ] 基础 diff 显示
+- [ ] 语法高亮支持
+- [ ] 文件导航
+
+---
+
+## 🔧 P2 - 重要功能任务（下周完成）
+
+### Task 2.1: Git 操作
+
+**📋 需求依据:**
+- **FR-004** (系统需求文档.md) - Tag 管理功能
+- **需求文档.md** §Git操作 - 分支管理、文件操作
+- **NFR-002** (系统需求文档.md) - 可靠性需求，错误处理
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §Git操作异步流程
+- **TUI_API_DESIGN.md** §Git操作接口
+- **参考实现**: `src/git/core.rs` 和 `src/commands/flow.rs`
+
+**任务清单:**
+- [ ] 分支切换 (checkout)
+- [ ] 分支创建/删除
+- [ ] 文件 stage/unstage
+- [ ] 查看文件差异
+
+### Task 2.2: 搜索和过滤
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 自动提交信息生成，需要历史查询
+- **NFR-001** (系统需求文档.md) - 性能需求，快速搜索响应
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §智能搜索算法
+- **TUI_CORE_MODULES.md** §algorithms/ - 搜索算法模块
+- **参考实现**: `src/tui_enhanced.rs` 的搜索功能实现
+
+**任务清单:**
+- [ ] 提交消息搜索
+- [ ] 作者过滤
+- [ ] 日期范围过滤
+- [ ] 搜索结果高亮
+
+### Task 2.3: 缓存优化
+
+**📋 需求依据:**
+- **NFR-001** (系统需求文档.md) - 性能需求，响应时间优化
+- **NFR-003** (系统需求文档.md) - 资源效率，内存使用优化
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §缓存策略
+- **TUI_CORE_MODULES.md** §cache/ - 缓存系统设计
+- **参考实现**: `src/config/mod.rs` 的缓存实现模式
+
+**任务清单:**
+- [ ] Git 命令结果缓存
+- [ ] 增量数据更新
+- [ ] 后台数据刷新
+
+---
+
+## 🤖 P3 - AI 集成任务（第三周）
+
+### Task 3.1: AI Commit 集成
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 自动提交信息生成
+- **FR-002** (系统需求文档.md) - 多AI服务提供商支持
+- **FR-003** (系统需求文档.md) - 智能大文件与多文件变更处理
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §AI集成架构
+- **TUI_API_DESIGN.md** §AI服务接口
+- **参考实现**: `src/core/ai/` 模块和 `src/commands/commit.rs`
+
+**任务清单:**
+- [ ] 在 TUI 中调用 AI 生成提交信息
+- [ ] 提交信息编辑界面
+- [ ] AI 配置界面
+- [ ] 执行提交操作
+
+### Task 3.2: 智能建议
+
+**📋 需求依据:**
+- **FR-001** (系统需求文档.md) - 智能推断 scope 和 type
+- **FR-003** (系统需求文档.md) - 智能作用域推断
+- **需求文档.md** §AI功能 - 基于历史的优化
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §智能分支操作算法
+- **TUI_CORE_MODULES.md** §smart/ - 智能组件模块
+- **参考实现**: `src/core/ai/agents/` 的智能推断逻辑
+
+**任务清单:**
+- [ ] 基于历史提交模式的建议
+- [ ] 提交信息模板
+- [ ] 智能 scope 推断
+
+---
+
+## ✨ P4 - 优化增强任务（持续改进）
+
+### Task 4.1: 用户体验
+
+**📋 需求依据:**
+- **FR-005** (系统需求文档.md) - 多层级配置系统
+- **NFR-004** (系统需求文档.md) - 可维护性需求
+- **需求文档.md** §用户体验 - 界面友好性
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §主题系统设计
+- **TUI_API_DESIGN.md** §配置管理接口
+- **参考实现**: `src/config/` 配置系统
+
+**任务清单:**
+- [ ] 主题系统
+- [ ] 按键绑定自定义
+- [ ] 命令面板
+- [ ] 撤销/重做
+
+### Task 4.2: 高级功能
+
+**📋 需求依据:**
+- **需求文档.md** §数据可视化 - 统计和图形展示
+- **NFR-001** (系统需求文档.md) - 性能需求，大数据处理
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §数据可视化设计
+- **TUI_COMPONENT_RELATIONSHIPS.md** - 组件交互设计
+- **参考实现**: `src/commands/history.rs` 的统计功能
+
+**任务清单:**
+- [ ] 提交图形显示
+- [ ] 统计仪表板
+- [ ] 文件树视图
+- [ ] 批量操作
+
+### Task 4.3: 性能优化
+
+**📋 需求依据:**
+- **NFR-001** (系统需求文档.md) - 性能需求，<100ms响应时间
+- **NFR-003** (系统需求文档.md) - 资源效率，内存<50MB
+
+**🏗️ 技术指导:**
+- **TUI_TECHNICAL_DESIGN.md** §性能优化策略
+- **TUI_CORE_MODULES.md** §algorithms/ - 虚拟滚动算法
+- **参考实现**: 项目中的性能优化实践
+
+**任务清单:**
+- [ ] 虚拟滚动
+- [ ] 懒加载
+- [ ] 内存优化
+- [ ] 渲染优化
+
+---
+
+## 📝 实施检查清单
+
+### 每完成一个 P0 任务后检查：
+- [ ] 代码能编译通过
+- [ ] `cargo run -- --tui-unified` 能运行
+- [ ] 能看到真实的 Git 数据
+- [ ] 没有 panic 或崩溃
+
+### 每完成一个 P1 任务后检查：
+- [ ] 功能正常工作
+- [ ] 用户交互流畅
+- [ ] 错误处理完善
+- [ ] 有基础测试
+
+### 每完成一个 P2+ 任务后检查：
+- [ ] 功能完整
+- [ ] 性能良好
+- [ ] 代码质量高
+- [ ] 文档完善
+
+---
+
+## 🔄 任务依赖关系
+
+```mermaid
+graph TD
+    P0.1[Git数据加载] --> P0.2[组件渲染]
+    P0.2 --> P0.3[视图连接]
+    P0.3 --> P0.4[数据初始化]
+
+    P0.4 --> P1.1[Git数据模型]
+    P0.4 --> P1.2[基础组件]
+    P1.2 --> P1.3[事件处理]
+    P1.1 --> P1.4[Diff查看器]
+
+    P1.3 --> P2.1[Git操作]
+    P1.3 --> P2.2[搜索过滤]
+    P1.1 --> P2.3[缓存优化]
+
+    P2.1 --> P3.1[AI集成]
+    P2.2 --> P3.2[智能建议]
+
+    P3.1 --> P4.1[用户体验]
+    P3.2 --> P4.2[高级功能]
+    P2.3 --> P4.3[性能优化]
+```
+
+---
+
+## 🏁 成功标准
+
+### P0 完成标准（今天）
+✅ 运行 `cargo run -- --tui-unified` 能看到：
+- 真实的 Git 提交历史
+- 真实的分支列表
+- 基础的键盘导航
+
+### P1 完成标准（本周）
+✅ 实现完整的 Git 仓库浏览器：
+- 所有视图都能显示数据
+- 流畅的导航体验
+- Diff 查看功能
+
+### P2 完成标准（下周）
+✅ 支持基础 Git 操作：
+- 能切换分支
+- 能搜索和过滤
+- 性能优化到位
+
+### P3 完成标准（第三周）
+✅ AI 功能完全集成：
+- 能在 TUI 中生成提交信息
+- 能直接提交代码
+
+---
+
+## 📚 参考资源
+
+### 可复用代码位置：
+1. **Git 命令执行**: `src/tui_hierarchical.rs:285-426`
+2. **提交列表渲染**: `src/tui_hierarchical.rs:1378-1405`
+3. **Diff 查看器**: `src/tui_enhanced.rs` 的 DiffViewer
+4. **Git 核心功能**: `src/git/core.rs`
+
+### 相关文档：
+- [TUI_TECHNICAL_DESIGN.md](TUI_TECHNICAL_DESIGN.md) - 技术架构设计
+- [TUI_CORE_MODULES.md](TUI_CORE_MODULES.md) - 核心模块设计
+- [TUI_API_DESIGN.md](TUI_API_DESIGN.md) - API 接口设计
+- [TUI_INTEGRATION_ANALYSIS.md](TUI_INTEGRATION_ANALYSIS.md) - 整合分析

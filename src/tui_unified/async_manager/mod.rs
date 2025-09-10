@@ -5,8 +5,8 @@ use tokio::sync::mpsc;
 
 pub struct AsyncTaskManager {
     tasks: HashMap<String, tokio::task::JoinHandle<()>>,
-    task_sender: mpsc::UnboundedSender<String>,
-    task_receiver: Option<mpsc::UnboundedReceiver<String>>,
+    _task_sender: mpsc::UnboundedSender<String>,    // 保留用于未来功能
+    _task_receiver: Option<mpsc::UnboundedReceiver<String>>,  // 保留用于未来功能
 }
 
 impl AsyncTaskManager {
@@ -14,8 +14,8 @@ impl AsyncTaskManager {
         let (sender, receiver) = mpsc::unbounded_channel();
         Self {
             tasks: HashMap::new(),
-            task_sender: sender,
-            task_receiver: Some(receiver),
+            _task_sender: sender,
+            _task_receiver: Some(receiver),
         }
     }
     

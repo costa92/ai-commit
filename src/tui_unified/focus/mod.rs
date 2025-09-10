@@ -2,6 +2,7 @@ pub mod manager;
 pub mod ring;
 
 pub use manager::FocusManager;
+pub use ring::{FocusRing, NavigationDirection};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusPanel {

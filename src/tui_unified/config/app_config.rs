@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+// 配置管理模块
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {

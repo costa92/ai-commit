@@ -283,7 +283,6 @@ impl QueryHistoryStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_query_history_creation() {
