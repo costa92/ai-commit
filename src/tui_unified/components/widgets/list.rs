@@ -1,6 +1,6 @@
 // 通用列表组件
 use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, widgets::{Block, Borders, List, ListItem, ListState}, text::Text, style::{Color, Style}};
+use ratatui::{Frame, layout::Rect, widgets::{Block, Borders, List, ListItem, ListState}, text::{Text, Line}, style::{Color, Style}};
 use crate::tui_unified::{
     state::AppState,
     components::base::{

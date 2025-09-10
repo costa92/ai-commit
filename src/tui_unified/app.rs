@@ -95,7 +95,7 @@ impl TuiUnifiedApp {
         let state = Arc::new(RwLock::new(AppState::new(&config).await?));
         
         let mut focus_manager = FocusManager::new();
-        focus_manager.set_focus(FocusPanel::Sidebar);
+        focus_manager.set_focus(FocusPanel::Content);  // 默认焦点在内容区，因为默认视图是GitLog
         
         Ok(Self {
             state: Arc::clone(&state),
@@ -169,6 +169,9 @@ impl TuiUnifiedApp {
             // 处理pending diff请求
             self.handle_pending_diff_request().await?;
             
+            // 处理直接分支切换请求
+            self.handle_direct_branch_switch_request().await?;
+            
             // 检查退出条件
             if self.should_quit {
                 break;
@@ -204,12 +207,50 @@ impl TuiUnifiedApp {
                 // 根据当前视图渲染主内容区
                 match current_view {
                     crate::tui_unified::state::app_state::ViewType::GitLog => {
-                        self.git_log_view.set_focus(self.focus_manager.current_panel == FocusPanel::Content);
-                        self.git_log_view.render(frame, layout.content, &*state);
+                        // Git Log 视图：左侧显示git log，右侧显示分支列表
+                        use ratatui::layout::{Constraint, Direction, Layout};
+                        
+                        // 分割区域：左侧60%显示git log，右侧40%显示分支列表
+                        let chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([
+                                Constraint::Percentage(60), // Git log
+                                Constraint::Percentage(40), // 分支列表
+                            ])
+                            .split(layout.content);
+
+                        let content_focused = self.focus_manager.current_panel == FocusPanel::Content;
+                        
+                        // 渲染git log
+                        self.git_log_view.set_focus(content_focused);
+                        self.git_log_view.render(frame, chunks[0], &*state);
+                        
+                        // 渲染分支列表
+                        self.branches_view.set_focus(false); // 分支列表在git log视图中不获得焦点
+                        self.branches_view.render(frame, chunks[1], &*state);
                     }
                     crate::tui_unified::state::app_state::ViewType::Branches => {
-                        self.branches_view.set_focus(self.focus_manager.current_panel == FocusPanel::Content);
-                        self.branches_view.render(frame, layout.content, &*state);
+                        // 分支视图：左侧显示分支列表，右侧显示该分支的git log
+                        use ratatui::layout::{Constraint, Direction, Layout};
+                        
+                        // 分割区域：左侧40%显示分支列表，右侧60%显示git log
+                        let chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([
+                                Constraint::Percentage(40), // 分支列表
+                                Constraint::Percentage(60), // Git log
+                            ])
+                            .split(layout.content);
+
+                        let content_focused = self.focus_manager.current_panel == FocusPanel::Content;
+                        
+                        // 渲染分支列表
+                        self.branches_view.set_focus(content_focused);
+                        self.branches_view.render(frame, chunks[0], &*state);
+                        
+                        // 渲染git log
+                        self.git_log_view.set_focus(false); // git log在分支视图中不获得焦点
+                        self.git_log_view.render(frame, chunks[1], &*state);
                     }
                     crate::tui_unified::state::app_state::ViewType::Tags => {
                         self.tags_view.set_focus(self.focus_manager.current_panel == FocusPanel::Content);
@@ -323,6 +364,7 @@ impl TuiUnifiedApp {
 
         frame.render_widget(status_bar, area);
     }
+
     
     /// 使用状态数据渲染界面 (静态方法以避免借用冲突)
     fn render_with_state_static(frame: &mut ratatui::Frame, layout: LayoutResult, state: &AppState, focus_manager: &FocusManager, current_mode: AppMode) {
@@ -723,6 +765,11 @@ impl TuiUnifiedApp {
                 KeyCode::Char('1') => {
                     state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog);
                     self.focus_manager.set_focus(FocusPanel::Content);
+                    // 确保GitLogView有正确的选择状态
+                    if !state.repo_state.commits.is_empty() {
+                        self.git_log_view.set_focus(true);
+                        self.git_log_view.set_selected_index(Some(0));
+                    }
                 }
                 KeyCode::Char('2') => {
                     state.set_current_view(crate::tui_unified::state::app_state::ViewType::Branches);
@@ -743,6 +790,21 @@ impl TuiUnifiedApp {
                 KeyCode::Char('6') => {
                     state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory);
                     self.focus_manager.set_focus(FocusPanel::Content);
+                }
+                KeyCode::Tab => {
+                    // 在侧边栏和内容区之间切换焦点
+                    match self.focus_manager.current_panel {
+                        FocusPanel::Sidebar => {
+                            self.focus_manager.set_focus(FocusPanel::Content);
+                        }
+                        FocusPanel::Content => {
+                            self.focus_manager.set_focus(FocusPanel::Sidebar);
+                        }
+                        FocusPanel::Detail => {
+                            // 从详情区切换到侧边栏
+                            self.focus_manager.set_focus(FocusPanel::Sidebar);
+                        }
+                    }
                 }
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     // 释放写锁，然后执行刷新操作
@@ -983,7 +1045,13 @@ impl TuiUnifiedApp {
         
         // 更新GitLogView的commit数据
         let commits = state_ref.repo_state.commits.clone();
+        let has_commits = !commits.is_empty();
         self.git_log_view.update_commits(commits);
+        
+        // 确保GitLogView获得焦点（因为它是默认视图）
+        if has_commits {
+            self.git_log_view.set_focus(true);
+        }
         
         Ok(())
     }
@@ -1118,8 +1186,21 @@ impl TuiUnifiedApp {
                 // 统一格式：带行号的语法高亮显示
                 let lines = self.parse_diff_for_unified(&diff_content);
 
+                // 获取当前文件名，用于显示在标题中
+                let current_file_name = if !viewer.files.is_empty() {
+                    let file = &viewer.files[viewer.selected_file];
+                    // 如果路径太长，截断显示
+                    if file.path.len() > 35 {
+                        format!("...{}", &file.path[file.path.len()-32..])
+                    } else {
+                        file.path.clone()
+                    }
+                } else {
+                    "Unknown".to_string()
+                };
+
                 let diff_paragraph = Paragraph::new(lines)
-                    .block(Block::default().borders(Borders::ALL).title("Unified Diff"))
+                    .block(Block::default().borders(Borders::ALL).title(format!("📄 Unified Diff: {}", current_file_name)))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
@@ -1138,15 +1219,28 @@ impl TuiUnifiedApp {
                 // 解析diff内容，构建并排视图
                 let (left_lines, right_lines) = self.parse_diff_for_side_by_side(&diff_content);
 
+                // 获取当前文件名，用于显示在标题中
+                let current_file_name = if !viewer.files.is_empty() {
+                    let file = &viewer.files[viewer.selected_file];
+                    // 如果路径太长，截断显示
+                    if file.path.len() > 35 {
+                        format!("...{}", &file.path[file.path.len()-32..])
+                    } else {
+                        file.path.clone()
+                    }
+                } else {
+                    "Unknown".to_string()
+                };
+
                 let left_paragraph = Paragraph::new(left_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Original"))
+                    .block(Block::default().borders(Borders::ALL).title(format!("🔻 Original: {}", current_file_name)))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(left_paragraph, horizontal_chunks[0]);
 
                 let right_paragraph = Paragraph::new(right_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Modified"))
+                    .block(Block::default().borders(Borders::ALL).title(format!("🔺 Modified: {}", current_file_name)))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
@@ -1165,15 +1259,28 @@ impl TuiUnifiedApp {
                 // 解析diff内容，构建上下分割视图
                 let (removed_lines, added_lines) = self.parse_diff_for_split(&diff_content);
 
+                // 获取当前文件名，用于显示在标题中
+                let current_file_name = if !viewer.files.is_empty() {
+                    let file = &viewer.files[viewer.selected_file];
+                    // 如果路径太长，截断显示
+                    if file.path.len() > 35 {
+                        format!("...{}", &file.path[file.path.len()-32..])
+                    } else {
+                        file.path.clone()
+                    }
+                } else {
+                    "Unknown".to_string()
+                };
+
                 let top_paragraph = Paragraph::new(removed_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Removed (-)"))
+                    .block(Block::default().borders(Borders::ALL).title(format!("🗑️ Removed (-): {}", current_file_name)))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(top_paragraph, vertical_chunks[0]);
 
                 let bottom_paragraph = Paragraph::new(added_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Added (+)"))
+                    .block(Block::default().borders(Borders::ALL).title(format!("➕ Added (+): {}", current_file_name)))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
@@ -1191,7 +1298,13 @@ impl TuiUnifiedApp {
         let mut old_line_num = 0u32;
         let mut new_line_num = 0u32;
         
-        for line in diff_content.lines() {
+        // 收集所有行并按块进行处理
+        let lines: Vec<&str> = diff_content.lines().collect();
+        let mut i = 0;
+        
+        while i < lines.len() {
+            let line = lines[i];
+            
             if line.starts_with("@@") {
                 // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@
                 if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
@@ -1217,26 +1330,61 @@ impl TuiUnifiedApp {
                 let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)));
                 left_lines.push(header_line.clone());
                 right_lines.push(header_line);
+                i += 1;
                 continue;
             }
             
             if line.starts_with("diff --git") || line.starts_with("index") || 
                line.starts_with("---") || line.starts_with("+++") {
+                i += 1;
                 continue;
             }
             
             if line.starts_with('-') {
-                // 删除的行：只在左边显示
-                let line_content = &line[1..];
-                let formatted_line = format!("{:4} │ {}", old_line_num, line_content);
-                left_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Red))));
+                // 收集连续的删除行
+                let mut removed_lines = Vec::new();
+                while i < lines.len() && lines[i].starts_with('-') {
+                    removed_lines.push(lines[i]);
+                    i += 1;
+                }
                 
-                // 右边显示空行
-                right_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
+                // 收集后续的添加行
+                let mut added_lines = Vec::new();
+                while i < lines.len() && lines[i].starts_with('+') {
+                    added_lines.push(lines[i]);
+                    i += 1;
+                }
                 
-                old_line_num += 1;
+                // 处理删除和添加行的对齐
+                let max_lines = removed_lines.len().max(added_lines.len());
+                
+                for j in 0..max_lines {
+                    if j < removed_lines.len() {
+                        // 有删除行，在左侧显示
+                        let line_content = &removed_lines[j][1..];
+                        let formatted_line = format!("{:4} │ {}", old_line_num + j as u32, line_content);
+                        left_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Red))));
+                    } else {
+                        // 没有删除行，左侧显示空行
+                        left_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
+                    }
+                    
+                    if j < added_lines.len() {
+                        // 有添加行，在右侧显示
+                        let line_content = &added_lines[j][1..];
+                        let formatted_line = format!("{:4} │ {}", new_line_num + j as u32, line_content);
+                        right_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Green))));
+                    } else {
+                        // 没有添加行，右侧显示空行
+                        right_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
+                    }
+                }
+                
+                old_line_num += removed_lines.len() as u32;
+                new_line_num += added_lines.len() as u32;
+                
             } else if line.starts_with('+') {
-                // 添加的行：只在右边显示
+                // 只有添加行（没有前面的删除行）
                 let line_content = &line[1..];
                 let formatted_line = format!("{:4} │ {}", new_line_num, line_content);
                 right_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Green))));
@@ -1245,6 +1393,8 @@ impl TuiUnifiedApp {
                 left_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
                 
                 new_line_num += 1;
+                i += 1;
+                
             } else if line.starts_with(' ') {
                 // 上下文行：两边都显示
                 let line_content = &line[1..];
@@ -1256,11 +1406,16 @@ impl TuiUnifiedApp {
                 
                 old_line_num += 1;
                 new_line_num += 1;
+                i += 1;
+                
             } else if !line.is_empty() {
                 // 其他内容行（如文件名等）：两边都显示
                 let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)));
                 left_lines.push(header_line.clone());
                 right_lines.push(header_line);
+                i += 1;
+            } else {
+                i += 1;
             }
         }
         
@@ -1470,7 +1625,7 @@ impl TuiUnifiedApp {
                     height: 1,
                 };
                 
-                let help_text = "Press [Esc] or [q] to close | [↑↓/jk] scroll | [PgUp/PgDn] page | [1] unified | [2] side-by-side | [3] file tree | [w] word-level | [n] line numbers";
+                let help_text = "Press [Esc] or [q] to close | [↑↓/jk] scroll | [PgUp/PgDn/ud] page | [g/G] start/end | [←→] files (side-by-side) | [1] unified | [2] side-by-side | [3/t] file list | [w] word-level | [n] line numbers | [h] syntax";
                 let help = Paragraph::new(Text::from(help_text))
                     .style(Style::default().fg(Color::Gray))
                     .alignment(Alignment::Center);
@@ -1677,7 +1832,7 @@ impl TuiUnifiedApp {
                                 viewer.set_view_mode(crate::diff_viewer::DiffViewMode::SideBySide);
                             }
                             KeyCode::Char('3') => {
-                                viewer.set_view_mode(crate::diff_viewer::DiffViewMode::Split);
+                                viewer.show_file_list = !viewer.show_file_list;
                             }
                             KeyCode::Char('t') => {
                                 viewer.show_file_list = !viewer.show_file_list;
@@ -1848,6 +2003,21 @@ impl TuiUnifiedApp {
                     );
                 }
             }
+        }
+        
+        Ok(())
+    }
+
+    async fn handle_direct_branch_switch_request(&mut self) -> Result<()> {
+        // 获取并清除直接分支切换请求
+        let branch_name = {
+            let mut state = self.state.write().await;
+            state.get_direct_branch_switch()
+        };
+        
+        if let Some(branch_name) = branch_name {
+            // 直接切换分支
+            self.checkout_branch_directly(&branch_name).await?;
         }
         
         Ok(())
@@ -2210,6 +2380,35 @@ impl TuiUnifiedApp {
         Ok(())
     }
 
+    /// 直接切换分支（仿照 tui_enhanced 的实现）
+    async fn checkout_branch_directly(&mut self, branch_name: &str) -> Result<()> {
+        let output = tokio::process::Command::new("git")
+            .args(["checkout", branch_name])
+            .output()
+            .await?;
+        
+        let mut state = self.state.write().await;
+        if output.status.success() {
+            state.add_notification(
+                format!("Switched to branch '{}'", branch_name),
+                crate::tui_unified::state::app_state::NotificationLevel::Success
+            );
+            drop(state);
+            
+            // 重新加载分支列表和提交记录
+            let _ = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::Branches).await;
+            let _ = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::GitLog).await;
+        } else {
+            let error = String::from_utf8_lossy(&output.stderr);
+            state.add_notification(
+                format!("Failed to switch branch: {}", error),
+                crate::tui_unified::state::app_state::NotificationLevel::Error
+            );
+        }
+        
+        Ok(())
+    }
+
     async fn confirm_branch_switch(&mut self) -> Result<()> {
         // 获取待切换的分支名
         let branch_name = {
@@ -2230,36 +2429,7 @@ impl TuiUnifiedApp {
             }
         };
         
-        // 首先检查工作目录是否干净（没有未提交的更改）
-        let status_result = tokio::process::Command::new("git")
-            .arg("status")
-            .arg("--porcelain")
-            .output()
-            .await;
-            
-        match status_result {
-            Ok(output) => {
-                if !output.stdout.is_empty() {
-                    // 有未提交的更改，禁止切换
-                    let mut state = self.state.write().await;
-                    state.add_notification(
-                        format!("Cannot switch branches: You have uncommitted changes.\nPlease commit or stash your changes first."),
-                        crate::tui_unified::state::app_state::NotificationLevel::Error
-                    );
-                    return Ok(());
-                }
-            }
-            Err(e) => {
-                let mut state = self.state.write().await;
-                state.add_notification(
-                    format!("Failed to check git status: {}", e),
-                    crate::tui_unified::state::app_state::NotificationLevel::Error
-                );
-                return Ok(());
-            }
-        }
-        
-        // 工作目录干净，执行分支切换
+        // 执行分支切换
         let switch_result = tokio::process::Command::new("git")
             .arg("checkout")
             .arg(&branch_name)
@@ -2276,23 +2446,9 @@ impl TuiUnifiedApp {
                     );
                     drop(state);
                     
-                    // 分支切换成功后刷新所有相关视图
-                    if let Err(e) = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::Branches).await {
-                        let mut state = self.state.write().await;
-                        state.add_notification(
-                            format!("Failed to refresh branches view: {}", e),
-                            crate::tui_unified::state::app_state::NotificationLevel::Warning
-                        );
-                    }
-                    
-                    // 同时刷新 git log，因为分支切换后提交历史会改变
-                    if let Err(e) = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::GitLog).await {
-                        let mut state = self.state.write().await;
-                        state.add_notification(
-                            format!("Failed to refresh git log: {}", e),
-                            crate::tui_unified::state::app_state::NotificationLevel::Warning
-                        );
-                    }
+                    // 分支切换成功后刷新相关视图
+                    let _ = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::Branches).await;
+                    let _ = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::GitLog).await;
                 } else {
                     let error_output = String::from_utf8_lossy(&output.stderr);
                     state.add_notification(

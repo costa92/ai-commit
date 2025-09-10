@@ -84,5 +84,22 @@ impl Stash {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FileStatus {
+    pub path: String,
+    pub status: String,
+    pub staged: bool,
+}
+
+impl FileStatus {
+    pub fn new(path: String, status: String, staged: bool) -> Self {
+        Self {
+            path,
+            status,
+            staged,
+        }
+    }
+}
+
 // Re-export QueryHistoryEntry from the main query_history module
 pub use crate::query_history::QueryHistoryEntry;

@@ -16,6 +16,20 @@ pub trait GitRepositoryAPI {
     async fn get_tags(&self) -> Result<Vec<Tag>, Box<dyn std::error::Error>>;
     async fn get_remotes(&self) -> Result<Vec<Remote>, Box<dyn std::error::Error>>;
     async fn get_stashes(&self) -> Result<Vec<Stash>, Box<dyn std::error::Error>>;
+    
+    // Task 2.1: Git Operations
+    async fn create_branch(&self, branch_name: &str, from_branch: Option<&str>) -> Result<(), Box<dyn std::error::Error>>;
+    async fn delete_branch(&self, branch_name: &str, force: bool) -> Result<(), Box<dyn std::error::Error>>;
+    async fn stage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>>;
+    async fn unstage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>>;
+    async fn stage_all(&self) -> Result<(), Box<dyn std::error::Error>>;
+    async fn get_working_tree_status(&self) -> Result<Vec<FileStatus>, Box<dyn std::error::Error>>;
+
+    // Task 2.2: Search and Filtering
+    async fn search_commits(&self, query: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn filter_commits_by_author(&self, author: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn filter_commits_by_date_range(&self, since: &str, until: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn search_branches(&self, query: &str) -> Result<Vec<Branch>, Box<dyn std::error::Error>>;
 }
 
 pub struct AsyncGitImpl {
@@ -517,5 +531,258 @@ impl GitRepositoryAPI for AsyncGitImpl {
         }
 
         Ok(stashes)
+    }
+
+    // Task 2.1: Git Operations Implementation
+    async fn create_branch(&self, branch_name: &str, from_branch: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args = vec!["checkout", "-b", branch_name];
+        
+        if let Some(from) = from_branch {
+            args.push(from);
+        }
+
+        let output = Command::new("git")
+            .args(&args)
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git create branch command failed: {}", stderr).into());
+        }
+
+        Ok(())
+    }
+
+    async fn delete_branch(&self, branch_name: &str, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+        let delete_flag = if force { "-D" } else { "-d" };
+        
+        let output = Command::new("git")
+            .args(["branch", delete_flag, branch_name])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git delete branch command failed: {}", stderr).into());
+        }
+
+        Ok(())
+    }
+
+    async fn stage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new("git")
+            .args(["add", file_path])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git add command failed: {}", stderr).into());
+        }
+
+        Ok(())
+    }
+
+    async fn unstage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new("git")
+            .args(["reset", "HEAD", file_path])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git reset command failed: {}", stderr).into());
+        }
+
+        Ok(())
+    }
+
+    async fn stage_all(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new("git")
+            .args(["add", "."])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git add all command failed: {}", stderr).into());
+        }
+
+        Ok(())
+    }
+
+    async fn get_working_tree_status(&self) -> Result<Vec<FileStatus>, Box<dyn std::error::Error>> {
+        let output = Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git status command failed: {}", stderr).into());
+        }
+
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        let mut file_statuses = Vec::new();
+
+        for line in output_str.lines() {
+            if line.len() >= 3 {
+                let status_code = &line[..2];
+                let file_path = &line[3..].to_string();
+                
+                let (status_text, staged) = match status_code {
+                    " M" => ("Modified", false),
+                    " A" => ("Added", false),
+                    " D" => ("Deleted", false),
+                    "M " => ("Modified", true),
+                    "A " => ("Added", true),
+                    "D " => ("Deleted", true),
+                    "??" => ("Untracked", false),
+                    "MM" => ("Modified (both)", false),
+                    "AM" => ("Added+Modified", false),
+                    "MD" => ("Modified+Deleted", false),
+                    _ => ("Unknown", false),
+                };
+                
+                file_statuses.push(FileStatus::new(
+                    file_path.clone(),
+                    status_text.to_string(),
+                    staged,
+                ));
+            }
+        }
+
+        Ok(file_statuses)
+    }
+
+    // Task 2.2: Search and Filtering Implementation
+    async fn search_commits(&self, query: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+        let limit_arg = limit.unwrap_or(50).to_string();
+        let output = Command::new("git")
+            .args([
+                "log",
+                "--grep", query,
+                "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
+                "--date=iso-strict",
+                "-n",
+                &limit_arg
+            ])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git search commits command failed: {}", stderr).into());
+        }
+
+        self.parse_commits_output(&output.stdout).await
+    }
+
+    async fn filter_commits_by_author(&self, author: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+        let limit_arg = limit.unwrap_or(50).to_string();
+        let output = Command::new("git")
+            .args([
+                "log",
+                "--author", author,
+                "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
+                "--date=iso-strict",
+                "-n",
+                &limit_arg
+            ])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git filter by author command failed: {}", stderr).into());
+        }
+
+        self.parse_commits_output(&output.stdout).await
+    }
+
+    async fn filter_commits_by_date_range(&self, since: &str, until: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+        let limit_arg = limit.unwrap_or(50).to_string();
+        let since_arg = format!("--since={}", since);
+        let until_arg = format!("--until={}", until);
+        
+        let output = Command::new("git")
+            .args([
+                "log",
+                &since_arg,
+                &until_arg,
+                "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
+                "--date=iso-strict",
+                "-n",
+                &limit_arg
+            ])
+            .current_dir(&self.repo_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Git filter by date range command failed: {}", stderr).into());
+        }
+
+        self.parse_commits_output(&output.stdout).await
+    }
+
+    async fn search_branches(&self, query: &str) -> Result<Vec<Branch>, Box<dyn std::error::Error>> {
+        let all_branches = self.get_branches().await?;
+        
+        // Filter branches by name containing the query
+        let filtered_branches = all_branches
+            .into_iter()
+            .filter(|branch| {
+                branch.name.to_lowercase().contains(&query.to_lowercase())
+            })
+            .collect();
+
+        Ok(filtered_branches)
+    }
+
+}
+
+impl AsyncGitImpl {
+    // Helper method to parse commits output
+    async fn parse_commits_output(&self, output: &[u8]) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+        let output_str = String::from_utf8_lossy(output);
+        let mut commits = Vec::new();
+
+        for line in output_str.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 9 {
+                let hash = parts[0].trim().to_string();
+                let author = parts[2].trim().to_string();
+                let date = parts[6].trim().to_string();
+                let subject = parts[7].trim().to_string();
+
+                // Get detailed file stats for this commit
+                let (files_changed, _insertions, _deletions) = self.get_commit_stats(&hash).await.unwrap_or((0, 0, 0));
+
+                commits.push(Commit {
+                    hash,
+                    message: subject.clone(),
+                    author,
+                    date,
+                    files_changed: files_changed as u32,
+                });
+            }
+        }
+
+        Ok(commits)
     }
 }

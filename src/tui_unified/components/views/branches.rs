@@ -157,8 +157,8 @@ impl Component for BranchesView {
                 self.refresh_branches(state);
                 EventResult::Handled
             }
-            KeyCode::Enter => {
-                // 切换到选中的分支
+            KeyCode::Enter | KeyCode::Char('c') => {
+                // 切换到选中的分支 (Enter 或 c 键)
                 if let Some(selected_branch) = self.selected_branch() {
                     // 不允许切换到当前分支
                     if selected_branch.is_current {
@@ -167,8 +167,8 @@ impl Component for BranchesView {
                             crate::tui_unified::state::app_state::NotificationLevel::Warning
                         );
                     } else {
-                        // 请求分支切换
-                        state.request_branch_switch(selected_branch.name.clone());
+                        // 请求直接分支切换（不通过模态框）
+                        state.request_direct_branch_switch(selected_branch.name.clone());
                     }
                 }
                 EventResult::Handled
@@ -178,10 +178,7 @@ impl Component for BranchesView {
                 self.refresh_branches(state);
                 EventResult::Handled
             }
-            KeyCode::Char('c') => {
-                // TODO: 创建新分支
-                EventResult::Handled
-            }
+            // 移除了 'c' 键，因为现在它用于分支切换
             KeyCode::Char('d') => {
                 // TODO: 删除选中的分支
                 EventResult::Handled

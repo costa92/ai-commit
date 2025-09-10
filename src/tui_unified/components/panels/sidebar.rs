@@ -28,31 +28,26 @@ impl SidebarPanel {
             MenuItem {
                 label: "📊 Git Log".to_string(),
                 key: '1',
-                description: "View commit history".to_string(),
-            },
-            MenuItem {
-                label: "🌲 Branches".to_string(),
-                key: '2',
-                description: "Manage branches".to_string(),
+                description: "View commit history with branches".to_string(),
             },
             MenuItem {
                 label: "🏷️ Tags".to_string(),
-                key: '3',
+                key: '2',
                 description: "View tags".to_string(),
             },
             MenuItem {
                 label: "📡 Remotes".to_string(),
-                key: '4',
+                key: '3',
                 description: "Manage remotes".to_string(),
             },
             MenuItem {
                 label: "💾 Stash".to_string(),
-                key: '5',
+                key: '4',
                 description: "Manage stash".to_string(),
             },
             MenuItem {
                 label: "📜 History".to_string(),
-                key: '6',
+                key: '5',
                 description: "Query history".to_string(),
             },
         ];
@@ -68,11 +63,11 @@ impl SidebarPanel {
     fn sync_selection_with_current_view(&mut self, state: &AppState) {
         let new_index = match state.current_view {
             crate::tui_unified::state::app_state::ViewType::GitLog => 0,
-            crate::tui_unified::state::app_state::ViewType::Branches => 1,
-            crate::tui_unified::state::app_state::ViewType::Tags => 2,
-            crate::tui_unified::state::app_state::ViewType::Remotes => 3,
-            crate::tui_unified::state::app_state::ViewType::Stash => 4,
-            crate::tui_unified::state::app_state::ViewType::QueryHistory => 5,
+            crate::tui_unified::state::app_state::ViewType::Branches => 0, // Branches 现在集成到 GitLog 中
+            crate::tui_unified::state::app_state::ViewType::Tags => 1,
+            crate::tui_unified::state::app_state::ViewType::Remotes => 2,
+            crate::tui_unified::state::app_state::ViewType::Stash => 3,
+            crate::tui_unified::state::app_state::ViewType::QueryHistory => 4,
         };
         
         if new_index < self.menu_items.len() {
@@ -181,27 +176,25 @@ impl Component for SidebarPanel {
                 // 根据选中的菜单项切换视图
                 match self.selected_index {
                     0 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog),
-                    1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Branches),
-                    2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
-                    3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
-                    4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
-                    5 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
+                    1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
+                    2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
+                    3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
+                    4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
                     _ => {}
                 }
                 EventResult::Handled
             }
-            KeyCode::Char(c) if c >= '1' && c <= '6' => {
+            KeyCode::Char(c) if c >= '1' && c <= '5' => {
                 let index = (c as u8 - b'1') as usize;
                 if index < self.menu_items.len() {
                     self.selected_index = index;
                     // 直接切换视图
                     match index {
                         0 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog),
-                        1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Branches),
-                        2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
-                        3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
-                        4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
-                        5 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
+                        1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
+                        2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
+                        3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
+                        4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
                         _ => {}
                     }
                 }

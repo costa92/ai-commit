@@ -253,6 +253,9 @@ impl DiffViewerComponent {
             *old_line_no += 1;
             *new_line_no += 1;
             (DiffLineType::Context, Some(*old_line_no), Some(*new_line_no))
+        } else if line.starts_with("\\") && line.contains("No newline at end of file") {
+            // 处理 "\ No newline at end of file" 标记
+            (DiffLineType::Context, None, None)
         } else {
             (DiffLineType::Header, None, None)
         };
@@ -333,7 +336,14 @@ impl DiffViewerComponent {
             DiffLineType::Removed => Style::default().fg(Color::Red),
             DiffLineType::Header => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             DiffLineType::Hunk => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
-            DiffLineType::Context => Style::default().fg(Color::White),
+            DiffLineType::Context => {
+                // 特殊处理 "No newline at end of file" 行
+                if line.content.starts_with("\\") && line.content.contains("No newline at end of file") {
+                    Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            },
             DiffLineType::FileTree => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             DiffLineType::Binary => Style::default().fg(Color::Magenta).add_modifier(Modifier::ITALIC),
         };
@@ -347,6 +357,11 @@ impl DiffViewerComponent {
 
     /// 格式化显示行
     fn format_line(&self, line: &DiffLine) -> String {
+        // 特殊处理 "No newline at end of file" 行
+        if line.content.starts_with("\\") && line.content.contains("No newline at end of file") {
+            return "⚠ No newline at end of file".to_string();
+        }
+        
         if self.show_line_numbers {
             let old_no = line.old_line_no.map_or("    ".to_string(), |n| format!("{:4}", n));
             let new_no = line.new_line_no.map_or("    ".to_string(), |n| format!("{:4}", n));
@@ -858,21 +873,36 @@ impl DiffViewerComponent {
                     result.push(ListItem::new(Line::from(Span::styled(content, style))));
                 }
                 DiffLineType::Context => {
-                    // 上下文行在两侧都显示
-                    let left_content = self.format_side_content(&line.content, line.old_line_no, half_width as usize, true);
-                    let right_content = self.format_side_content(&line.content, line.new_line_no, half_width as usize, false);
-                    
-                    let left_style = if is_selected { 
-                        Style::default().fg(Color::White).bg(Color::DarkGray)
-                    } else { 
-                        Style::default().fg(Color::White) 
-                    };
-                    
-                    result.push(ListItem::new(Line::from(vec![
-                        Span::styled(left_content, left_style),
-                        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(right_content, left_style),
-                    ])));
+                    // 检查是否为 "No newline at end of file" 标记
+                    if line.content.starts_with("\\") && line.content.contains("No newline at end of file") {
+                        // 特殊处理：以灰色显示，跨越整行
+                        let notice_style = if is_selected {
+                            Style::default().fg(Color::Gray).bg(Color::DarkGray)
+                        } else {
+                            Style::default().fg(Color::Gray)
+                        };
+                        
+                        // 将提示信息居中显示
+                        let notice_text = "⚠ No newline at end of file";
+                        let centered_content = format!("{:^width$}", notice_text, width = area_width.saturating_sub(2) as usize);
+                        result.push(ListItem::new(Line::from(Span::styled(centered_content, notice_style))));
+                    } else {
+                        // 普通上下文行在两侧都显示
+                        let left_content = self.format_side_content(&line.content, line.old_line_no, half_width as usize, true);
+                        let right_content = self.format_side_content(&line.content, line.new_line_no, half_width as usize, false);
+                        
+                        let left_style = if is_selected { 
+                            Style::default().fg(Color::White).bg(Color::DarkGray)
+                        } else { 
+                            Style::default().fg(Color::White) 
+                        };
+                        
+                        result.push(ListItem::new(Line::from(vec![
+                            Span::styled(left_content, left_style),
+                            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+                            Span::styled(right_content, left_style),
+                        ])));
+                    }
                 }
                 DiffLineType::Added => {
                     // 添加的行只在右侧显示
@@ -1054,7 +1084,7 @@ impl DiffViewerComponent {
     /// 导航：向上
     fn navigate_up(&mut self) {
         match self.display_mode {
-            DiffDisplayMode::FileTree | DiffDisplayMode::SideBySide => {
+            DiffDisplayMode::FileTree => {
                 // 文件列表导航
                 if let Some(current) = self.selected_file {
                     if current > 0 {
@@ -1071,6 +1101,10 @@ impl DiffViewerComponent {
                 // 同步状态
                 self.sync_file_selection();
             }
+            DiffDisplayMode::SideBySide => {
+                // 在Side-by-Side模式下，向上滚动内容
+                self.scroll_up(1);
+            }
             _ => {
                 self.scroll_up(1);
             }
@@ -1080,7 +1114,7 @@ impl DiffViewerComponent {
     /// 导航：向下
     fn navigate_down(&mut self) {
         match self.display_mode {
-            DiffDisplayMode::FileTree | DiffDisplayMode::SideBySide => {
+            DiffDisplayMode::FileTree => {
                 // 文件列表导航
                 if let Some(current) = self.selected_file {
                     if current < self.diff_files.len().saturating_sub(1) {
@@ -1097,6 +1131,10 @@ impl DiffViewerComponent {
                 // 同步状态
                 self.sync_file_selection();
             }
+            DiffDisplayMode::SideBySide => {
+                // 在Side-by-Side模式下，向下滚动内容
+                self.scroll_down(1);
+            }
             _ => {
                 self.scroll_down(1);
             }
@@ -1111,7 +1149,7 @@ impl DiffViewerComponent {
                     self.selected_file = Some(current.saturating_sub(5));
                 }
             }
-            _ => {
+            DiffDisplayMode::SideBySide | DiffDisplayMode::Unified => {
                 self.scroll_up(10);
             }
         }
@@ -1125,7 +1163,7 @@ impl DiffViewerComponent {
                     self.selected_file = Some((current + 5).min(self.diff_files.len().saturating_sub(1)));
                 }
             }
-            _ => {
+            DiffDisplayMode::SideBySide | DiffDisplayMode::Unified => {
                 self.scroll_down(10);
             }
         }
@@ -1295,10 +1333,26 @@ impl DiffViewerComponent {
             .map(|line| ListItem::new(Text::raw(line)))
             .collect();
 
+        // 构建标题，显示当前选中的文件名（截断长路径）
+        let title = if let Some(file_index) = self.selected_file {
+            if let Some(file) = self.diff_files.get(file_index) {
+                let display_path = if file.path.len() > 40 {
+                    format!("...{}", &file.path[file.path.len()-37..])
+                } else {
+                    file.path.clone()
+                };
+                format!("🔻 Old (-): {}", display_path)
+            } else {
+                "🔻 Old (-)".to_string()
+            }
+        } else {
+            "🔻 Old (-)".to_string()
+        };
+
         let old_list = List::new(old_lines)
             .block(
                 Block::default()
-                    .title("🔻 Old (-)")
+                    .title(title)
                     .borders(Borders::ALL)
                     .border_style(border_style)
             );
@@ -1316,10 +1370,26 @@ impl DiffViewerComponent {
             .map(|line| ListItem::new(Text::raw(line)))
             .collect();
 
+        // 构建标题，显示当前选中的文件名（截断长路径）
+        let title = if let Some(file_index) = self.selected_file {
+            if let Some(file) = self.diff_files.get(file_index) {
+                let display_path = if file.path.len() > 40 {
+                    format!("...{}", &file.path[file.path.len()-37..])
+                } else {
+                    file.path.clone()
+                };
+                format!("🔺 New (+): {}", display_path)
+            } else {
+                "🔺 New (+)".to_string()
+            }
+        } else {
+            "🔺 New (+)".to_string()
+        };
+
         let new_list = List::new(new_lines)
             .block(
                 Block::default()
-                    .title("🔺 New (+)")
+                    .title(title)
                     .borders(Borders::ALL)
                     .border_style(border_style)
             );
@@ -1624,6 +1694,39 @@ impl Component for DiffViewerComponent {
             (KeyCode::End, _) | (KeyCode::Char('G'), KeyModifiers::SHIFT) => {
                 self.navigate_end();
                 EventResult::Handled
+            }
+            // 在Side-by-Side模式下，左右箭头键用于在文件之间切换
+            (KeyCode::Left, _) => {
+                if self.display_mode == DiffDisplayMode::SideBySide {
+                    // 切换到上一个文件
+                    if let Some(current) = self.selected_file {
+                        if current > 0 {
+                            self.selected_file = Some(current - 1);
+                        } else if !self.diff_files.is_empty() {
+                            self.selected_file = Some(self.diff_files.len() - 1);
+                        }
+                        self.sync_file_selection();
+                    }
+                    EventResult::Handled
+                } else {
+                    EventResult::NotHandled
+                }
+            }
+            (KeyCode::Right, _) => {
+                if self.display_mode == DiffDisplayMode::SideBySide {
+                    // 切换到下一个文件
+                    if let Some(current) = self.selected_file {
+                        if current < self.diff_files.len().saturating_sub(1) {
+                            self.selected_file = Some(current + 1);
+                        } else if !self.diff_files.is_empty() {
+                            self.selected_file = Some(0);
+                        }
+                        self.sync_file_selection();
+                    }
+                    EventResult::Handled
+                } else {
+                    EventResult::NotHandled
+                }
             }
             // 其他快捷键
             (KeyCode::Char('n'), KeyModifiers::NONE) => {

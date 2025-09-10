@@ -54,6 +54,7 @@ pub struct SelectionState {
     pub selection_mode: SelectionMode,
     pub pending_diff_commit: Option<String>, // 待显示diff的提交哈希
     pub pending_branch_switch: Option<String>, // 待切换的分支名
+    pub direct_branch_switch: Option<String>, // 直接切换的分支名（不通过模态框）
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -260,6 +261,14 @@ impl AppState {
     
     pub fn get_pending_branch_switch(&mut self) -> Option<String> {
         self.selected_items.pending_branch_switch.take()
+    }
+    
+    pub fn request_direct_branch_switch(&mut self, branch_name: String) {
+        self.selected_items.direct_branch_switch = Some(branch_name);
+    }
+    
+    pub fn get_direct_branch_switch(&mut self) -> Option<String> {
+        self.selected_items.direct_branch_switch.take()
     }
     
     // 搜索状态管理
