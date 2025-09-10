@@ -194,18 +194,53 @@ impl CommitAgent {
     
     /// 清理提交消息
     fn clean_commit_message(&self, message: &str) -> String {
-        // 只取第一行，去除多余空白和引号
-        let cleaned = message.lines()
-            .next()
+        // 寻找符合 Conventional Commits 格式的行
+        for line in message.lines() {
+            let trimmed_line = line.trim();
+            
+            // 跳过空行和明显的解释性文本
+            if trimmed_line.is_empty() ||
+               trimmed_line.starts_with("Here") ||
+               trimmed_line.starts_with("Based") ||
+               trimmed_line.starts_with("The") ||
+               trimmed_line.starts_with("This") ||
+               trimmed_line.starts_with("Analysis") ||
+               trimmed_line.starts_with("Generated") ||
+               trimmed_line.starts_with("Commit message") ||
+               trimmed_line.starts_with("提交消息") ||
+               trimmed_line.contains("格式校验") ||
+               trimmed_line.contains("无效") ||
+               (trimmed_line.contains("message") && !trimmed_line.contains(":")) ||
+               (trimmed_line.contains("commit") && !trimmed_line.contains(":")) ||
+               trimmed_line.len() < 10 { // 过滤掉过短的行
+                continue;
+            }
+            
+            // 检查是否是有效的 commit 消息格式
+            if COMMIT_FORMAT_REGEX.is_match(trimmed_line) {
+                // 去除首尾的引号（单引号或双引号）
+                let cleaned = if (trimmed_line.starts_with('"') && trimmed_line.ends_with('"')) ||
+                                 (trimmed_line.starts_with('\'') && trimmed_line.ends_with('\'')) {
+                    trimmed_line[1..trimmed_line.len()-1].to_string()
+                } else {
+                    trimmed_line.to_string()
+                };
+                return cleaned;
+            }
+        }
+        
+        // 如果找不到符合格式的行，返回第一个非空行（兜底）
+        let fallback = message.lines()
+            .find(|line| !line.trim().is_empty())
             .unwrap_or("")
             .trim();
             
-        // 去除首尾的引号（单引号或双引号）
-        if (cleaned.starts_with('"') && cleaned.ends_with('"')) ||
-           (cleaned.starts_with('\'') && cleaned.ends_with('\'')) {
-            cleaned[1..cleaned.len()-1].to_string()
+        // 去除首尾的引号
+        if (fallback.starts_with('"') && fallback.ends_with('"')) ||
+           (fallback.starts_with('\'') && fallback.ends_with('\'')) {
+            fallback[1..fallback.len()-1].to_string()
         } else {
-            cleaned.to_string()
+            fallback.to_string()
         }
     }
 }

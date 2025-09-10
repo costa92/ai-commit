@@ -63,6 +63,11 @@ impl GitLogView {
         self.list_widget.selected_item()
     }
 
+    /// 更新commit列表数据
+    pub fn update_commits(&mut self, commits: Vec<Commit>) {
+        self.list_widget.set_items(commits);
+    }
+
     pub fn toggle_details(&mut self) {
         self.show_details = !self.show_details;
         self.update_title();

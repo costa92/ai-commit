@@ -100,6 +100,7 @@ pub enum ModalType {
     Input,
     Progress,
     DiffViewer,
+    AICommit,
 }
 
 #[derive(Debug, Clone)]
@@ -327,6 +328,52 @@ impl AppState {
                 ModalButton {
                     label: "Close".to_string(),
                     action: ModalAction::Cancel,
+                }
+            ],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+    }
+    
+    pub fn show_ai_commit_modal(&mut self, message: String, status: String) {
+        let modal = ModalState {
+            modal_type: ModalType::AICommit,
+            title: "AI Commit".to_string(),
+            content: format!("Status: {}\n\nMessage: {}", status, message.trim()),
+            buttons: vec![
+                ModalButton {
+                    label: "Commit (Enter)".to_string(),
+                    action: ModalAction::Ok,
+                },
+                ModalButton {
+                    label: "Edit (e)".to_string(),
+                    action: ModalAction::Custom("edit".to_string()),
+                },
+                ModalButton {
+                    label: "Cancel (Esc)".to_string(),
+                    action: ModalAction::Cancel,
+                }
+            ],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+    }
+
+    pub fn show_ai_commit_push_modal(&mut self, status: String) {
+        let modal = ModalState {
+            modal_type: ModalType::AICommit,
+            title: "AI Commit - Push".to_string(),
+            content: format!("{}\n\nPush changes to remote repository?", status),
+            buttons: vec![
+                ModalButton {
+                    label: "Push (y/Enter)".to_string(),
+                    action: ModalAction::Yes,
+                },
+                ModalButton {
+                    label: "Skip (n/Esc)".to_string(),
+                    action: ModalAction::No,
                 }
             ],
             default_button: 0,

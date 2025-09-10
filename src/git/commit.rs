@@ -125,6 +125,40 @@ pub async fn get_git_diff() -> anyhow::Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// 获取所有变更（包括未暂存的工作区变更）用于 AI commit
+pub async fn get_all_changes_diff() -> anyhow::Result<String> {
+    // 首先检查是否有暂存的变更
+    let staged_output = Command::new("git")
+        .args(["diff", "--cached"])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run git diff --cached: {}", e))?;
+
+    let staged_diff = String::from_utf8_lossy(&staged_output.stdout);
+    
+    if !staged_diff.trim().is_empty() {
+        // 有暂存的变更，返回暂存变更
+        return Ok(staged_diff.to_string());
+    }
+    
+    // 没有暂存变更，获取工作区变更
+    let unstaged_output = Command::new("git")
+        .args(["diff"])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run git diff: {}", e))?;
+
+    let unstaged_diff = String::from_utf8_lossy(&unstaged_output.stdout);
+    
+    if !unstaged_diff.trim().is_empty() {
+        // 有工作区变更，返回工作区变更
+        return Ok(unstaged_diff.to_string());
+    }
+    
+    // 都没有变更，返回空字符串
+    Ok(String::new())
+}
+
 pub async fn git_commit_allow_empty(message: &str) -> anyhow::Result<()> {
     let status = Command::new("git")
         .args(["commit", "--allow-empty", "-m", message])

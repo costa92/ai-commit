@@ -32,11 +32,16 @@ use crate::tui_unified::{
         },
         widgets::{
             search_box::SearchBox,
+            commit_editor::CommitEditor,
         },
     },
     Result
 };
-use crate::diff_viewer::{DiffViewer, render_diff_viewer};
+use crate::diff_viewer::{DiffViewer};
+use crate::core::ai::agents::manager::AgentManager;
+use crate::core::ai::agents::{AgentTask, AgentContext, TaskType, AgentConfig};
+use crate::config::Config;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AppMode {
@@ -45,6 +50,7 @@ pub enum AppMode {
     Command,     // 命令模式
     Help,        // 帮助模式
     Diff,        // 全屏diff模式
+    AICommit,    // AI提交模式
 }
 
 pub struct TuiUnifiedApp {
@@ -65,6 +71,7 @@ pub struct TuiUnifiedApp {
     query_history_view: QueryHistoryView,
     search_box: SearchBox,
     diff_viewer: Option<DiffViewer>,
+    commit_editor: CommitEditor,
     
     // 配置
     _config: AppConfig,
@@ -72,6 +79,14 @@ pub struct TuiUnifiedApp {
     // 运行状态
     should_quit: bool,
     current_mode: AppMode,
+    
+    // AI commit 功能
+    agent_manager: Option<AgentManager>,
+    ai_commit_message: Option<String>,
+    ai_commit_mode: bool,
+    ai_commit_editing: bool,
+    ai_commit_status: Option<String>,
+    ai_commit_push_prompt: bool, // 是否显示推送提示
 }
 
 impl TuiUnifiedApp {
@@ -95,9 +110,18 @@ impl TuiUnifiedApp {
             query_history_view: QueryHistoryView::new(),
             search_box: SearchBox::new().with_placeholder("Search...".to_string()),
             diff_viewer: None,
+            commit_editor: CommitEditor::new(),
             _config: config,
             should_quit: false,
             current_mode: AppMode::Normal,
+            
+            // AI commit 初始化
+            agent_manager: None,
+            ai_commit_message: None,
+            ai_commit_mode: false,
+            ai_commit_editing: false,
+            ai_commit_status: None,
+            ai_commit_push_prompt: false,
         })
     }
     
@@ -267,6 +291,7 @@ impl TuiUnifiedApp {
             AppMode::Command => "COMMAND",
             AppMode::Help => "HELP",
             AppMode::Diff => "DIFF",
+            AppMode::AICommit => "AI COMMIT",
         };
 
         let focus_text = match self.focus_manager.current_panel {
@@ -276,7 +301,7 @@ impl TuiUnifiedApp {
         };
 
         let status_content = format!(
-            "[{}] Focus: {} | View: {:?} | Press Tab to switch focus, ? for help, q to quit",
+            "[{}] Focus: {} | View: {:?} | Press Tab to switch focus, c for AI commit, r to refresh, ? for help, q to quit",
             mode_text,
             focus_text,
             state.current_view
@@ -588,6 +613,12 @@ impl TuiUnifiedApp {
                 };
                 return Ok(());
             }
+            KeyCode::Char('c') => {
+                // AI Commit 功能
+                if !self.ai_commit_mode {
+                    return self.enter_ai_commit_mode().await;
+                }
+            }
             KeyCode::Tab => {
                 if self.current_mode == AppMode::Normal {
                     self.focus_manager.next_focus();
@@ -702,6 +733,25 @@ impl TuiUnifiedApp {
                 KeyCode::Char('6') => {
                     state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory);
                     self.focus_manager.set_focus(FocusPanel::Content);
+                }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    // 释放写锁，然后执行刷新操作
+                    let current_view = state.current_view;
+                    drop(state);
+                    if let Err(e) = self.refresh_current_view(current_view).await {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Refresh failed: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Error
+                        );
+                    } else {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            "Refreshed successfully".to_string(),
+                            crate::tui_unified::state::app_state::NotificationLevel::Success
+                        );
+                    }
+                    return Ok(()); // 提前返回，因为我们已经处理了状态
                 }
                 _ => {}
             }
@@ -921,6 +971,10 @@ impl TuiUnifiedApp {
         self.stash_view.load_stashes(state_ref).await;
         self.query_history_view.load_history().await;
         
+        // 更新GitLogView的commit数据
+        let commits = state_ref.repo_state.commits.clone();
+        self.git_log_view.update_commits(commits);
+        
         Ok(())
     }
     
@@ -957,10 +1011,220 @@ impl TuiUnifiedApp {
         frame.render_widget(status_bar, layout.status_bar);
     }
     
+    /// 清除模态框背景，确保不会有底层内容泄露
+    fn clear_modal_background(&self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
+        use ratatui::widgets::{Block, Clear, Paragraph};
+        use ratatui::text::Text;
+        
+        // 首先清除整个屏幕区域
+        frame.render_widget(Clear, area);
+        
+        // 创建一个完全不透明的背景填充
+        let background_text = " ".repeat((area.width as usize) * (area.height as usize));
+        let background_paragraph = Paragraph::new(Text::from(background_text))
+            .style(ratatui::style::Style::default()
+                .bg(ratatui::style::Color::Black)
+                .fg(ratatui::style::Color::Black));
+        frame.render_widget(background_paragraph, area);
+        
+        // 再次渲染一个Block来确保完全遮蔽
+        let background_block = Block::default()
+            .style(ratatui::style::Style::default()
+                .bg(ratatui::style::Color::Black));
+        frame.render_widget(background_block, area);
+    }
+
+    /// 在指定区域内渲染diff viewer，而不是全屏渲染
+    fn render_diff_viewer_in_area(&self, frame: &mut ratatui::Frame, viewer: &DiffViewer, area: ratatui::layout::Rect) {
+        use ratatui::{
+            widgets::{Block, Borders, Paragraph},
+            layout::{Constraint, Direction, Layout},
+            text::{Text},
+            style::{Color, Style}
+        };
+
+        // 主布局：顶部信息栏 + 内容区 + 底部状态栏
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),   // 顶部信息
+                Constraint::Min(0),      // 内容区
+                Constraint::Length(4),   // 状态栏 (增加高度以显示更多信息)
+            ])
+            .split(area);
+        
+        // 渲染顶部信息
+        let commit_info_text = format!("Commit: {} | Files: {} | Mode: {}", 
+            viewer.commit_info.hash.get(0..8).unwrap_or("unknown"), 
+            viewer.files.len(),
+            match viewer.view_mode {
+                crate::diff_viewer::DiffViewMode::Unified => "Unified (1)",
+                crate::diff_viewer::DiffViewMode::SideBySide => "Side-by-Side (2)",
+                crate::diff_viewer::DiffViewMode::Split => "Split (3)",
+            }
+        );
+        let info_paragraph = Paragraph::new(Text::from(commit_info_text))
+            .block(Block::default().borders(Borders::ALL).title("Commit Info"))
+            .style(Style::default().fg(Color::White));
+        frame.render_widget(info_paragraph, main_chunks[0]);
+        
+        // 内容区：根据视图模式渲染不同的diff显示
+        self.render_diff_content_by_mode(frame, viewer, main_chunks[1]);
+        
+        // 状态栏 - 添加视图切换说明
+        let status_text = format!(
+            "File {}/{} | Scroll: {} | View Mode: {} | Keys: 1-Unified 2-Side-by-Side 3-Split q-Close", 
+            viewer.selected_file + 1, 
+            viewer.files.len().max(1), 
+            viewer.diff_scroll,
+            match viewer.view_mode {
+                crate::diff_viewer::DiffViewMode::Unified => "Unified",
+                crate::diff_viewer::DiffViewMode::SideBySide => "Side-by-Side", 
+                crate::diff_viewer::DiffViewMode::Split => "Split",
+            }
+        );
+        let status_paragraph = Paragraph::new(Text::from(status_text))
+            .block(Block::default().borders(Borders::ALL).title("Controls"))
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(status_paragraph, main_chunks[2]);
+    }
+
+    fn render_diff_content_by_mode(&self, frame: &mut ratatui::Frame, viewer: &DiffViewer, area: ratatui::layout::Rect) {
+        use ratatui::{
+            widgets::{Block, Borders, Paragraph},
+            layout::{Constraint, Direction, Layout},
+            text::{Line, Span},
+            style::{Color, Style}
+        };
+
+        let diff_content = if !viewer.current_diff.is_empty() {
+            viewer.current_diff.clone()
+        } else {
+            "No diff content available".to_string()
+        };
+
+        match viewer.view_mode {
+            crate::diff_viewer::DiffViewMode::Unified => {
+                // 统一格式：语法高亮显示
+                let lines: Vec<Line> = diff_content
+                    .lines()
+                    .map(|line| {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            Line::from(Span::styled(line, Style::default().fg(Color::Green)))
+                        } else if line.starts_with('-') && !line.starts_with("---") {
+                            Line::from(Span::styled(line, Style::default().fg(Color::Red)))
+                        } else if line.starts_with("@@") {
+                            Line::from(Span::styled(line, Style::default().fg(Color::Cyan)))
+                        } else if line.starts_with("diff --git") {
+                            Line::from(Span::styled(line, Style::default().fg(Color::Yellow)))
+                        } else {
+                            Line::from(Span::styled(line, Style::default().fg(Color::White)))
+                        }
+                    })
+                    .collect();
+
+                let diff_paragraph = Paragraph::new(lines)
+                    .block(Block::default().borders(Borders::ALL).title("Unified Diff"))
+                    .style(Style::default().fg(Color::White))
+                    .scroll((viewer.diff_scroll, 0))
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(diff_paragraph, area);
+            }
+            crate::diff_viewer::DiffViewMode::SideBySide => {
+                // 并排格式：左右分栏显示
+                let horizontal_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(50),
+                    ])
+                    .split(area);
+
+                // 提取删除和添加的行
+                let mut removed_lines = Vec::new();
+                let mut added_lines = Vec::new();
+                
+                for line in diff_content.lines() {
+                    if line.starts_with('-') && !line.starts_with("---") {
+                        removed_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Red))));
+                    } else if line.starts_with('+') && !line.starts_with("+++") {
+                        added_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Green))));
+                    } else if line.starts_with("@@") {
+                        let header_line = Line::from(Span::styled(line, Style::default().fg(Color::Cyan)));
+                        removed_lines.push(header_line.clone());
+                        added_lines.push(header_line);
+                    } else if !line.starts_with("diff --git") && !line.starts_with("index") {
+                        let context_line = Line::from(Span::styled(line, Style::default().fg(Color::White)));
+                        removed_lines.push(context_line.clone());
+                        added_lines.push(context_line);
+                    }
+                }
+
+                let left_paragraph = Paragraph::new(removed_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Removed (-)"))
+                    .style(Style::default().fg(Color::White))
+                    .scroll((viewer.diff_scroll, 0))
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(left_paragraph, horizontal_chunks[0]);
+
+                let right_paragraph = Paragraph::new(added_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Added (+)"))
+                    .style(Style::default().fg(Color::White))
+                    .scroll((viewer.diff_scroll, 0))
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(right_paragraph, horizontal_chunks[1]);
+            }
+            crate::diff_viewer::DiffViewMode::Split => {
+                // 分割格式：上下分栏显示
+                let vertical_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(50),
+                    ])
+                    .split(area);
+
+                // 提取删除和添加的行
+                let mut removed_lines = Vec::new();
+                let mut added_lines = Vec::new();
+                
+                for line in diff_content.lines() {
+                    if line.starts_with('-') && !line.starts_with("---") {
+                        removed_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Red))));
+                    } else if line.starts_with('+') && !line.starts_with("+++") {
+                        added_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Green))));
+                    } else if line.starts_with("@@") {
+                        let header_line = Line::from(Span::styled(line, Style::default().fg(Color::Cyan)));
+                        removed_lines.push(header_line.clone());
+                        added_lines.push(header_line);
+                    } else if !line.starts_with("diff --git") && !line.starts_with("index") {
+                        let context_line = Line::from(Span::styled(line, Style::default().fg(Color::White)));
+                        removed_lines.push(context_line.clone());
+                        added_lines.push(context_line);
+                    }
+                }
+
+                let top_paragraph = Paragraph::new(removed_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Removed (-)"))
+                    .style(Style::default().fg(Color::White))
+                    .scroll((viewer.diff_scroll, 0))
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(top_paragraph, vertical_chunks[0]);
+
+                let bottom_paragraph = Paragraph::new(added_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Added (+)"))
+                    .style(Style::default().fg(Color::White))
+                    .scroll((viewer.diff_scroll, 0))
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(bottom_paragraph, vertical_chunks[1]);
+            }
+        }
+    }
+
     /// 渲染模态框
     fn render_modal(&mut self, frame: &mut ratatui::Frame, modal: &crate::tui_unified::state::app_state::ModalState, area: ratatui::layout::Rect) {
         use ratatui::{
-            widgets::{Paragraph, Clear},
+            widgets::{Paragraph},
             layout::{Constraint, Direction, Layout, Alignment},
             text::{Text},
             style::{Color, Style}
@@ -989,12 +1253,12 @@ impl TuiUnifiedApp {
                         .split(vertical[1])[1]
                 };
                 
-                // 清除背景
-                frame.render_widget(Clear, popup_area);
+                // 使用专门的背景清除方法
+                self.clear_modal_background(frame, area);
                 
-                // 使用完全工作的DiffViewer
-                if let Some(viewer) = &mut self.diff_viewer {
-                    render_diff_viewer(frame, viewer);
+                // 使用自定义的DiffViewer渲染，限制在popup区域内
+                if let Some(viewer) = &self.diff_viewer {
+                    self.render_diff_viewer_in_area(frame, viewer, popup_area);
                 } else {
                     // 如果diff_viewer没有初始化，显示loading
                     let loading_paragraph = ratatui::widgets::Paragraph::new("Loading diff...")
@@ -1018,9 +1282,152 @@ impl TuiUnifiedApp {
                     .alignment(Alignment::Center);
                 frame.render_widget(help, help_area);
             }
+            crate::tui_unified::state::app_state::ModalType::AICommit => {
+                // AI Commit 模态框
+                let popup_area = {
+                    let vertical = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Percentage(25),
+                            Constraint::Min(15),
+                            Constraint::Percentage(25),
+                        ])
+                        .split(area);
+                    
+                    Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Percentage(20),
+                            Constraint::Min(60),
+                            Constraint::Percentage(20),
+                        ])
+                        .split(vertical[1])[1]
+                };
+                
+                // 使用专门的背景清除方法
+                self.clear_modal_background(frame, area);
+                
+                // AI Commit 对话框
+                use ratatui::widgets::{Block, Borders};
+                
+                if self.ai_commit_editing {
+                    // 编辑模式：显示编辑器
+                    match self.state.try_read() {
+                        Ok(state) => {
+                            self.commit_editor.render(frame, popup_area, &*state);
+                        }
+                        Err(_) => {
+                            // 如果无法获取状态，使用一个静态的虚拟状态
+                            static DUMMY_STATE: std::sync::LazyLock<crate::tui_unified::state::AppState> = std::sync::LazyLock::new(|| {
+                                crate::tui_unified::state::AppState {
+                                    layout: Default::default(),
+                                    focus: Default::default(),
+                                    current_view: crate::tui_unified::state::app_state::ViewType::GitLog,
+                                    modal: None,
+                                    repo_state: Default::default(),
+                                    selected_items: Default::default(),
+                                    search_state: Default::default(),
+                                    config: crate::tui_unified::config::AppConfig::default(),
+                                    loading_tasks: HashMap::new(),
+                                    notifications: Vec::new(),
+                                }
+                            });
+                            self.commit_editor.render(frame, popup_area, &*DUMMY_STATE);
+                        }
+                    }
+                } else {
+                    // 非编辑模式：显示生成的消息
+                    let ai_commit_content = if let Some(ref message) = self.ai_commit_message {
+                        format!("Status: {}\n\n📝 Generated Commit Message:\n\n{}", 
+                            self.ai_commit_status.as_ref().unwrap_or(&"Ready".to_string()),
+                            message.trim())
+                    } else {
+                        format!("🤖 {}", self.ai_commit_status.as_ref().unwrap_or(&"Generating commit message...".to_string()))
+                    };
+                    
+                    let ai_commit_block = Paragraph::new(Text::from(ai_commit_content))
+                        .block(Block::default()
+                            .borders(Borders::ALL)
+                            .title("AI Commit")
+                            .border_style(Style::default().fg(Color::Green)))
+                        .style(Style::default().fg(Color::White))
+                        .wrap(ratatui::widgets::Wrap { trim: true });
+                    
+                    frame.render_widget(ai_commit_block, popup_area);
+                }
+                
+                // 帮助文本
+                let help_area = ratatui::layout::Rect {
+                    x: popup_area.x,
+                    y: popup_area.y + popup_area.height,
+                    width: popup_area.width,
+                    height: 1,
+                };
+                
+                let help_text = if self.ai_commit_editing {
+                    "[Tab] Save & Exit Edit | [Esc] Cancel Edit"
+                } else if self.ai_commit_push_prompt {
+                    "[y/Enter] Push | [n/Esc] Skip Push"
+                } else if self.ai_commit_message.is_some() {
+                    "[Enter] Commit | [e] Edit | [Esc] Cancel"
+                } else {
+                    "🤖 Generating commit message... | [Esc] Cancel"
+                };
+                let help = Paragraph::new(Text::from(help_text))
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(Alignment::Center);
+                frame.render_widget(help, help_area);
+            }
             _ => {
                 // 对于其他类型的模态框，使用简单的消息框
-                // 这里可以根据需要扩展
+                let popup_area = {
+                    let vertical = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Percentage(30),
+                            Constraint::Min(10),
+                            Constraint::Percentage(30),
+                        ])
+                        .split(area);
+                    
+                    Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Percentage(25),
+                            Constraint::Min(50),
+                            Constraint::Percentage(25),
+                        ])
+                        .split(vertical[1])[1]
+                };
+                
+                // 使用专门的背景清除方法
+                self.clear_modal_background(frame, area);
+                
+                // 渲染通用模态框
+                use ratatui::widgets::{Block, Borders};
+                let modal_block = Paragraph::new(Text::from(modal.content.clone()))
+                    .block(Block::default()
+                        .borders(Borders::ALL)
+                        .title(modal.title.clone())
+                        .border_style(Style::default().fg(Color::Yellow)))
+                    .style(Style::default().fg(Color::White))
+                    .wrap(ratatui::widgets::Wrap { trim: true });
+                
+                frame.render_widget(modal_block, popup_area);
+                
+                // 帮助文本
+                let help_area = ratatui::layout::Rect {
+                    x: popup_area.x,
+                    y: popup_area.y + popup_area.height,
+                    width: popup_area.width,
+                    height: 1,
+                };
+                
+                let help_text = "[Enter] OK | [Esc] Cancel";
+                let help = Paragraph::new(Text::from(help_text))
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(Alignment::Center);
+                frame.render_widget(help, help_area);
             }
         }
     }
@@ -1092,11 +1499,106 @@ impl TuiUnifiedApp {
                     // 对于其他模态框类型，只处理关闭快捷键
                     match key.code {
                         KeyCode::Esc | KeyCode::Char('q') => {
+                            // 如果是AI commit推送提示模式，跳过推送
+                            if self.ai_commit_mode && self.ai_commit_push_prompt {
+                                drop(state); // 显式释放读锁
+                                self.skip_push();
+                                let mut state = self.state.write().await;
+                                state.hide_modal();
+                                return Ok(());
+                            }
+                            // 如果是AI commit编辑模式，退出编辑但保持AI commit模式
+                            else if self.ai_commit_mode && self.ai_commit_editing {
+                                drop(state); // 显式释放读锁
+                                self.ai_commit_editing = false;
+                                self.commit_editor.set_focused(false);
+                                // 恢复到非编辑模式，用户仍可以提交或再次编辑
+                                return Ok(());
+                            }
+                            // 如果是AI commit非编辑模式，完全退出AI commit模式
+                            else if self.ai_commit_mode {
+                                drop(state); // 显式释放读锁
+                                self.exit_ai_commit_mode();
+                            } else {
+                                drop(state); // 显式释放读锁
+                            }
                             let mut state = self.state.write().await;
                             state.hide_modal();
                             return Ok(());
                         }
-                        _ => {}
+                        KeyCode::Enter => {
+                            // 在AI commit推送提示模式下，Enter等于确认推送
+                            if self.ai_commit_mode && self.ai_commit_push_prompt {
+                                drop(state); // 显式释放读锁
+                                return self.confirm_push().await;
+                            }
+                            // 在AI commit模式下按Enter确认提交
+                            else if self.ai_commit_mode && !self.ai_commit_editing && self.ai_commit_message.is_some() {
+                                drop(state); // 显式释放读锁
+                                return self.confirm_ai_commit().await;
+                            }
+                        }
+                        KeyCode::Char('e') => {
+                            // 在AI commit模式下按e编辑commit message
+                            if self.ai_commit_mode && !self.ai_commit_editing {
+                                self.ai_commit_editing = true;
+                                // 将当前消息加载到编辑器中
+                                if let Some(ref message) = self.ai_commit_message {
+                                    self.commit_editor.set_content(message);
+                                }
+                                self.commit_editor.set_focused(true);
+                            }
+                        }
+                        KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            // 在AI commit推送提示模式下，'y'键确认推送
+                            if self.ai_commit_mode && self.ai_commit_push_prompt {
+                                drop(state); // 显式释放读锁
+                                return self.confirm_push().await;
+                            }
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') => {
+                            // 在AI commit推送提示模式下，'n'键跳过推送
+                            if self.ai_commit_mode && self.ai_commit_push_prompt {
+                                drop(state); // 显式释放读锁
+                                self.skip_push();
+                                return Ok(());
+                            }
+                        }
+                        KeyCode::Tab => {
+                            // 在AI commit编辑模式下，Tab键退出编辑并保存
+                            if self.ai_commit_mode && self.ai_commit_editing {
+                                self.ai_commit_editing = false;
+                                self.commit_editor.set_focused(false);
+                                // 保存编辑的内容
+                                let edited_content = self.commit_editor.get_content();
+                                self.ai_commit_message = Some(edited_content.clone());
+                                self.ai_commit_status = Some("Message edited".to_string());
+                                
+                                // 不需要重新显示模态框，因为渲染逻辑会自动切换到非编辑模式显示
+                                // 现在用户可以按 Enter 提交或 Esc 取消
+                            }
+                        }
+                        _ => {
+                            // 在AI commit编辑模式下，将键盘事件转发给编辑器
+                            if self.ai_commit_mode && self.ai_commit_editing {
+                                let mut dummy_state = crate::tui_unified::state::AppState::new(&crate::tui_unified::config::AppConfig::default()).await.unwrap_or_else(|_| {
+                                    // 如果创建失败，创建一个基本的虚拟状态
+                                    crate::tui_unified::state::AppState {
+                                        layout: Default::default(),
+                                        focus: Default::default(),
+                                        current_view: crate::tui_unified::state::app_state::ViewType::GitLog,
+                                        modal: None,
+                                        repo_state: Default::default(),
+                                        selected_items: Default::default(),
+                                        search_state: Default::default(),
+                                        config: crate::tui_unified::config::AppConfig::default(),
+                                        loading_tasks: HashMap::new(),
+                                        notifications: Vec::new(),
+                                    }
+                                });
+                                let _result = self.commit_editor.handle_key_event(key, &mut dummy_state);
+                            }
+                        }
                     }
                 }
             }
@@ -1138,6 +1640,491 @@ impl TuiUnifiedApp {
             }
         }
         
+        Ok(())
+    }
+    
+    /// 重新加载 Git 数据（在提交后刷新）
+    async fn reload_git_data(&mut self) -> Result<()> {
+        // 直接调用现有的加载逻辑
+        self.load_initial_git_data().await
+    }
+
+    /// 刷新当前视图的数据
+    async fn refresh_current_view(&mut self, view_type: crate::tui_unified::state::app_state::ViewType) -> Result<()> {
+        match view_type {
+            crate::tui_unified::state::app_state::ViewType::GitLog => {
+                self.refresh_git_log().await
+            }
+            crate::tui_unified::state::app_state::ViewType::Branches => {
+                self.refresh_branches().await
+            }
+            crate::tui_unified::state::app_state::ViewType::Tags => {
+                self.refresh_tags().await
+            }
+            crate::tui_unified::state::app_state::ViewType::Remotes => {
+                self.refresh_remotes().await
+            }
+            crate::tui_unified::state::app_state::ViewType::Stash => {
+                self.refresh_stash().await
+            }
+            crate::tui_unified::state::app_state::ViewType::QueryHistory => {
+                self.refresh_query_history().await
+            }
+        }
+    }
+    
+    /// 进入 AI commit 模式
+    async fn enter_ai_commit_mode(&mut self) -> Result<()> {
+        // 使用新的函数获取所有变更（包括未暂存的）
+        let diff = match crate::git::get_all_changes_diff().await {
+            Ok(diff) => {
+                if diff.trim().is_empty() {
+                    let mut state = self.state.write().await;
+                    state.add_notification(
+                        "No changes to commit".to_string(),
+                        crate::tui_unified::state::app_state::NotificationLevel::Warning
+                    );
+                    return Ok(());
+                }
+                diff
+            }
+            Err(e) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Failed to get changes: {}", e),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
+                return Ok(());
+            }
+        };
+
+        // 初始化 Agent Manager（如果还没有）
+        if self.agent_manager.is_none() {
+            let agent_manager = AgentManager::with_default_context();
+            self.agent_manager = Some(agent_manager);
+        }
+
+        // 设置状态
+        self.ai_commit_mode = true;
+        self.ai_commit_status = Some("Generating commit message...".to_string());
+        self.current_mode = AppMode::AICommit;
+
+        // 显示 AI commit 模态框
+        {
+            let mut state = self.state.write().await;
+            state.show_ai_commit_modal(
+                "".to_string(), 
+                "Generating commit message...".to_string()
+            );
+        }
+
+        // 生成 commit message
+        self.generate_commit_message(diff).await
+    }
+
+    /// 生成 AI commit message
+    async fn generate_commit_message(&mut self, diff: String) -> Result<()> {
+        if let Some(ref mut agent_manager) = self.agent_manager {
+            // 创建配置
+            let config = Config::new();
+            
+            // 更新 Agent 配置
+            let mut env_vars = std::env::vars().collect::<HashMap<String, String>>();
+            
+            // 添加 API Key 配置
+            if let Some(api_key) = config.get_api_key() {
+                env_vars.insert("API_KEY".to_string(), api_key);
+            }
+            
+            // 设置 API URL
+            let api_url = config.get_url();
+            env_vars.insert("API_URL".to_string(), api_url);
+            
+            let agent_config = AgentConfig {
+                provider: config.provider.clone(),
+                model: config.model.clone(),
+                temperature: 0.7,
+                max_tokens: 2000,
+                stream: true,
+                max_retries: 3,
+                timeout_secs: 60,
+            };
+            
+            let context = AgentContext {
+                working_dir: std::env::current_dir()?,
+                env_vars,
+                config: agent_config,
+                history: vec![],
+            };
+            
+            // 更新管理器上下文
+            agent_manager.update_context(context);
+            
+            // 获取或创建 Commit Agent
+            match agent_manager.get_or_create_agent("commit").await {
+                Ok(commit_agent) => {
+                    // 创建任务
+                    let task = AgentTask::new(TaskType::GenerateCommit, diff);
+                    
+                    // 执行任务
+                    match commit_agent.execute(task, agent_manager.context()).await {
+                        Ok(result) => {
+                            if result.success {
+                                self.ai_commit_message = Some(result.content.clone());
+                                self.ai_commit_status = Some("Commit message generated successfully".to_string());
+                                
+                                // 更新模态框内容
+                                let mut state = self.state.write().await;
+                                state.show_ai_commit_modal(
+                                    result.content, 
+                                    "Commit message generated successfully".to_string()
+                                );
+                            } else {
+                                self.ai_commit_status = Some("Failed to generate commit message".to_string());
+                                
+                                // 更新模态框内容
+                                let mut state = self.state.write().await;
+                                state.show_ai_commit_modal(
+                                    "".to_string(), 
+                                    "Failed to generate commit message".to_string()
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            self.ai_commit_status = Some(format!("Error: {}", e));
+                            
+                            // 更新模态框内容
+                            let mut state = self.state.write().await;
+                            state.show_ai_commit_modal(
+                                "".to_string(), 
+                                format!("Error: {}", e)
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.ai_commit_status = Some(format!("Failed to create agent: {}", e));
+                    
+                    // 更新模态框内容
+                    let mut state = self.state.write().await;
+                    state.show_ai_commit_modal(
+                        "".to_string(), 
+                        format!("Failed to create agent: {}", e)
+                    );
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// 确认并提交 AI 生成的 commit message
+    async fn confirm_ai_commit(&mut self) -> Result<()> {
+        if let Some(ref message) = self.ai_commit_message {
+            // 首先检查是否有暂存的变更
+            let staged_diff = match crate::git::get_git_diff().await {
+                Ok(diff) => diff,
+                Err(e) => {
+                    let mut state = self.state.write().await;
+                    state.add_notification(
+                        format!("Failed to check staged changes: {}", e),
+                        crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                    return Ok(());
+                }
+            };
+            
+            // 如果没有暂存变更，先自动添加所有变更
+            if staged_diff.trim().is_empty() {
+                match crate::git::git_add_all().await {
+                    Ok(_) => {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            "Changes staged automatically".to_string(),
+                            crate::tui_unified::state::app_state::NotificationLevel::Info
+                        );
+                        drop(state);
+                    }
+                    Err(e) => {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Failed to stage changes: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Error
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+            
+            // 现在执行提交
+            match crate::git::git_commit(message).await {
+                Ok(_) => {
+                    let mut state = self.state.write().await;
+                    state.add_notification(
+                        "Commit successful!".to_string(),
+                        crate::tui_unified::state::app_state::NotificationLevel::Info
+                    );
+                    drop(state);
+                    
+                    // 重新加载 Git 数据以显示新的提交
+                    if let Err(e) = self.reload_git_data().await {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Failed to reload git data: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                        drop(state);
+                    }
+                    
+                    // 显示推送提示而不是立即退出
+                    self.ai_commit_push_prompt = true;
+                    self.ai_commit_status = Some("Commit successful! Push to remote?".to_string());
+                    
+                    // 显示推送提示模态框
+                    let mut state = self.state.write().await;
+                    state.show_ai_commit_push_modal("Commit successful!".to_string());
+                }
+                Err(e) => {
+                    let mut state = self.state.write().await;
+                    state.add_notification(
+                        format!("Commit failed: {}", e),
+                        crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// 退出 AI commit 模式
+    fn exit_ai_commit_mode(&mut self) {
+        self.ai_commit_mode = false;
+        self.ai_commit_editing = false;
+        self.ai_commit_message = None;
+        self.ai_commit_status = None;
+        self.ai_commit_push_prompt = false;
+        self.current_mode = AppMode::Normal;
+        
+        // 重置编辑器状态
+        self.commit_editor.set_focused(false);
+        self.commit_editor.set_content("");
+    }
+
+    /// 确认推送到远程
+    async fn confirm_push(&mut self) -> Result<()> {
+        // 执行 git push
+        match crate::git::git_push().await {
+            Ok(_) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    "Push successful!".to_string(),
+                    crate::tui_unified::state::app_state::NotificationLevel::Success
+                );
+                state.hide_modal();
+                drop(state);
+                
+                // 完成推送后退出AI commit模式
+                self.exit_ai_commit_mode();
+            }
+            Err(e) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Push failed: {}", e),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
+                // 推送失败时不退出AI commit模式，让用户可以重试
+                self.ai_commit_status = Some(format!("Push failed: {}", e));
+                state.show_ai_commit_push_modal(format!("Push failed: {}. Try again?", e));
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// 跳过推送
+    fn skip_push(&mut self) {
+        // 关闭模态框并退出AI commit模式
+        self.exit_ai_commit_mode();
+    }
+
+    /// 刷新Git Log视图
+    async fn refresh_git_log(&mut self) -> Result<()> {
+        let repo_path = std::env::current_dir()?;
+        let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
+        
+        match git.get_commits(Some(100)).await {
+            Ok(commits_data) => {
+                // 转换为内部数据结构
+                let commits: Vec<crate::tui_unified::state::git_state::Commit> = commits_data
+                    .into_iter()
+                    .map(|c| crate::tui_unified::state::git_state::Commit {
+                        hash: c.hash.clone(),
+                        short_hash: c.hash[..8.min(c.hash.len())].to_string(),
+                        author: c.author.clone(),
+                        author_email: format!("{}@example.com", c.author),
+                        committer: c.author.clone(),
+                        committer_email: format!("{}@example.com", c.author),
+                        date: chrono::DateTime::parse_from_str(
+                            &format!("{} 00:00:00 +0000", c.date), 
+                            "%Y-%m-%d %H:%M:%S %z"
+                        )
+                        .unwrap_or_else(|_| chrono::Utc::now().into())
+                        .with_timezone(&chrono::Utc),
+                        message: c.message.clone(),
+                        subject: c.message,
+                        body: None,
+                        parents: Vec::new(),
+                        refs: Vec::new(),
+                        files_changed: c.files_changed as usize,
+                        insertions: 0,
+                        deletions: 0,
+                    })
+                    .collect();
+                
+                // 更新状态
+                let mut state = self.state.write().await;
+                state.repo_state.update_commits(commits.clone());
+                drop(state);
+                
+                // 更新GitLogView
+                self.git_log_view.update_commits(commits);
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Git operation failed: {}", e).into())
+        }
+    }
+
+    /// 刷新Branches视图
+    async fn refresh_branches(&mut self) -> Result<()> {
+        let repo_path = std::env::current_dir()?;
+        let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
+        
+        match git.get_branches().await {
+            Ok(branches_data) => {
+                let branches: Vec<crate::tui_unified::state::git_state::Branch> = branches_data
+                    .into_iter()
+                    .map(|b| crate::tui_unified::state::git_state::Branch {
+                        name: b.name.clone(),
+                        full_name: format!("refs/heads/{}", b.name),
+                        is_current: b.is_current,
+                        is_remote: false,
+                        upstream: b.upstream,
+                        last_commit: None,
+                        ahead_count: 0,
+                        behind_count: 0,
+                        last_updated: chrono::Utc::now(),
+                    })
+                    .collect();
+                
+                // 更新状态
+                let mut state = self.state.write().await;
+                state.repo_state.update_branches(branches);
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Git operation failed: {}", e).into())
+        }
+    }
+
+    /// 刷新Tags视图
+    async fn refresh_tags(&mut self) -> Result<()> {
+        let repo_path = std::env::current_dir()?;
+        let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
+        
+        match git.get_tags().await {
+            Ok(tags_data) => {
+                let tags: Vec<crate::tui_unified::state::git_state::Tag> = tags_data
+                    .into_iter()
+                    .map(|t| crate::tui_unified::state::git_state::Tag {
+                        name: t.name,
+                        commit_hash: t.commit_hash,
+                        message: t.message,
+                        tagger: None,
+                        date: chrono::Utc::now(),
+                        is_annotated: true,
+                    })
+                    .collect();
+                
+                // 更新状态
+                let mut state = self.state.write().await;
+                state.repo_state.update_tags(tags);
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Git operation failed: {}", e).into())
+        }
+    }
+
+    /// 刷新Remotes视图
+    async fn refresh_remotes(&mut self) -> Result<()> {
+        let repo_path = std::env::current_dir()?;
+        let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
+        
+        match git.get_remotes().await {
+            Ok(remotes_data) => {
+                let remotes: Vec<crate::tui_unified::state::git_state::Remote> = remotes_data
+                    .into_iter()
+                    .map(|r| crate::tui_unified::state::git_state::Remote {
+                        name: r.name.clone(),
+                        url: r.url,
+                        fetch_url: r.name.clone(),
+                        push_url: None,
+                        is_default: r.name == "origin",
+                    })
+                    .collect();
+                
+                // 更新状态并通知视图
+                let mut state = self.state.write().await;
+                state.repo_state.update_remotes(remotes);
+                let state_ref = &*state;
+                drop(state);
+                
+                // 通知RemotesView重新加载数据
+                let state_ref = &*self.state.read().await;
+                self.remotes_view.load_remotes(state_ref).await;
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Git operation failed: {}", e).into())
+        }
+    }
+
+    /// 刷新Stash视图
+    async fn refresh_stash(&mut self) -> Result<()> {
+        let repo_path = std::env::current_dir()?;
+        let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
+        
+        match git.get_stashes().await {
+            Ok(stashes_data) => {
+                let stashes: Vec<crate::tui_unified::state::git_state::Stash> = stashes_data
+                    .into_iter()
+                    .map(|s| crate::tui_unified::state::git_state::Stash {
+                        index: s.index as usize,
+                        hash: format!("stash@{{{}}}", s.index),
+                        branch: s.branch,
+                        message: s.message,
+                        date: chrono::Utc::now(),
+                        files_changed: 0,
+                    })
+                    .collect();
+                
+                // 更新状态并通知视图
+                let mut state = self.state.write().await;
+                state.repo_state.update_stashes(stashes);
+                let state_ref = &*state;
+                drop(state);
+                
+                // 通知StashView重新加载数据
+                let state_ref = &*self.state.read().await;
+                self.stash_view.load_stashes(state_ref).await;
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Git operation failed: {}", e).into())
+        }
+    }
+
+    /// 刷新Query History视图
+    async fn refresh_query_history(&mut self) -> Result<()> {
+        // 重新加载查询历史
+        self.query_history_view.load_history().await;
         Ok(())
     }
 }

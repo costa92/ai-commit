@@ -1,4 +1,6 @@
 use crate::query_history::{QueryHistory, QueryHistoryEntry};
+use crate::core::ai::agents::manager::AgentManager;
+use crate::core::ai::agents::{AgentTask, AgentContext, TaskType, AgentConfig};
 use crate::diff_viewer::{DiffViewer, render_diff_viewer};
 use anyhow::Result;
 use crossterm::{
@@ -168,6 +170,16 @@ pub struct App {
     pub status_message: Option<String>,
     /// 是否显示左侧面板
     pub show_left_panel: bool,
+    /// AI commit agent manager
+    agent_manager: Option<AgentManager>,
+    /// AI 生成的提交信息
+    ai_commit_message: Option<String>,
+    /// 是否在 AI 提交模式
+    ai_commit_mode: bool,
+    /// AI 提交编辑模式
+    ai_commit_editing: bool,
+    /// AI 提交状态消息
+    ai_commit_status: Option<String>,
 }
 
 /// 分屏模式
@@ -295,6 +307,11 @@ impl App {
             current_branch,
             status_message: None,
             show_left_panel: true,
+            agent_manager: None,
+            ai_commit_message: None,
+            ai_commit_mode: false,
+            ai_commit_editing: false,
+            ai_commit_status: None,
         })
     }
 
@@ -557,6 +574,158 @@ impl App {
         }
         
         Ok(())
+    }
+    
+    /// 初始化 AI commit agent
+    async fn init_commit_agent(&mut self) -> Result<()> {
+        let agent_config = AgentConfig {
+            provider: "deepseek".to_string(),
+            model: "deepseek-chat".to_string(),
+            temperature: 0.1,
+            max_tokens: 2000,
+            stream: false,
+            max_retries: 3,
+            timeout_secs: 60,
+        };
+        
+        let context = AgentContext {
+            working_dir: std::env::current_dir().unwrap_or_default(),
+            env_vars: std::collections::HashMap::new(),
+            config: agent_config,
+            history: vec![],
+        };
+        
+        let mut manager = AgentManager::new(context);
+        
+        // 尝试获取或创建 commit agent 来确保初始化成功
+        match manager.get_or_create_agent("commit").await {
+            Ok(_) => {
+                self.agent_manager = Some(manager);
+                self.ai_commit_status = Some("AI commit agent initialized".to_string());
+            }
+            Err(e) => {
+                self.ai_commit_status = Some(format!("Failed to initialize AI agent: {}", e));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// 进入 AI 提交模式
+    async fn enter_ai_commit_mode(&mut self) {
+        self.ai_commit_mode = true;
+        self.ai_commit_editing = false;
+        self.ai_commit_status = Some("Generating AI commit message...".to_string());
+        
+        // 如果还没有初始化 agent，先初始化
+        if self.agent_manager.is_none() {
+            self.init_commit_agent().await.ok();
+        }
+        
+        // 生成 AI 提交信息
+        if let Some(ref mut manager) = self.agent_manager {
+            // 获取当前的 git diff
+            match tokio::process::Command::new("git")
+                .args(["diff", "--cached"])
+                .output()
+                .await
+            {
+                Ok(output) => {
+                    let diff = String::from_utf8_lossy(&output.stdout);
+                    
+                    // 如果没有暂存的更改，尝试获取工作区的更改
+                    let diff = if diff.trim().is_empty() {
+                        match tokio::process::Command::new("git")
+                            .args(["diff"])
+                            .output()
+                            .await
+                        {
+                            Ok(output) => String::from_utf8_lossy(&output.stdout).to_string(),
+                            Err(_) => String::new(),
+                        }
+                    } else {
+                        diff.to_string()
+                    };
+                    
+                    if !diff.trim().is_empty() {
+                        // 创建任务和上下文
+                        let task = AgentTask::new(TaskType::GenerateCommit, diff);
+                        
+                        let agent_config = AgentConfig {
+                            provider: "deepseek".to_string(),
+                            model: "deepseek-chat".to_string(),
+                            temperature: 0.1,
+                            max_tokens: 2000,
+                            stream: false,
+                            max_retries: 3,
+                            timeout_secs: 60,
+                        };
+                        
+                        let _context = AgentContext {
+                            working_dir: std::env::current_dir().unwrap_or_default(),
+                            env_vars: std::collections::HashMap::new(),
+                            config: agent_config,
+                            history: vec![],
+                        };
+                        
+                        // 执行任务
+                        match manager.execute_task("commit", task).await {
+                            Ok(result) => {
+                                if result.success {
+                                    self.ai_commit_message = Some(result.content);
+                                    self.ai_commit_status = Some("AI commit message generated. Press 'e' to edit, 'y' to commit, 'n' to cancel".to_string());
+                                } else {
+                                    self.ai_commit_status = Some("Failed to generate commit message".to_string());
+                                }
+                            }
+                            Err(e) => {
+                                self.ai_commit_status = Some(format!("Failed to generate commit message: {}", e));
+                            }
+                        }
+                    } else {
+                        self.ai_commit_status = Some("No changes to commit. Please stage your changes first.".to_string());
+                    }
+                }
+                Err(e) => {
+                    self.ai_commit_status = Some(format!("Failed to get git diff: {}", e));
+                }
+            }
+        }
+    }
+    
+    /// 退出 AI 提交模式
+    fn exit_ai_commit_mode(&mut self) {
+        self.ai_commit_mode = false;
+        self.ai_commit_editing = false;
+        self.ai_commit_message = None;
+        self.ai_commit_status = None;
+    }
+    
+    /// 执行 AI 提交
+    async fn execute_ai_commit(&mut self) -> Result<()> {
+        if let Some(ref message) = self.ai_commit_message {
+            // 使用现有的 git commit 逻辑
+            let output = tokio::process::Command::new("git")
+                .args(["commit", "-m", message])
+                .output()
+                .await?;
+                
+            if output.status.success() {
+                self.ai_commit_status = Some("Successfully committed with AI-generated message".to_string());
+                // 刷新提交历史
+                self.refresh_git_commits().await;
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                self.ai_commit_status = Some(format!("Commit failed: {}", error));
+            }
+        }
+        Ok(())
+    }
+    
+    /// 进入 AI 提交编辑模式
+    fn start_ai_commit_editing(&mut self) {
+        self.ai_commit_editing = true;
+        self.ai_commit_status = Some("Editing AI commit message. Press 'Enter' to finish, 'Esc' to cancel".to_string());
     }
     
     pub async fn load_branch_commits(&mut self) {
@@ -1306,7 +1475,30 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                 }
 
                 // 搜索模式
-                if app.search_mode {
+                // 优先处理 AI commit 模式
+                if app.ai_commit_mode {
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Char('n') => {
+                            app.exit_ai_commit_mode();
+                        }
+                        KeyCode::Char('y') => {
+                            app.execute_ai_commit().await.ok();
+                            app.exit_ai_commit_mode();
+                        }
+                        KeyCode::Char('e') => {
+                            app.start_ai_commit_editing();
+                        }
+                        KeyCode::Enter if app.ai_commit_editing => {
+                            app.ai_commit_editing = false;
+                            app.ai_commit_status = Some("AI commit message updated. Press 'y' to commit, 'n' to cancel".to_string());
+                        }
+                        _ if app.ai_commit_editing => {
+                            // 在编辑模式下，允许编辑提交信息
+                            // 这里可以添加文本编辑逻辑，暂时简化处理
+                        }
+                        _ => {}
+                    }
+                } else if app.search_mode {
                     match key.code {
                         KeyCode::Esc => {
                             app.search_mode = false;
@@ -1566,6 +1758,10 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
                         app.show_help = true;
                     }
                     (_, KeyCode::Char('h')) => app.syntax_highlight = !app.syntax_highlight,
+                    (_, KeyCode::Char('a')) => {
+                        // AI commit 功能
+                        app.enter_ai_commit_mode().await;
+                    }
                     (_, KeyCode::Char('r')) => {
                         // 如果在历史视图中，刷新历史记录；否则重置滚动位置
                         if app.tabs[app.current_tab].view_type == ViewType::History {
@@ -1653,6 +1849,12 @@ fn ui(f: &mut Frame, app: &mut App) {
     // 显示帮助弹窗
     if app.show_help {
         render_help(f, f.size());
+        return;
+    }
+    
+    // 显示 AI commit 弹窗
+    if app.ai_commit_mode {
+        render_ai_commit_modal(f, app);
         return;
     }
 
@@ -2483,7 +2685,9 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         .split(area);
     
     // 渲染状态信息
-    let mode = if app.search_mode {
+    let mode = if app.ai_commit_mode {
+        "AI-COMMIT"
+    } else if app.search_mode {
         "SEARCH"
     } else {
         "NORMAL"
@@ -2524,7 +2728,9 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
     };
     
     // 添加状态消息
-    let status_msg = if let Some(msg) = &app.status_message {
+    let status_msg = if let Some(msg) = &app.ai_commit_status {
+        format!(" | {}", msg)
+    } else if let Some(msg) = &app.status_message {
         format!(" | {}", msg)
     } else {
         String::new()
@@ -2595,6 +2801,7 @@ fn render_extra_shortcuts(f: &mut Frame, area: Rect) {
         ("r", "Refresh", Color::Green),
         ("d", "Details", Color::Yellow),
         ("h", "Syntax", Color::Magenta),
+        ("a", "AI Commit", Color::Green),
         ("C-s", "Split", Color::Cyan),
         ("C-w", "Focus", Color::Cyan),
     ];
@@ -2742,4 +2949,80 @@ pub async fn test_git_commits_loading() -> Result<()> {
         );
     }
     Ok(())
+}/// 渲染 AI commit 弹窗
+fn render_ai_commit_modal(f: &mut Frame, app: &App) {
+    use ratatui::widgets::{Clear, Paragraph, Wrap};
+    
+    // 计算弹窗尺寸 (80% 宽度, 60% 高度)
+    let size = f.size();
+    let popup_area = {
+        let width = size.width * 80 / 100;
+        let height = size.height * 60 / 100;
+        let x = (size.width - width) / 2;
+        let y = (size.height - height) / 2;
+        Rect::new(x, y, width, height)
+    };
+
+    // 清除背景
+    f.render_widget(Clear, popup_area);
+
+    // 创建弹窗布局
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),   // 标题
+            Constraint::Min(1),      // 内容
+            Constraint::Length(3),   // 按键提示
+        ])
+        .split(popup_area);
+
+    // 渲染标题
+    let title_block = Block::default()
+        .borders(Borders::ALL)
+        .title(" AI Commit Generator ")
+        .border_style(Style::default().fg(Color::Green));
+    f.render_widget(title_block, chunks[0]);
+
+    // 渲染内容
+    let content = if let Some(message) = &app.ai_commit_message {
+        if app.ai_commit_editing {
+            format!("📝 Editing AI-generated commit message:\n\n{}", message)
+        } else {
+            format!("🤖 AI-generated commit message:\n\n{}", message)
+        }
+    } else {
+        "🔄 Generating AI commit message...\n\nPlease wait while the AI analyzes your changes and generates an appropriate commit message.".to_string()
+    };
+
+    let content_paragraph = Paragraph::new(content)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::White))
+        )
+        .wrap(Wrap { trim: true })
+        .style(Style::default().fg(Color::White));
+    
+    f.render_widget(content_paragraph, chunks[1]);
+
+    // 渲染按键提示
+    let help_text = if app.ai_commit_editing {
+        "Press [Enter] to finish editing, [Esc] to cancel"
+    } else if app.ai_commit_message.is_some() {
+        "Press [y] to commit, [e] to edit, [n] to cancel"
+    } else {
+        "Please wait..."
+    };
+
+    let help_paragraph = Paragraph::new(help_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Controls ")
+                .border_style(Style::default().fg(Color::Yellow))
+        )
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(Alignment::Center);
+    
+    f.render_widget(help_paragraph, chunks[2]);
 }
