@@ -300,11 +300,21 @@ impl TuiUnifiedApp {
             FocusPanel::Detail => "Detail",
         };
 
+        let view_specific_keys = match state.current_view {
+            crate::tui_unified::state::app_state::ViewType::GitLog => "p for pull, Enter to view diff",
+            crate::tui_unified::state::app_state::ViewType::Branches => "Enter to switch branch, Tab to show remotes",
+            crate::tui_unified::state::app_state::ViewType::Tags => "Enter to view tag details", 
+            crate::tui_unified::state::app_state::ViewType::Remotes => "Enter to view remote details",
+            crate::tui_unified::state::app_state::ViewType::Stash => "Enter to view stash details",
+            crate::tui_unified::state::app_state::ViewType::QueryHistory => "Enter to execute query",
+        };
+
         let status_content = format!(
-            "[{}] Focus: {} | View: {:?} | Press Tab to switch focus, c for AI commit, r to refresh, ? for help, q to quit",
+            "[{}] Focus: {} | View: {:?} | {} | Tab-focus, c-AI commit, r-refresh, ?-help, q-quit",
             mode_text,
             focus_text,
-            state.current_view
+            state.current_view,
+            view_specific_keys
         );
 
         let status_bar = Paragraph::new(Text::raw(status_content))
@@ -1105,23 +1115,8 @@ impl TuiUnifiedApp {
 
         match viewer.view_mode {
             crate::diff_viewer::DiffViewMode::Unified => {
-                // 统一格式：语法高亮显示
-                let lines: Vec<Line> = diff_content
-                    .lines()
-                    .map(|line| {
-                        if line.starts_with('+') && !line.starts_with("+++") {
-                            Line::from(Span::styled(line, Style::default().fg(Color::Green)))
-                        } else if line.starts_with('-') && !line.starts_with("---") {
-                            Line::from(Span::styled(line, Style::default().fg(Color::Red)))
-                        } else if line.starts_with("@@") {
-                            Line::from(Span::styled(line, Style::default().fg(Color::Cyan)))
-                        } else if line.starts_with("diff --git") {
-                            Line::from(Span::styled(line, Style::default().fg(Color::Yellow)))
-                        } else {
-                            Line::from(Span::styled(line, Style::default().fg(Color::White)))
-                        }
-                    })
-                    .collect();
+                // 统一格式：带行号的语法高亮显示
+                let lines = self.parse_diff_for_unified(&diff_content);
 
                 let diff_paragraph = Paragraph::new(lines)
                     .block(Block::default().borders(Borders::ALL).title("Unified Diff"))
@@ -1140,35 +1135,18 @@ impl TuiUnifiedApp {
                     ])
                     .split(area);
 
-                // 提取删除和添加的行
-                let mut removed_lines = Vec::new();
-                let mut added_lines = Vec::new();
-                
-                for line in diff_content.lines() {
-                    if line.starts_with('-') && !line.starts_with("---") {
-                        removed_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Red))));
-                    } else if line.starts_with('+') && !line.starts_with("+++") {
-                        added_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Green))));
-                    } else if line.starts_with("@@") {
-                        let header_line = Line::from(Span::styled(line, Style::default().fg(Color::Cyan)));
-                        removed_lines.push(header_line.clone());
-                        added_lines.push(header_line);
-                    } else if !line.starts_with("diff --git") && !line.starts_with("index") {
-                        let context_line = Line::from(Span::styled(line, Style::default().fg(Color::White)));
-                        removed_lines.push(context_line.clone());
-                        added_lines.push(context_line);
-                    }
-                }
+                // 解析diff内容，构建并排视图
+                let (left_lines, right_lines) = self.parse_diff_for_side_by_side(&diff_content);
 
-                let left_paragraph = Paragraph::new(removed_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Removed (-)"))
+                let left_paragraph = Paragraph::new(left_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Original"))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(left_paragraph, horizontal_chunks[0]);
 
-                let right_paragraph = Paragraph::new(added_lines)
-                    .block(Block::default().borders(Borders::ALL).title("Added (+)"))
+                let right_paragraph = Paragraph::new(right_lines)
+                    .block(Block::default().borders(Borders::ALL).title("Modified"))
                     .style(Style::default().fg(Color::White))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
@@ -1184,25 +1162,8 @@ impl TuiUnifiedApp {
                     ])
                     .split(area);
 
-                // 提取删除和添加的行
-                let mut removed_lines = Vec::new();
-                let mut added_lines = Vec::new();
-                
-                for line in diff_content.lines() {
-                    if line.starts_with('-') && !line.starts_with("---") {
-                        removed_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Red))));
-                    } else if line.starts_with('+') && !line.starts_with("+++") {
-                        added_lines.push(Line::from(Span::styled(&line[1..], Style::default().fg(Color::Green))));
-                    } else if line.starts_with("@@") {
-                        let header_line = Line::from(Span::styled(line, Style::default().fg(Color::Cyan)));
-                        removed_lines.push(header_line.clone());
-                        added_lines.push(header_line);
-                    } else if !line.starts_with("diff --git") && !line.starts_with("index") {
-                        let context_line = Line::from(Span::styled(line, Style::default().fg(Color::White)));
-                        removed_lines.push(context_line.clone());
-                        added_lines.push(context_line);
-                    }
-                }
+                // 解析diff内容，构建上下分割视图
+                let (removed_lines, added_lines) = self.parse_diff_for_split(&diff_content);
 
                 let top_paragraph = Paragraph::new(removed_lines)
                     .block(Block::default().borders(Borders::ALL).title("Removed (-)"))
@@ -1219,6 +1180,239 @@ impl TuiUnifiedApp {
                 frame.render_widget(bottom_paragraph, vertical_chunks[1]);
             }
         }
+    }
+
+    /// 解析 diff 内容用于并排显示
+    fn parse_diff_for_side_by_side(&self, diff_content: &str) -> (Vec<ratatui::text::Line<'static>>, Vec<ratatui::text::Line<'static>>) {
+        use ratatui::{text::{Line, Span}, style::{Color, Style}};
+        
+        let mut left_lines = Vec::new();
+        let mut right_lines = Vec::new();
+        let mut old_line_num = 0u32;
+        let mut new_line_num = 0u32;
+        
+        for line in diff_content.lines() {
+            if line.starts_with("@@") {
+                // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@
+                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
+                    let parts: Vec<&str> = captures.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Some(old_part) = parts[0].strip_prefix('-') {
+                            if let Some((start, _)) = old_part.split_once(',') {
+                                old_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                old_line_num = old_part.parse().unwrap_or(0);
+                            }
+                        }
+                        if let Some(new_part) = parts[1].strip_prefix('+') {
+                            if let Some((start, _)) = new_part.split_once(',') {
+                                new_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                new_line_num = new_part.parse().unwrap_or(0);
+                            }
+                        }
+                    }
+                }
+                
+                let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)));
+                left_lines.push(header_line.clone());
+                right_lines.push(header_line);
+                continue;
+            }
+            
+            if line.starts_with("diff --git") || line.starts_with("index") || 
+               line.starts_with("---") || line.starts_with("+++") {
+                continue;
+            }
+            
+            if line.starts_with('-') {
+                // 删除的行：只在左边显示
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4} │ {}", old_line_num, line_content);
+                left_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Red))));
+                
+                // 右边显示空行
+                right_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
+                
+                old_line_num += 1;
+            } else if line.starts_with('+') {
+                // 添加的行：只在右边显示
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4} │ {}", new_line_num, line_content);
+                right_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Green))));
+                
+                // 左边显示空行
+                left_lines.push(Line::from(Span::styled("     │".to_string(), Style::default().fg(Color::DarkGray))));
+                
+                new_line_num += 1;
+            } else if line.starts_with(' ') {
+                // 上下文行：两边都显示
+                let line_content = &line[1..];
+                let left_formatted = format!("{:4} │ {}", old_line_num, line_content);
+                let right_formatted = format!("{:4} │ {}", new_line_num, line_content);
+                
+                left_lines.push(Line::from(Span::styled(left_formatted.to_string(), Style::default().fg(Color::White))));
+                right_lines.push(Line::from(Span::styled(right_formatted.to_string(), Style::default().fg(Color::White))));
+                
+                old_line_num += 1;
+                new_line_num += 1;
+            } else if !line.is_empty() {
+                // 其他内容行（如文件名等）：两边都显示
+                let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)));
+                left_lines.push(header_line.clone());
+                right_lines.push(header_line);
+            }
+        }
+        
+        (left_lines, right_lines)
+    }
+
+    /// 解析 diff 内容用于分割显示
+    fn parse_diff_for_split(&self, diff_content: &str) -> (Vec<ratatui::text::Line<'static>>, Vec<ratatui::text::Line<'static>>) {
+        use ratatui::{text::{Line, Span}, style::{Color, Style}};
+        
+        let mut removed_lines = Vec::new();
+        let mut added_lines = Vec::new();
+        let mut old_line_num = 0u32;
+        let mut new_line_num = 0u32;
+        
+        for line in diff_content.lines() {
+            if line.starts_with("@@") {
+                // 解析行号信息
+                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
+                    let parts: Vec<&str> = captures.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Some(old_part) = parts[0].strip_prefix('-') {
+                            if let Some((start, _)) = old_part.split_once(',') {
+                                old_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                old_line_num = old_part.parse().unwrap_or(0);
+                            }
+                        }
+                        if let Some(new_part) = parts[1].strip_prefix('+') {
+                            if let Some((start, _)) = new_part.split_once(',') {
+                                new_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                new_line_num = new_part.parse().unwrap_or(0);
+                            }
+                        }
+                    }
+                }
+                
+                let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)));
+                removed_lines.push(header_line.clone());
+                added_lines.push(header_line);
+                continue;
+            }
+            
+            if line.starts_with("diff --git") || line.starts_with("index") || 
+               line.starts_with("---") || line.starts_with("+++") {
+                continue;
+            }
+            
+            if line.starts_with('-') {
+                // 删除的行
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4} │ {}", old_line_num, line_content);
+                removed_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Red))));
+                old_line_num += 1;
+            } else if line.starts_with('+') {
+                // 添加的行
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4} │ {}", new_line_num, line_content);
+                added_lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Green))));
+                new_line_num += 1;
+            } else if line.starts_with(' ') {
+                // 上下文行：两边都显示
+                let line_content = &line[1..];
+                let old_formatted = format!("{:4} │ {}", old_line_num, line_content);
+                let new_formatted = format!("{:4} │ {}", new_line_num, line_content);
+                
+                removed_lines.push(Line::from(Span::styled(old_formatted.to_string(), Style::default().fg(Color::White))));
+                added_lines.push(Line::from(Span::styled(new_formatted.to_string(), Style::default().fg(Color::White))));
+                
+                old_line_num += 1;
+                new_line_num += 1;
+            } else if !line.is_empty() {
+                // 其他内容行
+                let header_line = Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)));
+                removed_lines.push(header_line.clone());
+                added_lines.push(header_line);
+            }
+        }
+        
+        (removed_lines, added_lines)
+    }
+
+    /// 解析 diff 内容用于统一显示
+    fn parse_diff_for_unified(&self, diff_content: &str) -> Vec<ratatui::text::Line<'static>> {
+        use ratatui::{text::{Line, Span}, style::{Color, Style}};
+        
+        let mut lines = Vec::new();
+        let mut old_line_num = 0u32;
+        let mut new_line_num = 0u32;
+        
+        for line in diff_content.lines() {
+            if line.starts_with("@@") {
+                // 解析行号信息
+                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
+                    let parts: Vec<&str> = captures.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let Some(old_part) = parts[0].strip_prefix('-') {
+                            if let Some((start, _)) = old_part.split_once(',') {
+                                old_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                old_line_num = old_part.parse().unwrap_or(0);
+                            }
+                        }
+                        if let Some(new_part) = parts[1].strip_prefix('+') {
+                            if let Some((start, _)) = new_part.split_once(',') {
+                                new_line_num = start.parse().unwrap_or(0);
+                            } else {
+                                new_line_num = new_part.parse().unwrap_or(0);
+                            }
+                        }
+                    }
+                }
+                lines.push(Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan))));
+                continue;
+            }
+            
+            if line.starts_with("diff --git") {
+                lines.push(Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow))));
+                continue;
+            }
+            
+            if line.starts_with("index") || line.starts_with("---") || line.starts_with("+++") {
+                continue;
+            }
+            
+            if line.starts_with('-') {
+                // 删除的行
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4}   │ -{}", old_line_num, line_content);
+                lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Red))));
+                old_line_num += 1;
+            } else if line.starts_with('+') {
+                // 添加的行
+                let line_content = &line[1..];
+                let formatted_line = format!("   {:4} │ +{}", new_line_num, line_content);
+                lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::Green))));
+                new_line_num += 1;
+            } else if line.starts_with(' ') {
+                // 上下文行
+                let line_content = &line[1..];
+                let formatted_line = format!("{:4}:{:4} │  {}", old_line_num, new_line_num, line_content);
+                lines.push(Line::from(Span::styled(formatted_line.to_string(), Style::default().fg(Color::White))));
+                old_line_num += 1;
+                new_line_num += 1;
+            } else if !line.is_empty() {
+                // 其他内容行
+                lines.push(Line::from(Span::styled(line.to_string(), Style::default().fg(Color::White))));
+            }
+        }
+        
+        lines
     }
 
     /// 渲染模态框
@@ -1491,6 +1685,12 @@ impl TuiUnifiedApp {
                             KeyCode::Char('h') => {
                                 viewer.syntax_highlight = !viewer.syntax_highlight;
                             }
+                            KeyCode::Left | KeyCode::Char('H') => {
+                                viewer.prev_hunk();
+                            }
+                            KeyCode::Right | KeyCode::Char('L') => {
+                                viewer.next_hunk();
+                            }
                             _ => {}
                         }
                     }
@@ -1527,8 +1727,18 @@ impl TuiUnifiedApp {
                             return Ok(());
                         }
                         KeyCode::Enter => {
+                            // 在Git Pull模式下，Enter确认拉取
+                            if modal.modal_type == crate::tui_unified::state::app_state::ModalType::GitPull {
+                                drop(state); // 显式释放读锁
+                                return self.confirm_git_pull().await;
+                            }
+                            // 在分支切换模式下，Enter确认切换
+                            else if modal.modal_type == crate::tui_unified::state::app_state::ModalType::BranchSwitch {
+                                drop(state); // 显式释放读锁
+                                return self.confirm_branch_switch().await;
+                            }
                             // 在AI commit推送提示模式下，Enter等于确认推送
-                            if self.ai_commit_mode && self.ai_commit_push_prompt {
+                            else if self.ai_commit_mode && self.ai_commit_push_prompt {
                                 drop(state); // 显式释放读锁
                                 return self.confirm_push().await;
                             }
@@ -1936,6 +2146,167 @@ impl TuiUnifiedApp {
                 // 推送失败时不退出AI commit模式，让用户可以重试
                 self.ai_commit_status = Some(format!("Push failed: {}", e));
                 state.show_ai_commit_push_modal(format!("Push failed: {}. Try again?", e));
+            }
+        }
+        
+        Ok(())
+    }
+
+    async fn confirm_git_pull(&mut self) -> Result<()> {
+        // 隐藏模态框
+        {
+            let mut state = self.state.write().await;
+            state.hide_modal();
+        }
+        
+        // 执行 git pull
+        let result = tokio::process::Command::new("git")
+            .arg("pull")
+            .output()
+            .await;
+            
+        match result {
+            Ok(output) => {
+                let mut state = self.state.write().await;
+                if output.status.success() {
+                    let pull_output = String::from_utf8_lossy(&output.stdout);
+                    let notification_msg = if pull_output.contains("Already up to date") {
+                        "Already up to date".to_string()
+                    } else {
+                        "Pull completed successfully!".to_string()
+                    };
+                    
+                    state.add_notification(
+                        notification_msg,
+                        crate::tui_unified::state::app_state::NotificationLevel::Success
+                    );
+                    drop(state);
+                    
+                    // 拉取成功后刷新git log
+                    if let Err(e) = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::GitLog).await {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Failed to refresh git log: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                    }
+                } else {
+                    let error_output = String::from_utf8_lossy(&output.stderr);
+                    state.add_notification(
+                        format!("Pull failed: {}", error_output),
+                        crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                }
+            }
+            Err(e) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Failed to execute git pull: {}", e),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
+            }
+        }
+        
+        Ok(())
+    }
+
+    async fn confirm_branch_switch(&mut self) -> Result<()> {
+        // 获取待切换的分支名
+        let branch_name = {
+            let mut state = self.state.write().await;
+            state.hide_modal();
+            state.get_pending_branch_switch()
+        };
+        
+        let branch_name = match branch_name {
+            Some(name) => name,
+            None => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    "No branch selected for switching".to_string(),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
+                return Ok(());
+            }
+        };
+        
+        // 首先检查工作目录是否干净（没有未提交的更改）
+        let status_result = tokio::process::Command::new("git")
+            .arg("status")
+            .arg("--porcelain")
+            .output()
+            .await;
+            
+        match status_result {
+            Ok(output) => {
+                if !output.stdout.is_empty() {
+                    // 有未提交的更改，禁止切换
+                    let mut state = self.state.write().await;
+                    state.add_notification(
+                        format!("Cannot switch branches: You have uncommitted changes.\nPlease commit or stash your changes first."),
+                        crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                    return Ok(());
+                }
+            }
+            Err(e) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Failed to check git status: {}", e),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
+                return Ok(());
+            }
+        }
+        
+        // 工作目录干净，执行分支切换
+        let switch_result = tokio::process::Command::new("git")
+            .arg("checkout")
+            .arg(&branch_name)
+            .output()
+            .await;
+            
+        match switch_result {
+            Ok(output) => {
+                let mut state = self.state.write().await;
+                if output.status.success() {
+                    state.add_notification(
+                        format!("Switched to branch '{}'", branch_name),
+                        crate::tui_unified::state::app_state::NotificationLevel::Success
+                    );
+                    drop(state);
+                    
+                    // 分支切换成功后刷新所有相关视图
+                    if let Err(e) = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::Branches).await {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Failed to refresh branches view: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                    }
+                    
+                    // 同时刷新 git log，因为分支切换后提交历史会改变
+                    if let Err(e) = self.refresh_current_view(crate::tui_unified::state::app_state::ViewType::GitLog).await {
+                        let mut state = self.state.write().await;
+                        state.add_notification(
+                            format!("Failed to refresh git log: {}", e),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                    }
+                } else {
+                    let error_output = String::from_utf8_lossy(&output.stderr);
+                    state.add_notification(
+                        format!("Failed to switch branch: {}", error_output),
+                        crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                }
+            }
+            Err(e) => {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Failed to execute git checkout: {}", e),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error
+                );
             }
         }
         

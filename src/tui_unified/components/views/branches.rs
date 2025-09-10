@@ -158,7 +158,19 @@ impl Component for BranchesView {
                 EventResult::Handled
             }
             KeyCode::Enter => {
-                // TODO: 切换到选中的分支
+                // 切换到选中的分支
+                if let Some(selected_branch) = self.selected_branch() {
+                    // 不允许切换到当前分支
+                    if selected_branch.is_current {
+                        state.add_notification(
+                            "Already on this branch".to_string(),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                    } else {
+                        // 请求分支切换
+                        state.request_branch_switch(selected_branch.name.clone());
+                    }
+                }
                 EventResult::Handled
             }
             KeyCode::Char('r') => {

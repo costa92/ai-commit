@@ -167,6 +167,11 @@ impl Component for GitLogView {
                 self.refresh_commits(state);
                 EventResult::Handled
             }
+            KeyCode::Char('p') => {
+                // 拉取最新代码
+                state.request_git_pull();
+                EventResult::Handled
+            }
             _ => {
                 // 委托给列表组件处理
                 self.list_widget.handle_key_event(key, state)

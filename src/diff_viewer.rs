@@ -45,6 +45,29 @@ pub struct DiffViewer {
     pub search_term: String,
     /// 是否显示文件列表
     pub show_file_list: bool,
+    /// 当前文件的修改块列表
+    pub hunks: Vec<DiffHunk>,
+    /// 当前选中的修改块索引
+    pub current_hunk: usize,
+}
+
+/// Diff 修改块（hunk）
+#[derive(Clone, Debug)]
+pub struct DiffHunk {
+    /// 在diff内容中的起始行号（从0开始）
+    pub start_line: usize,
+    /// 在diff内容中的结束行号
+    pub end_line: usize,
+    /// 原文件起始行号
+    pub old_start: u32,
+    /// 原文件行数
+    pub old_lines: u32,
+    /// 新文件起始行号
+    pub new_start: u32,
+    /// 新文件行数
+    pub new_lines: u32,
+    /// 修改块的头部信息（如：@@ -1,4 +1,4 @@）
+    pub header: String,
 }
 
 /// 提交信息
@@ -99,7 +122,7 @@ impl DiffViewer {
             String::new()
         };
         
-        Ok(Self {
+        let mut viewer = Self {
             commit_hash: commit_hash.to_string(),
             commit_info,
             files,
@@ -112,7 +135,14 @@ impl DiffViewer {
             search_mode: false,
             search_term: String::new(),
             show_file_list: true,  // 默认显示文件列表
-        })
+            hunks: Vec::new(),
+            current_hunk: 0,
+        };
+        
+        // 解析当前文件的修改块
+        viewer.parse_hunks();
+        
+        Ok(viewer)
     }
     
     /// 加载提交信息
@@ -236,7 +266,11 @@ impl DiffViewer {
     pub async fn load_current_file_diff(&mut self) {
         if let Some(file) = self.files.get(self.selected_file) {
             match Self::load_file_diff(&self.commit_hash, &file.path).await {
-                Ok(diff) => self.current_diff = diff,
+                Ok(diff) => {
+                    self.current_diff = diff;
+                    self.parse_hunks();
+                    self.current_hunk = 0;
+                }
                 Err(e) => self.current_diff = format!("Error loading diff: {}", e),
             }
         }
@@ -362,6 +396,143 @@ impl DiffViewer {
         }
         
         (old_lines, new_lines)
+    }
+
+    /// 解析当前 diff 内容中的修改块 (hunks)
+    fn parse_hunks(&mut self) {
+        self.hunks.clear();
+        let lines: Vec<&str> = self.current_diff.lines().collect();
+        let mut current_line = 0;
+        
+        while current_line < lines.len() {
+            let line = lines[current_line];
+            
+            // 找到 hunk header (以 @@ 开头)
+            if line.starts_with("@@") {
+                let start_line = current_line;
+                
+                // 解析 hunk header 获取行号信息
+                let (old_start, new_start, old_lines, new_lines) = 
+                    if let Some((old_start, new_start)) = parse_hunk_header(line) {
+                        // 尝试解析行数信息
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            let old_info = &parts[1]; // -old_start,old_lines
+                            let new_info = &parts[2]; // +new_start,new_lines
+                            
+                            let old_count = if let Some(comma_pos) = old_info.find(',') {
+                                old_info[comma_pos + 1..].parse().unwrap_or(1)
+                            } else { 1 };
+                            
+                            let new_count = if let Some(comma_pos) = new_info.find(',') {
+                                new_info[comma_pos + 1..].parse().unwrap_or(1)
+                            } else { 1 };
+                            
+                            (old_start as u32, new_start as u32, old_count, new_count)
+                        } else {
+                            (0, 0, 1, 1)
+                        }
+                    } else {
+                        (0, 0, 1, 1)
+                    };
+                
+                // 寻找这个 hunk 的结束位置
+                let mut end_line = current_line + 1;
+                let mut processed_old = 0;
+                let mut processed_new = 0;
+                
+                while end_line < lines.len() && processed_old < old_lines && processed_new < new_lines {
+                    let content_line = lines[end_line];
+                    
+                    // 如果遇到下一个 hunk header，停止
+                    if content_line.starts_with("@@") {
+                        break;
+                    }
+                    
+                    // 统计处理的行数
+                    if content_line.starts_with("-") && !content_line.starts_with("---") {
+                        processed_old += 1;
+                    } else if content_line.starts_with("+") && !content_line.starts_with("+++") {
+                        processed_new += 1;
+                    } else if !content_line.starts_with("diff ") && 
+                             !content_line.starts_with("index ") &&
+                             !content_line.starts_with("---") &&
+                             !content_line.starts_with("+++") {
+                        // 上下文行，两边都计数
+                        processed_old += 1;
+                        processed_new += 1;
+                    }
+                    
+                    end_line += 1;
+                }
+                
+                // 创建 hunk 对象
+                let hunk = DiffHunk {
+                    start_line,
+                    end_line: end_line - 1,
+                    old_start,
+                    old_lines,
+                    new_start,
+                    new_lines,
+                    header: line.to_string(),
+                };
+                
+                self.hunks.push(hunk);
+                current_line = end_line;
+            } else {
+                current_line += 1;
+            }
+        }
+        
+        // 如果没有找到任何 hunk，创建一个默认的包含整个 diff 的 hunk
+        if self.hunks.is_empty() && !self.current_diff.is_empty() {
+            self.hunks.push(DiffHunk {
+                start_line: 0,
+                end_line: lines.len().saturating_sub(1),
+                old_start: 1,
+                old_lines: lines.len() as u32,
+                new_start: 1, 
+                new_lines: lines.len() as u32,
+                header: "Complete diff".to_string(),
+            });
+        }
+    }
+    
+    /// 跳转到下一个修改块 (hunk)
+    pub fn next_hunk(&mut self) {
+        if !self.hunks.is_empty() {
+            self.current_hunk = (self.current_hunk + 1) % self.hunks.len();
+            self.scroll_to_current_hunk();
+        }
+    }
+    
+    /// 跳转到上一个修改块 (hunk)  
+    pub fn prev_hunk(&mut self) {
+        if !self.hunks.is_empty() {
+            if self.current_hunk == 0 {
+                self.current_hunk = self.hunks.len() - 1;
+            } else {
+                self.current_hunk -= 1;
+            }
+            self.scroll_to_current_hunk();
+        }
+    }
+    
+    /// 滚动到当前选中的修改块
+    fn scroll_to_current_hunk(&mut self) {
+        if let Some(hunk) = self.hunks.get(self.current_hunk) {
+            // 将当前 hunk 滚动到视图中央
+            self.diff_scroll = hunk.start_line.saturating_sub(5) as u16;
+        }
+    }
+    
+    /// 获取当前修改块信息（用于状态栏显示）
+    pub fn current_hunk_info(&self) -> String {
+        if self.hunks.is_empty() {
+            "No hunks".to_string()
+        } else {
+            format!("Hunk {}/{}", self.current_hunk + 1, self.hunks.len())
+        }
     }
 }
 
@@ -742,10 +913,11 @@ fn render_status_bar(f: &mut Frame, viewer: &DiffViewer, area: Rect) {
     };
     
     let status = format!(
-        " {} | File {}/{} | {} View | Files: {} | Syntax: {} ",
+        " {} | File {}/{} | {} | {} View | Files: {} | Syntax: {} ",
         mode,
         viewer.selected_file + 1,
         viewer.files.len(),
+        viewer.current_hunk_info(),
         match viewer.view_mode {
             DiffViewMode::Split => "Split",
             DiffViewMode::Unified => "Unified",
@@ -822,6 +994,8 @@ fn render_secondary_menu_bar(f: &mut Frame, area: Rect, viewer: &DiffViewer) {
         ("J/K", "Scroll", Color::Yellow),
         ("f/PgDn", "Page↓", Color::Blue),
         ("b/PgUp", "Page↑", Color::Blue),
+        ("→/←", "File", Color::Green),
+        ("↑/↓", "Hunk", Color::Green),
         file_list_key,
         ("h", "Syntax", Color::Cyan),
         ("│", "", Color::DarkGray),

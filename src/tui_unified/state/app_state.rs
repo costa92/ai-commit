@@ -53,6 +53,7 @@ pub struct SelectionState {
     pub multi_selection: Vec<String>,
     pub selection_mode: SelectionMode,
     pub pending_diff_commit: Option<String>, // 待显示diff的提交哈希
+    pub pending_branch_switch: Option<String>, // 待切换的分支名
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -101,6 +102,8 @@ pub enum ModalType {
     Progress,
     DiffViewer,
     AICommit,
+    GitPull,
+    BranchSwitch,
 }
 
 #[derive(Debug, Clone)]
@@ -208,6 +211,55 @@ impl AppState {
     
     pub fn get_pending_diff_commit(&mut self) -> Option<String> {
         self.selected_items.pending_diff_commit.take()
+    }
+    
+    pub fn request_git_pull(&mut self) {
+        let modal = ModalState {
+            modal_type: ModalType::GitPull,
+            title: "Git Pull".to_string(),
+            content: "Pull latest changes from remote repository?".to_string(),
+            buttons: vec![
+                ModalButton {
+                    label: "Pull".to_string(),
+                    action: ModalAction::Yes,
+                },
+                ModalButton {
+                    label: "Cancel".to_string(),
+                    action: ModalAction::Cancel,
+                },
+            ],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+    }
+    
+    pub fn request_branch_switch(&mut self, branch_name: String) {
+        let modal = ModalState {
+            modal_type: ModalType::BranchSwitch,
+            title: "Switch Branch".to_string(),
+            content: format!("Switch to branch '{}'?\n\nThis will change your current working branch.", branch_name),
+            buttons: vec![
+                ModalButton {
+                    label: "Switch".to_string(),
+                    action: ModalAction::Yes,
+                },
+                ModalButton {
+                    label: "Cancel".to_string(),
+                    action: ModalAction::Cancel,
+                },
+            ],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+        
+        // 存储要切换的分支名（我们需要在 SelectionState 中添加字段）
+        self.selected_items.pending_branch_switch = Some(branch_name);
+    }
+    
+    pub fn get_pending_branch_switch(&mut self) -> Option<String> {
+        self.selected_items.pending_branch_switch.take()
     }
     
     // 搜索状态管理
