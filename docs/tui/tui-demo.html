@@ -1,0 +1,3482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Commit TUI Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header Navigation */
+        .header-nav {
+            background: #2d2d30;
+            border-bottom: 2px solid #007acc;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-tab {
+            padding: 6px 16px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .nav-tab:hover {
+            background: #4a4a4f;
+        }
+
+        .nav-tab.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: white;
+        }
+
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            color: #969696;
+        }
+
+        .sync-status .refresh-icon {
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        .sync-status.refreshing .refresh-icon {
+            display: inline;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .repo-info {
+            padding: 16px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .repo-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+            font-size: 13px;
+        }
+
+        .dynamic-list {
+            flex: 1;
+            padding: 8px;
+        }
+
+        .list-title {
+            font-size: 12px;
+            color: #969696;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .list-item {
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 2px 0;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .list-item:hover {
+            background: #2a2d2e;
+        }
+
+        .list-item.selected {
+            background: #094771;
+        }
+
+        .list-item .icon {
+            width: 16px;
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e1e;
+            overflow: hidden;
+        }
+
+        .view-container {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .view-container.active {
+            display: block;
+        }
+
+        /* Git Log View */
+        .git-log {
+            font-family: monospace;
+        }
+
+        .commit-item {
+            padding: 8px;
+            border: 1px solid #3e3e42;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .commit-item:hover {
+            background: #2a2d2e;
+        }
+
+        .commit-item.selected {
+            background: #094771;
+            border-color: #007acc;
+        }
+
+        .commit-hash {
+            color: #f1c232;
+            font-family: monospace;
+        }
+
+        .commit-date {
+            color: #969696;
+            font-size: 12px;
+        }
+
+        .commit-message {
+            flex: 1;
+        }
+
+        .commit-status {
+            font-size: 16px;
+        }
+
+        .stash-icon {
+            font-size: 14px;
+            margin-right: 4px;
+        }
+
+        .remote-icon, .search-icon {
+            font-size: 14px;
+            margin-right: 4px;
+        }
+
+        /* File Status List */
+        .file-status-list {
+            background: #1e1e1e;
+            border-radius: 4px;
+            padding: 8px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .file-item:hover {
+            background: #252526;
+        }
+
+        .file-item.selected {
+            background: #094771;
+        }
+
+        .file-item.staged {
+            border-left: 3px solid #4ec9b0;
+        }
+
+        .file-item.unstaged {
+            border-left: 3px solid #f14c4c;
+        }
+
+        .file-item.untracked {
+            border-left: 3px solid #969696;
+        }
+
+        .file-status-icon {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        .file-path {
+            flex: 1;
+            color: #cccccc;
+            margin-right: 8px;
+        }
+
+        .file-status {
+            color: #969696;
+            font-size: 12px;
+            margin-right: 8px;
+            min-width: 60px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .file-item:hover .file-actions {
+            opacity: 1;
+        }
+
+        .btn-small {
+            padding: 2px 6px;
+            font-size: 11px;
+            border: 1px solid #3e3e42;
+            background: #2d2d30;
+            color: #cccccc;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .btn-small:hover {
+            background: #3e3e42;
+        }
+
+        .btn-small.btn-danger {
+            border-color: #f14c4c;
+            color: #f14c4c;
+        }
+
+        .btn-small.btn-danger:hover {
+            background: #f14c4c;
+            color: #ffffff;
+        }
+
+        /* Commit Files List */
+        .commit-files {
+            background: #1e1e1e;
+            border-radius: 4px;
+            padding: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .commit-file-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 3px;
+            margin-bottom: 2px;
+        }
+
+        .commit-file-item:hover {
+            background: #252526;
+        }
+
+        /* Modal Dialog */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2d2d30;
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 12px 16px;
+            background: #007acc;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 12px 16px;
+            background: #252526;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 6px 16px;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+            margin: 0 2px;
+        }
+
+        .btn:hover {
+            background: #1177bb;
+        }
+
+        .btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #0e639c;
+        }
+
+        .btn-primary:hover {
+            background: #1177bb;
+        }
+
+        .btn-secondary {
+            background: #3e3e42;
+        }
+
+        .btn-secondary:hover {
+            background: #4a4a4f;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #f14c4c;
+        }
+
+        .btn-danger:hover {
+            background: #f36666;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #ccc;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+            background: #f44336;
+            border-radius: 4px;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: #007acc;
+            color: white;
+            padding: 4px 16px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-left {
+            display: flex;
+            gap: 16px;
+        }
+
+        .status-right {
+            display: flex;
+            gap: 16px;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: #cccccc;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 6px 8px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            color: #cccccc;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        /* AI Commit Specific */
+        .ai-suggestions {
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 12px 0;
+        }
+
+        .ai-suggestion-item {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ai-suggestion-item:hover {
+            border-color: #007acc;
+            background: #2a2d2e;
+        }
+
+        .ai-suggestion-item.selected {
+            border-color: #007acc;
+            background: #094771;
+        }
+
+        .ai-suggestion-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4ec9b0;
+        }
+
+        .ai-suggestion-body {
+            font-size: 12px;
+            color: #969696;
+            white-space: pre-wrap;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #3e3e42;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #007acc;
+            transition: width 0.3s;
+        }
+
+        /* Diff Viewer */
+        .diff-viewer {
+            font-family: monospace;
+            font-size: 13px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            overflow-x: auto;
+        }
+
+        .diff-line {
+            padding: 2px 4px;
+            white-space: pre;
+        }
+
+        .diff-line.added {
+            background: rgba(87, 171, 90, 0.2);
+            color: #57ab5a;
+        }
+
+        .diff-line.removed {
+            background: rgba(229, 83, 75, 0.2);
+            color: #e5534b;
+        }
+
+        .diff-line.context {
+            color: #969696;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            padding: 8px;
+            background: #252526;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .quick-action {
+            padding: 4px 8px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-action:hover {
+            background: #4a4a4f;
+            border-color: #007acc;
+        }
+
+        .kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: monospace;
+            margin: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Navigation -->
+        <div class="header-nav">
+            <div class="nav-tabs">
+                <div class="nav-tab" data-view="branches">Branches</div>
+                <div class="nav-tab" data-view="tags">Tags</div>
+                <div class="nav-tab active" data-view="stash">Stash</div>
+                <div class="nav-tab" data-view="status">Status</div>
+                <div class="nav-tab" data-view="remotes">Remotes</div>
+                <div class="nav-tab" data-view="history">History</div>
+            </div>
+            <div class="sync-status" id="syncStatus">
+                <span class="refresh-icon">🔄</span>
+                <span class="status-text">Ready</span>
+                <span>| Auto-refresh: ON</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="repo-info">
+                    <div class="repo-info-item">
+                        <span>📋</span>
+                        <span>ai-commit</span>
+                    </div>
+                    <div class="repo-info-item">
+                        <span>🔀</span>
+                        <span>main</span>
+                    </div>
+                    <div class="repo-info-item">
+                        <span>📊</span>
+                        <span>1024 commits</span>
+                    </div>
+                    <div class="repo-info-item">
+                        <span>🌿</span>
+                        <span>45 branches</span>
+                    </div>
+                    <div class="repo-info-item">
+                        <span>🏷️</span>
+                        <span>12 tags</span>
+                    </div>
+                    <div class="repo-info-item">
+                        <span>💾</span>
+                        <span>2 stashes</span>
+                    </div>
+                </div>
+                <div class="dynamic-list" id="dynamicList">
+                    <!-- Dynamic content based on selected view -->
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Branches View -->
+                <div class="view-container" id="branchesView">
+                    <h3>Branch Management</h3>
+                    <div style="background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-weight: bold; color: #4ec9b0;">Selected: <span id="selectedBranch">★ main</span></div>
+                            <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                                <div>📊 Branch Details:</div>
+                                <div>• Upstream: origin/main</div>
+                                <div>• Ahead: 2 commits | Behind: 0 commits</div>
+                                <div>• Last commit: fix(ui): 修复侧边栏布局问题</div>
+                                <div>• Author: costa | Date: 2024-09-11</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn" onclick="checkoutBranch()">Checkout</button>
+                        <button class="btn" onclick="createBranch()">Create New</button>
+                        <button class="btn" onclick="deleteBranch()">Delete</button>
+                        <button class="btn">Merge</button>
+                        <button class="btn">Push</button>
+                        <button class="btn">Pull</button>
+                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                    </div>
+                    
+                    <!-- Git Log for Branches -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #cccccc;">Git Log</h4>
+                        <div class="git-log" id="branchesGitLog">
+                            <div class="commit-item selected" data-hash="18c4a3a" onclick="selectBranchCommit('18c4a3a')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">18c4a3a</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editBranchCommit('18c4a3a')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetBranchCommit('18c4a3a')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickBranchCommit('18c4a3a')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                            <div class="commit-item" data-hash="8502563" onclick="selectBranchCommit('8502563')">
+                                <span class="commit-status">🔧</span>
+                                <span class="commit-hash">8502563</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(src): 修复TUI界面焦点管理和视图切换问题</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editBranchCommit('8502563')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetBranchCommit('8502563')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickBranchCommit('8502563')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                            <div class="commit-item" data-hash="5f49518" onclick="selectBranchCommit('5f49518')">
+                                <span class="commit-status">✨</span>
+                                <span class="commit-hash">5f49518</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">feat(diff_viewer): 添加 Diff 修改块列表和解析函数</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editBranchCommit('5f49518')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetBranchCommit('5f49518')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickBranchCommit('5f49518')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px;">
+                        <div style="font-size: 12px; color: #969696;">
+                            <span class="kbd">Enter</span> Checkout | 
+                            <span class="kbd">c</span> Create | 
+                            <span class="kbd">d</span> Delete | 
+                            <span class="kbd">m</span> Merge
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tags View -->
+                <div class="view-container" id="tagsView">
+                    <h3>Tag Management</h3>
+                    <div style="background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-weight: bold; color: #4ec9b0;">Selected: <span id="selectedTag">v2.1.0</span></div>
+                            <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                                <div>🏷️ Tag Details:</div>
+                                <div>• Date: 2024-09-11 15:45:32</div>
+                                <div>• Commit: 18c4a3a</div>
+                                <div>• Message: Latest release</div>
+                                <div>• Tagger: costa &lt;costa@helltalk.com&gt;</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <button class="btn" onclick="checkoutTag()">Checkout Tag</button>
+                        <button class="btn" onclick="createTag()">Create Tag</button>
+                        <button class="btn" onclick="deleteTag()">Delete</button>
+                        <button class="btn">Push Tag</button>
+                        <button class="btn">Compare</button>
+                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                    </div>
+                    
+                    <!-- Git Log for Tags -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #cccccc;">Git Log</h4>
+                        <div class="git-log" id="tagsGitLog">
+                            <div class="commit-item selected" data-hash="18c4a3a" onclick="selectTagCommit('18c4a3a')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">18c4a3a</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(ui): 修复侧边栏布局问题</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editTagCommit('18c4a3a')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetTagCommit('18c4a3a')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickTagCommit('18c4a3a')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                            <div class="commit-item" data-hash="8502563" onclick="selectTagCommit('8502563')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">8502563</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(src): 修复TUI界面焦点管理</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editTagCommit('8502563')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetTagCommit('8502563')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickTagCommit('8502563')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                            <div class="commit-item" data-hash="5f49518" onclick="selectTagCommit('5f49518')">
+                                <span class="commit-status">🔒</span>
+                                <span class="commit-hash">5f49518</span>
+                                <span class="commit-date">[09-10 15:30]</span>
+                                <span class="commit-message">feat(diff_viewer): 添加 Diff 修改块</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editTagCommit('5f49518')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetTagCommit('5f49518')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickTagCommit('5f49518')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                            <div class="commit-item" data-hash="9bd566f" onclick="selectTagCommit('9bd566f')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">9bd566f</span>
+                                <span class="commit-date">[09-10 14:20]</span>
+                                <span class="commit-message">fix(tui_enhanced): 修复左侧面板显示</span>
+                                <div class="commit-actions">
+                                    <button class="btn btn-secondary" onclick="editTagCommit('9bd566f')" title="Edit">✏️</button>
+                                    <button class="btn btn-secondary" onclick="resetTagCommit('9bd566f')" title="Reset">🔄</button>
+                                    <button class="btn btn-secondary" onclick="cherryPickTagCommit('9bd566f')" title="Cherry Pick">🍒</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px;">
+                        <div style="font-size: 12px; color: #969696;">
+                            <span class="kbd">Enter</span> Diff | 
+                            <span class="kbd">c</span> Create Tag | 
+                            <span class="kbd">d</span> Delete | 
+                            <span class="kbd">r</span> Reword |
+                            <span class="kbd">↑↓</span> Navigate
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stash/Git Log View -->
+                <div class="view-container active" id="stashView">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>Git Log</h3>
+                        <div>
+                            <button class="btn btn-secondary" onclick="toggleStashMode()">Switch to Stash</button>
+                            <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    <div class="git-log" id="gitLog">
+                        <div class="commit-item selected" data-hash="18c4a3a" onclick="selectMainCommit('18c4a3a')">
+                            <span class="commit-status">📝</span>
+                            <span class="commit-hash">18c4a3a</span>
+                            <span class="commit-date">[09-11 01:44]</span>
+                            <span class="commit-message">fix(ui): 修复侧边栏布局问题</span>
+                        </div>
+                        <div class="commit-item" data-hash="8502563" onclick="selectMainCommit('8502563')">
+                            <span class="commit-status">📝</span>
+                            <span class="commit-hash">8502563</span>
+                            <span class="commit-date">[09-11 01:44]</span>
+                            <span class="commit-message">fix(src): 修复TUI界面焦点管理</span>
+                        </div>
+                        <div class="commit-item" data-hash="5f49518" onclick="selectMainCommit('5f49518')">
+                            <span class="commit-status">🔒</span>
+                            <span class="commit-hash">5f49518</span>
+                            <span class="commit-date">[09-11 01:44]</span>
+                            <span class="commit-message">feat(diff_viewer): 添加 Diff 修改块</span>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <span class="quick-action" onclick="rewordCommit()"><kbd>r</kbd> Reword</span>
+                        <span class="quick-action" onclick="editCommit()"><kbd>e</kbd> Edit</span>
+                        <span class="quick-action" onclick="squashCommit()"><kbd>s</kbd> Squash</span>
+                        <span class="quick-action" onclick="showDiff()"><kbd>Enter</kbd> Show Diff</span>
+                        <span class="quick-action" onclick="showInteractiveRebase()"><kbd>Ctrl+E</kbd> Interactive Rebase</span>
+                    </div>
+                </div>
+
+                <!-- Status View -->
+                <div class="view-container" id="statusView">
+                    <h3>Git Status</h3>
+                    
+                    <!-- Staged Files -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #4ec9b0;">Changes to be committed</h4>
+                        <div class="file-status-list" id="stagedFiles">
+                            <div class="file-item staged" onclick="toggleFileStatus(this, 'src/tui/layout/manager.rs')">
+                                <span class="file-status-icon">✓</span>
+                                <span class="file-path">src/tui/layout/manager.rs</span>
+                                <span class="file-status">Modified</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="unstageFile(event, 'src/tui/layout/manager.rs')">Unstage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'src/tui/layout/manager.rs')">Diff</button>
+                                </span>
+                            </div>
+                            <div class="file-item staged" onclick="toggleFileStatus(this, 'src/components/sidebar.rs')">
+                                <span class="file-status-icon">✓</span>
+                                <span class="file-path">src/components/sidebar.rs</span>
+                                <span class="file-status">Modified</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="unstageFile(event, 'src/components/sidebar.rs')">Unstage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'src/components/sidebar.rs')">Diff</button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Unstaged Files -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #f14c4c;">Changes not staged for commit</h4>
+                        <div class="file-status-list" id="unstagedFiles">
+                            <div class="file-item unstaged" onclick="toggleFileStatus(this, 'docs/new-layout-design.md')">
+                                <span class="file-status-icon">○</span>
+                                <span class="file-path">docs/new-layout-design.md</span>
+                                <span class="file-status">Modified</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'docs/new-layout-design.md')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'docs/new-layout-design.md')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'docs/new-layout-design.md')">Discard</button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Untracked Files -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #969696;">Untracked files</h4>
+                        <div class="file-status-list" id="untrackedFiles">
+                            <div class="file-item untracked" onclick="toggleFileStatus(this, 'temp/debug.log')">
+                                <span class="file-status-icon">?</span>
+                                <span class="file-path">temp/debug.log</span>
+                                <span class="file-status">New file</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'temp/debug.log')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'temp/debug.log')">Delete</button>
+                                </span>
+                            </div>
+                            <div class="file-item untracked" onclick="toggleFileStatus(this, '.env.local')">
+                                <span class="file-status-icon">?</span>
+                                <span class="file-path">.env.local</span>
+                                <span class="file-status">New file</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, '.env.local')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, '.env.local')">Delete</button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="quick-actions" style="margin-top: 16px;">
+                        <button class="btn" onclick="commitChanges()">Commit</button>
+                        <button class="btn" onclick="showAICommit()">AI Commit</button>
+                        <button class="btn" onclick="stageAllFiles()">Add All</button>
+                        <button class="btn" onclick="unstageAllFiles()">Reset</button>
+                        <button class="btn btn-danger" onclick="discardAllFiles()">Discard</button>
+                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                    </div>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px;">
+                        <div style="font-size: 12px; color: #969696;">
+                            <span class="kbd">Enter</span> Toggle | 
+                            <span class="kbd">Space</span> Stage/Unstage | 
+                            <span class="kbd">d</span> Diff |
+                            <span class="kbd">c</span> Commit | 
+                            <span class="kbd">↑↓</span> Navigate
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Remotes View -->
+                <div class="view-container" id="remotesView">
+                    <h3>Remote Management</h3>
+                    <div class="quick-actions">
+                        <button class="btn">Fetch</button>
+                        <button class="btn">Pull</button>
+                        <button class="btn">Push</button>
+                        <button class="btn">Sync</button>
+                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                    </div>
+                    
+                    <!-- Git Log for Remotes -->
+                    <div style="margin-top: 16px;">
+                        <h4 style="margin-bottom: 8px; color: #cccccc;">Git Log</h4>
+                        <div class="git-log" id="remotesGitLog">
+                            <div class="commit-item selected" data-hash="18c4a3a" onclick="selectRemoteCommit('18c4a3a')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">18c4a3a</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(ui): 修复侧边栏布局问题</span>
+                            </div>
+                            <div class="commit-item" data-hash="8502563" onclick="selectRemoteCommit('8502563')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">8502563</span>
+                                <span class="commit-date">[09-11 01:44]</span>
+                                <span class="commit-message">fix(src): 修复TUI界面焦点管理</span>
+                            </div>
+                            <div class="commit-item" data-hash="5f49518" onclick="selectRemoteCommit('5f49518')">
+                                <span class="commit-status">🔒</span>
+                                <span class="commit-hash">5f49518</span>
+                                <span class="commit-date">[09-10 15:30]</span>
+                                <span class="commit-message">feat(diff_viewer): 添加 Diff 修改块</span>
+                            </div>
+                            <div class="commit-item" data-hash="9bd566f" onclick="selectRemoteCommit('9bd566f')">
+                                <span class="commit-status">📝</span>
+                                <span class="commit-hash">9bd566f</span>
+                                <span class="commit-date">[09-10 14:20]</span>
+                                <span class="commit-message">fix(tui_enhanced): 修复左侧面板显示</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px;">
+                        <div style="font-size: 12px; color: #969696;">
+                            <span class="kbd">Enter</span> Diff | 
+                            <span class="kbd">f</span> Fetch | 
+                            <span class="kbd">p</span> Pull | 
+                            <span class="kbd">r</span> Reword |
+                            <span class="kbd">↑↓</span> Navigate
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History View -->
+                <div class="view-container" id="historyView">
+                    <h3>Query History</h3>
+                    <div class="quick-actions">
+                        <button class="btn">Search</button>
+                        <button class="btn">Filter</button>
+                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span>[NORMAL]</span>
+                <span>Focus: Content</span>
+                <span>View: <span id="currentView">Stash</span></span>
+            </div>
+            <div class="status-right">
+                <span><kbd>F5</kbd> Refresh</span>
+                <span><kbd>Ctrl+P</kbd> Pull</span>
+                <span><kbd>Ctrl+A</kbd> AI Commit</span>
+                <span><kbd>Tab</kbd> Focus</span>
+                <span><kbd>q</kbd> Quit</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Diff Viewer Modal -->
+    <div class="modal" id="diffModal">
+        <div class="modal-content" style="width: 90%; max-width: 1200px;">
+            <div class="modal-header">
+                <span>
+                    📄 Diff Viewer - Commit: <span id="diffCommitHash"></span> | 
+                    Files: 10 | 
+                    Mode: <span id="diffMode">Unified</span>
+                </span>
+                <button class="close-btn" onclick="closeDiffModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- File List Panel -->
+                <div id="fileListPanel" style="display: none; margin-bottom: 12px; background: #252526; padding: 12px; border-radius: 4px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; color: #4ec9b0;">
+                        📁 Changed Files (3 files, +45 -12 lines)
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div class="file-item" onclick="selectFile(0)" style="padding: 6px 8px; background: #094771; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between;">
+                            <span>📝 src/tui/layout/manager.rs</span>
+                            <span style="color: #57ab5a;">+15 -5</span>
+                        </div>
+                        <div class="file-item" onclick="selectFile(1)" style="padding: 6px 8px; background: #1e1e1e; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between;">
+                            <span>📝 src/components/sidebar.rs</span>
+                            <span style="color: #57ab5a;">+8 -12</span>
+                        </div>
+                        <div class="file-item" onclick="selectFile(2)" style="padding: 6px 8px; background: #1e1e1e; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between;">
+                            <span>➕ docs/design.md</span>
+                            <span style="color: #57ab5a;">+45 -0</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #3e3e42; font-size: 12px; color: #969696;">
+                        Click to jump to file | <kbd>f</kbd> to close
+                    </div>
+                </div>
+
+                <!-- File Header -->
+                <div style="background: #252526; padding: 12px; border-radius: 4px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: bold; color: #4ec9b0;">
+                                📁 <span id="currentFilePath">src/tui/layout/manager.rs</span>
+                            </div>
+                            <div style="font-size: 12px; color: #969696; margin-top: 4px;">
+                                📊 Changes: <span id="fileChanges">+15 lines, -5 lines</span> | 
+                                🔍 Binary: No | Mode: 100644 → 100644 | 
+                                📝 Status: <span id="fileStatus">Modified</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="toggleFileList()">
+                            <kbd>f</kbd> Files
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Mode Switcher -->
+                <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+                    <button class="btn btn-secondary" onclick="switchDiffMode('unified')">
+                        <kbd>1</kbd> Unified
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchDiffMode('side-by-side')">
+                        <kbd>2</kbd> Side-by-Side
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchDiffMode('split')">
+                        <kbd>3</kbd> Split
+                    </button>
+                    <span style="margin-left: auto; display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" onclick="previousFile()">
+                            <kbd>p</kbd> Prev
+                        </button>
+                        <button class="btn btn-secondary" onclick="nextFile()">
+                            <kbd>n</kbd> Next
+                        </button>
+                    </span>
+                </div>
+                
+                <!-- Unified Mode View -->
+                <div id="unifiedView" class="diff-viewer">
+                    <div class="diff-line context">@@ -194,18 +194,53 @@ impl CommitAgent {</div>
+                    <div class="diff-line context">    0</div>
+                    <div class="diff-line context">    1     /// 清理提交消息</div>
+                    <div class="diff-line context">    2     fn clean_commit_message(&self, message: &str) -> String {</div>
+                    <div class="diff-line removed">-   3     // 只取第一行，去除多余空白和引号</div>
+                    <div class="diff-line removed">-   4     let cleaned = message.lines()</div>
+                    <div class="diff-line removed">-   5         .next()</div>
+                    <div class="diff-line added">+   3     // 寻找符合 Conventional Commits 格式的行</div>
+                    <div class="diff-line added">+   4     for line in message.lines() {</div>
+                    <div class="diff-line added">+   5         let trimmed_line = line.trim();</div>
+                    <div class="diff-line added">+   6</div>
+                    <div class="diff-line added">+   7     // 跳过空行和明显的解释性文本</div>
+                    <div class="diff-line added">+   8     if trimmed_line.is_empty() ||</div>
+                    <div class="diff-line added">+   9         trimmed_line.starts_with("Here") ||</div>
+                    <div class="diff-line added">+  10         trimmed_line.starts_with("Based") ||</div>
+                    <div class="diff-line added">+  11         trimmed_line.starts_with("The") ||</div>
+                    <div class="diff-line added">+  12         trimmed_line.starts_with("This") ||</div>
+                    <div class="diff-line added">+  13         trimmed_line.starts_with("Analysis")</div>
+                    <div class="diff-line added">+  14     {</div>
+                    <div class="diff-line added">+  15         continue;</div>
+                </div>
+                
+                <!-- Side-by-Side Mode View -->
+                <div id="sideBySideView" class="diff-viewer" style="display: none;">
+                    <div style="display: flex; gap: 16px;">
+                        <div style="flex: 1; background: #1e1e1e; padding: 8px; border-radius: 4px;">
+                            <div style="font-weight: bold; margin-bottom: 8px; color: #f14c4c;">
+                                ▼ Original: src/core/ai/agents/commit_agent.rs
+                            </div>
+                            <div class="diff-line context">@@ -194,18 +194,53 @@ impl CommitAgent {</div>
+                            <div class="diff-line context">  0</div>
+                            <div class="diff-line context">  1     /// 清理提交消息</div>
+                            <div class="diff-line context">  2   fn clean_commit_message(&self, message: &str) →</div>
+                            <div class="diff-line removed">- 3     // 只取第一行，去除多余空白和引号</div>
+                            <div class="diff-line removed">- 4     let cleaned = message.lines()</div>
+                            <div class="diff-line removed">- 5         .next()</div>
+                            <div style="height: 180px;"></div>
+                        </div>
+                        <div style="flex: 1; background: #1e1e1e; padding: 8px; border-radius: 4px;">
+                            <div style="font-weight: bold; margin-bottom: 8px; color: #57ab5a;">
+                                ▼ Modified: src/core/ai/agents/commit_agent.rs
+                            </div>
+                            <div class="diff-line context">@@ -194,18 +194,53 @@ impl CommitAgent {</div>
+                            <div class="diff-line context">  0</div>
+                            <div class="diff-line context">  1     /// 清理提交消息</div>
+                            <div class="diff-line context">  2   fn clean_commit_message(&self, message: &str) →</div>
+                            <div class="diff-line added">+ 3     // 寻找符合 Conventional Commits 格式的行</div>
+                            <div class="diff-line added">+ 4     for line in message.lines() {</div>
+                            <div class="diff-line added">+ 5         let trimmed_line = line.trim();</div>
+                            <div class="diff-line added">+ 6</div>
+                            <div class="diff-line added">+ 7     // 跳过空行和明显的解释性文本</div>
+                            <div class="diff-line added">+ 8     if trimmed_line.is_empty() ||</div>
+                            <div class="diff-line added">+ 9         trimmed_line.starts_with("Here") ||</div>
+                            <div class="diff-line added">+ 10        trimmed_line.starts_with("Based") ||</div>
+                            <div class="diff-line added">+ 11        trimmed_line.starts_with("The") ||</div>
+                            <div class="diff-line added">+ 12        trimmed_line.starts_with("This") ||</div>
+                            <div class="diff-line added">+ 13        trimmed_line.starts_with("Analysis")</div>
+                            <div class="diff-line added">+ 14    {</div>
+                            <div class="diff-line added">+ 15        continue;</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Split Mode View -->
+                <div id="splitView" class="diff-viewer" style="display: none;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-weight: bold; margin-bottom: 8px;">
+                            ▼ File: src/core/ai/agents/commit_agent.rs
+                        </div>
+                        <div style="background: #1e1e1e; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                            <div style="font-weight: bold; margin-bottom: 8px; color: #f14c4c;">
+                                ┌─ Original ─────────────────────────────────────────────────────────────┐
+                            </div>
+                            <div class="diff-line context">@@ -194,18 +194,53 @@ impl CommitAgent {</div>
+                            <div class="diff-line context">  0</div>
+                            <div class="diff-line context">  1     /// 清理提交消息</div>
+                            <div class="diff-line context">  2   fn clean_commit_message(&self, message: &str) -> String {</div>
+                            <div class="diff-line removed">- 3     // 只取第一行，去除多余空白和引号</div>
+                            <div class="diff-line removed">- 4     let cleaned = message.lines()</div>
+                            <div class="diff-line removed">- 5         .next()</div>
+                            <div style="border-bottom: 1px solid #3e3e42; margin: 8px 0;"></div>
+                        </div>
+                        <div style="background: #1e1e1e; padding: 8px; border-radius: 4px;">
+                            <div style="font-weight: bold; margin-bottom: 8px; color: #57ab5a;">
+                                ┌─ Modified ─────────────────────────────────────────────────────────────┐
+                            </div>
+                            <div class="diff-line context">@@ -194,18 +194,53 @@ impl CommitAgent {</div>
+                            <div class="diff-line context">  0</div>
+                            <div class="diff-line context">  1     /// 清理提交消息</div>
+                            <div class="diff-line context">  2   fn clean_commit_message(&self, message: &str) -> String {</div>
+                            <div class="diff-line added">+ 3     // 寻找符合 Conventional Commits 格式的行</div>
+                            <div class="diff-line added">+ 4     for line in message.lines() {</div>
+                            <div class="diff-line added">+ 5         let trimmed_line = line.trim();</div>
+                            <div class="diff-line added">+ 6</div>
+                            <div class="diff-line added">+ 7     // 跳过空行和明显的解释性文本</div>
+                            <div class="diff-line added">+ 8     if trimmed_line.is_empty() ||</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display: flex; justify-content: space-between; width: 100%;">
+                    <div>
+                        <span>File <span id="currentFileIndex">1</span>/3 | Scroll: 0 | View Mode: <span id="diffModeStatus">Unified</span></span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="kbd">↑↓</span> Scroll
+                        <span class="kbd">n/p</span> Next/Prev File
+                        <span class="kbd">f</span> File List
+                        <span class="kbd">1-3</span> Switch Mode
+                        <span class="kbd">q</span> Close
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reword Modal -->
+    <div class="modal" id="rewordModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>✏️ Edit Commit Message</span>
+                <button class="close-btn" onclick="closeRewordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Commit: <span id="rewordCommitHash"></span></label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Original Message</label>
+                    <input type="text" class="form-input" id="originalMessage" readonly value="fix(ui): 修复侧边栏布局问题">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">New Message</label>
+                    <input type="text" class="form-input" id="newMessage" placeholder="Enter new commit message">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Body (optional)</label>
+                    <textarea class="form-textarea" id="commitBody" placeholder="Additional details..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="saveReword()">Save</button>
+                <button class="btn btn-info" onclick="aiEnhance()">AI Enhance</button>
+                <button class="btn btn-secondary" onclick="closeRewordModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Commit Modal -->
+    <div class="modal" id="aiCommitModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>🤖 AI Commit Assistant</span>
+                <button class="close-btn" onclick="closeAIModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">AI Provider</label>
+                    <select class="form-select" id="aiProvider">
+                        <option value="ollama">Ollama (Local)</option>
+                        <option value="deepseek">Deepseek</option>
+                        <option value="siliconflow">SiliconFlow</option>
+                        <option value="kimi">Kimi</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Model</label>
+                    <select class="form-select" id="aiModel">
+                        <option value="mistral">Mistral</option>
+                        <option value="llama2">Llama 2</option>
+                        <option value="codellama">Code Llama</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Changes Summary</label>
+                    <div style="background: #1e1e1e; padding: 8px; border-radius: 4px;">
+                        <div>Files: 3 changed, +45 -12 lines</div>
+                        <div>• src/tui/layout/manager.rs [Modified]</div>
+                        <div>• src/components/sidebar.rs [Modified]</div>
+                        <div>• docs/design.md [Added]</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-primary" onclick="generateAICommit()">Generate Suggestions</button>
+                </div>
+                <div id="aiProgress" style="display: none;">
+                    <label class="form-label">Analyzing changes...</label>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="aiSuggestions" style="display: none;">
+                    <label class="form-label">AI Suggestions</label>
+                    <div class="ai-suggestions">
+                        <div class="ai-suggestion-item" onclick="selectSuggestion(this, 1)">
+                            <div class="ai-suggestion-title">1. fix(ui): 重构侧边栏布局，解决信息层次混乱问题 ⭐</div>
+                            <div class="ai-suggestion-body">• 分离仓库状态和菜单导航
+• 优化焦点管理逻辑
+• 改善用户交互体验</div>
+                        </div>
+                        <div class="ai-suggestion-item" onclick="selectSuggestion(this, 2)">
+                            <div class="ai-suggestion-title">2. fix(tui): 修复侧边栏组件布局和焦点管理问题</div>
+                            <div class="ai-suggestion-body">解决了侧边栏中Repository信息、分支列表和菜单导航
+混合显示导致的信息层次不清和交互复杂的问题</div>
+                        </div>
+                        <div class="ai-suggestion-item" onclick="selectSuggestion(this, 3)">
+                            <div class="ai-suggestion-title">3. refactor(layout): 优化TUI布局管理系统</div>
+                            <div class="ai-suggestion-body">重构布局管理器以支持更灵活的组件排列和响应式设计</div>
+                        </div>
+                    </div>
+                    <div id="editAICommit" style="display: none; margin-top: 16px;">
+                        <label class="form-label">Edit Selected Message</label>
+                        <textarea class="form-input" id="aiCommitMessage" rows="3" placeholder="Edit the commit message..."></textarea>
+                        <div style="margin-top: 8px; font-size: 12px; color: #969696;">
+                            <span class="kbd">Ctrl+Enter</span> Apply | <span class="kbd">Esc</span> Cancel Edit
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div id="aiCommitActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="useAICommit()">Use Selected</button>
+                    <button class="btn btn-info" onclick="editAIMessage()">Edit Message</button>
+                    <button class="btn btn-warning" onclick="regenerateAI()">Regenerate</button>
+                </div>
+                <div id="aiEditActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="applyEditedMessage()">Apply Changes</button>
+                    <button class="btn btn-secondary" onclick="cancelEdit()">Cancel Edit</button>
+                </div>
+                <button class="btn btn-secondary" onclick="closeAIModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Rebase Modal -->
+    <div class="modal" id="rebaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>🔄 Interactive Rebase Editor</span>
+                <button class="close-btn" onclick="closeRebaseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Editing 5 commits from 18c4a3a to HEAD</label>
+                </div>
+                <div style="background: #1e1e1e; padding: 12px; border-radius: 4px;">
+                    <div class="commit-item">
+                        <select class="form-select" style="width: 100px; margin-right: 8px;">
+                            <option value="pick">pick</option>
+                            <option value="reword">reword</option>
+                            <option value="edit">edit</option>
+                            <option value="squash">squash</option>
+                            <option value="fixup">fixup</option>
+                            <option value="drop">drop</option>
+                        </select>
+                        <span>18c4a3a fix(ui): 修复侧边栏布局问题</span>
+                    </div>
+                    <div class="commit-item">
+                        <select class="form-select" style="width: 100px; margin-right: 8px;">
+                            <option value="pick">pick</option>
+                            <option value="reword" selected>reword</option>
+                            <option value="edit">edit</option>
+                            <option value="squash">squash</option>
+                            <option value="fixup">fixup</option>
+                            <option value="drop">drop</option>
+                        </select>
+                        <span>8502563 fix(src): 修复TUI界面焦点管理 ✏️</span>
+                    </div>
+                    <div class="commit-item">
+                        <select class="form-select" style="width: 100px; margin-right: 8px;">
+                            <option value="pick">pick</option>
+                            <option value="reword">reword</option>
+                            <option value="edit">edit</option>
+                            <option value="squash" selected>squash</option>
+                            <option value="fixup">fixup</option>
+                            <option value="drop">drop</option>
+                        </select>
+                        <span>5f49518 feat: 添加 Diff 修改块</span>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label class="form-label">Commands:</label>
+                    <div style="font-size: 12px; color: #969696;">
+                        <div><kbd>p</kbd> pick - 使用提交</div>
+                        <div><kbd>r</kbd> reword - 使用提交，但修改提交信息</div>
+                        <div><kbd>e</kbd> edit - 使用提交，但停下来修改</div>
+                        <div><kbd>s</kbd> squash - 使用提交，但融合到上一个提交</div>
+                        <div><kbd>f</kbd> fixup - 类似于 squash，但丢弃提交信息</div>
+                        <div><kbd>d</kbd> drop - 删除提交</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="startRebase()">Start Rebase</button>
+                <button class="btn btn-secondary" onclick="closeRebaseModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Commit Modal -->
+    <div class="modal" id="commitModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>📝 Commit Changes</span>
+                <button class="close-btn" onclick="closeCommitModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Commit Message</label>
+                    <textarea class="form-input" id="commitMessage" rows="4" placeholder="Enter commit message...&#10;&#10;Use conventional commit format:&#10;feat(scope): description&#10;fix(scope): description&#10;docs(scope): description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Files to commit</label>
+                    <div class="commit-files" id="commitFilesList">
+                        <div class="commit-file-item">
+                            <span class="file-status-icon">✓</span>
+                            <span class="file-path">src/tui/layout/manager.rs</span>
+                            <span class="file-status">Modified</span>
+                        </div>
+                        <div class="commit-file-item">
+                            <span class="file-status-icon">✓</span>
+                            <span class="file-path">src/components/sidebar.rs</span>
+                            <span class="file-status">Modified</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="pushAfterCommit" style="margin-right: 8px;">
+                        Push to remote after commit
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="executeCommit()">Commit</button>
+                <button class="btn btn-info" onclick="showAICommit(); closeCommitModal();">AI Assist</button>
+                <button class="btn btn-secondary" onclick="closeCommitModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <div class="modal" id="customAlertModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <span id="alertTitle">💬 提示</span>
+                <button class="close-btn" onclick="closeCustomAlert()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="alertMessage" style="padding: 20px 0; line-height: 1.6; color: #e0e0e0;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeCustomAlert()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div class="modal" id="customConfirmModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <span id="confirmTitle">❓ 确认操作</span>
+                <button class="close-btn" onclick="closeCustomConfirm()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="confirmMessage" style="padding: 20px 0; line-height: 1.6; color: #e0e0e0;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="confirmYesBtn">确认</button>
+                <button class="btn btn-secondary" onclick="closeCustomConfirm()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentView = 'stash';
+        let selectedCommit = '18c4a3a';
+        let selectedAISuggestion = null;
+        let customConfirmCallback = null;
+
+        // Custom Alert and Confirm Functions
+        function showCustomAlert(message, title = '💬 提示', icon = '💬') {
+            document.getElementById('alertTitle').textContent = `${icon} ${title}`;
+            document.getElementById('alertMessage').innerHTML = message.replace(/\n/g, '<br>');
+            document.getElementById('customAlertModal').classList.add('active');
+        }
+
+        function closeCustomAlert() {
+            document.getElementById('customAlertModal').classList.remove('active');
+        }
+
+        function showCustomConfirm(message, onConfirm, title = '确认操作', icon = '❓') {
+            document.getElementById('confirmTitle').textContent = `${icon} ${title}`;
+            document.getElementById('confirmMessage').innerHTML = message.replace(/\n/g, '<br>');
+            document.getElementById('customConfirmModal').classList.add('active');
+            customConfirmCallback = onConfirm;
+            
+            // Set up the confirm button
+            const confirmBtn = document.getElementById('confirmYesBtn');
+            confirmBtn.onclick = function() {
+                if (customConfirmCallback) {
+                    customConfirmCallback();
+                    customConfirmCallback = null;
+                }
+                closeCustomConfirm();
+            };
+        }
+
+        function closeCustomConfirm() {
+            document.getElementById('customConfirmModal').classList.remove('active');
+            customConfirmCallback = null;
+        }
+
+        // Handle ESC key for custom modals
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                // Close custom alert if open
+                const alertModal = document.getElementById('customAlertModal');
+                const confirmModal = document.getElementById('customConfirmModal');
+                const diffModal = document.getElementById('diffModal');
+                
+                if (alertModal && alertModal.classList.contains('active')) {
+                    closeCustomAlert();
+                    e.stopPropagation();
+                } else if (confirmModal && confirmModal.classList.contains('active')) {
+                    closeCustomConfirm();
+                    e.stopPropagation();
+                } else if (diffModal && diffModal.classList.contains('active')) {
+                    closeDiffModal();
+                    e.stopPropagation();
+                }
+            }
+        });
+        let isStashMode = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeNavigation();
+            initializeKeyboardShortcuts();
+            updateDynamicList('stash');
+            
+            // Initialize the first commit as selected
+            selectMainCommit('18c4a3a');
+        });
+
+        // Navigation
+        function initializeNavigation() {
+            const tabs = document.querySelectorAll('.nav-tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const view = tab.dataset.view;
+                    switchView(view);
+                });
+            });
+
+            // Commit items
+            const commits = document.querySelectorAll('.commit-item');
+            commits.forEach(commit => {
+                commit.addEventListener('click', () => {
+                    selectCommit(commit);
+                });
+            });
+        }
+
+        function switchView(view) {
+            // Update tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`.nav-tab[data-view="${view}"]`).classList.add('active');
+
+            // Update views
+            document.querySelectorAll('.view-container').forEach(container => {
+                container.classList.remove('active');
+            });
+            document.getElementById(`${view}View`).classList.add('active');
+
+            // Update status
+            currentView = view;
+            document.getElementById('currentView').textContent = view.charAt(0).toUpperCase() + view.slice(1);
+
+            // Update dynamic list
+            updateDynamicList(view);
+            
+            // Auto-select first item when switching views
+            if (view === 'remotes') {
+                selectRemote(0, 'origin');
+            } else if (view === 'history') {
+                selectHistory(0, 'fix.*ui');
+            } else if (view === 'status') {
+                // Auto-select first file in status view
+                setTimeout(() => {
+                    const firstFile = document.querySelector('#statusView .file-item');
+                    if (firstFile) {
+                        selectedFileIndex = 0;
+                        firstFile.classList.add('selected');
+                    }
+                }, 100);
+            }
+        }
+
+        let selectedBranchIndex = 0;
+        let selectedTagIndex = 0;
+        let selectedStashIndex = 0;
+        let selectedCommitIndex = 0;
+        let selectedRemoteIndex = 0;
+        let selectedHistoryIndex = 0;
+        let selectedTagCommitIndex = 0;  // Track selected commit in tags view
+        let selectedRemoteCommitIndex = 0;  // Track selected commit in remotes view
+        let currentBranchIndex = 0; // 追踪当前实际所在的分支（带星标）
+
+        function updateDynamicList(view) {
+            const dynamicList = document.getElementById('dynamicList');
+            let content = '';
+
+            switch(view) {
+                case 'branches':
+                    content = `
+                        <div class="list-title">Branches List</div>
+                        <div class="list-item ${selectedBranchIndex === 0 ? 'selected' : ''}" onclick="selectBranch(0, 'main')"><span class="icon">${currentBranchIndex === 0 ? '★' : ' '}</span> main</div>
+                        <div class="list-item ${selectedBranchIndex === 1 ? 'selected' : ''}" onclick="selectBranch(1, 'feature/auth')"><span class="icon">${currentBranchIndex === 1 ? '★' : ' '}</span> feature/auth</div>
+                        <div class="list-item ${selectedBranchIndex === 2 ? 'selected' : ''}" onclick="selectBranch(2, 'develop')"><span class="icon">${currentBranchIndex === 2 ? '★' : ' '}</span> develop</div>
+                        <div class="list-item ${selectedBranchIndex === 3 ? 'selected' : ''}" onclick="selectBranch(3, 'hotfix/v1.2')"><span class="icon">${currentBranchIndex === 3 ? '★' : ' '}</span> hotfix/v1.2</div>
+                    `;
+                    break;
+                case 'tags':
+                    content = `
+                        <div class="list-title">Tags List</div>
+                        <div class="list-item ${selectedTagIndex === 0 ? 'selected' : ''}" onclick="selectTag(0, 'v2.1.0')">v2.1.0 [09-11]</div>
+                        <div class="list-item ${selectedTagIndex === 1 ? 'selected' : ''}" onclick="selectTag(1, 'v2.0.5')">v2.0.5 [09-08]</div>
+                        <div class="list-item ${selectedTagIndex === 2 ? 'selected' : ''}" onclick="selectTag(2, 'v2.0.0')">v2.0.0 [08-15]</div>
+                    `;
+                    break;
+                case 'stash':
+                    if (isStashMode) {
+                        content = `
+                            <div class="list-title">Stash List</div>
+                            <div class="list-item ${selectedStashIndex === 0 ? 'selected' : ''}" onclick="selectStash(0, 'stash@{0}')"><span class="stash-icon">💾</span>[0] WIP: feature</div>
+                            <div class="list-item ${selectedStashIndex === 1 ? 'selected' : ''}" onclick="selectStash(1, 'stash@{1}')"><span class="stash-icon">💾</span>[1] temp changes</div>
+                        `;
+                    } else {
+                        content = `
+                            <div class="list-title">Recent Commits</div>
+                            <div class="list-item ${selectedCommitIndex === 0 ? 'selected' : ''}" onclick="selectCommit(0, '18c4a3a')"><span class="commit-status">📝</span>18c4a3a fix(ui)</div>
+                            <div class="list-item ${selectedCommitIndex === 1 ? 'selected' : ''}" onclick="selectCommit(1, '8502563')"><span class="commit-status">📝</span>8502563 fix(src)</div>
+                            <div class="list-item ${selectedCommitIndex === 2 ? 'selected' : ''}" onclick="selectCommit(2, '5f49518')"><span class="commit-status">📝</span>5f49518 feat</div>
+                        `;
+                    }
+                    break;
+                case 'status':
+                    content = `
+                        <div class="list-title">Quick Actions</div>
+                        <div class="list-item">[c] Commit</div>
+                        <div class="list-item">[a] Add All</div>
+                        <div class="list-item">[r] Reset</div>
+                        <div class="list-item">[d] Discard</div>
+                    `;
+                    break;
+                case 'remotes':
+                    content = `
+                        <div class="list-title">Remotes</div>
+                        <div class="list-item ${selectedRemoteIndex === 0 ? 'selected' : ''}" onclick="selectRemote(0, 'origin')"><span class="remote-icon">📡</span>origin</div>
+                        <div class="list-item ${selectedRemoteIndex === 1 ? 'selected' : ''}" onclick="selectRemote(1, 'upstream')"><span class="remote-icon">📡</span>upstream</div>
+                    `;
+                    break;
+                case 'history':
+                    content = `
+                        <div class="list-title">Recent Searches</div>
+                        <div class="list-item ${selectedHistoryIndex === 0 ? 'selected' : ''}" onclick="selectHistory(0, 'fix.*ui')"><span class="search-icon">🔍</span>fix.*ui</div>
+                        <div class="list-item ${selectedHistoryIndex === 1 ? 'selected' : ''}" onclick="selectHistory(1, 'author:costa')"><span class="search-icon">🔍</span>author:costa</div>
+                        <div class="list-item ${selectedHistoryIndex === 2 ? 'selected' : ''}" onclick="selectHistory(2, 'since:2024-09-01')"><span class="search-icon">🔍</span>since:2024-09-01</div>
+                    `;
+                    break;
+            }
+
+            dynamicList.innerHTML = content;
+        }
+
+        function selectCommit(commitElement) {
+            document.querySelectorAll('.commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            commitElement.classList.add('selected');
+            selectedCommit = commitElement.dataset.hash;
+        }
+
+        // Keyboard shortcuts
+        function initializeKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Check if any modal is open
+                const isModalOpen = document.querySelector('.modal.active');
+                const isDiffModalOpen = document.getElementById('diffModal') && document.getElementById('diffModal').classList.contains('active');
+                
+                // Handle diff modal specific keys
+                if (isDiffModalOpen) {
+                    if (e.key === '1') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        switchDiffMode('unified');
+                        return;
+                    }
+                    if (e.key === '2') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        switchDiffMode('side-by-side');
+                        return;
+                    }
+                    if (e.key === '3') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        switchDiffMode('split');
+                        return;
+                    }
+                }
+                
+                // Number keys for navigation - only if no modal is open
+                if (e.key >= '1' && e.key <= '6' && !isModalOpen) {
+                    const views = ['branches', 'tags', 'stash', 'status', 'remotes', 'history'];
+                    const index = parseInt(e.key) - 1;
+                    if (views[index]) {
+                        switchView(views[index]);
+                    }
+                }
+
+                // Ctrl+A for AI Commit - only if no modal is open
+                if (e.ctrlKey && e.key === 'a' && !isModalOpen) {
+                    e.preventDefault();
+                    showAICommit();
+                }
+
+                // F5 for refresh - only if no modal is open
+                if (e.key === 'F5' && !isModalOpen) {
+                    e.preventDefault();
+                    refreshView();
+                }
+
+                // Enter for diff in stash view - only if no modal is open
+                if (e.key === 'Enter' && currentView === 'stash' && !isModalOpen) {
+                    showDiff();
+                }
+
+                // Enter for checkout in branches view
+                if (e.key === 'Enter' && currentView === 'branches') {
+                    checkoutBranch();
+                }
+
+                // Enter for diff/checkout in tags view
+                if (e.key === 'Enter' && currentView === 'tags') {
+                    // Check if we're in Git Log area or sidebar
+                    if (document.activeElement.closest('#tagsGitLog') || (!document.activeElement.closest('#dynamicList'))) {
+                        // Show diff for selected commit
+                        showDiff();
+                    } else {
+                        // Checkout selected tag
+                        checkoutTag();
+                    }
+                }
+                
+                // Enter for diff in remotes view
+                if (e.key === 'Enter' && currentView === 'remotes') {
+                    // Check if we're in Git Log area or sidebar
+                    if (document.activeElement.closest('#remotesGitLog') || (!document.activeElement.closest('#dynamicList'))) {
+                        // Show diff for selected commit
+                        showDiff();
+                    }
+                }
+
+                // c for create in branches/tags view or commit in status view
+                if (e.key === 'c') {
+                    if (currentView === 'branches') {
+                        createBranch();
+                    } else if (currentView === 'tags') {
+                        createTag();
+                    } else if (currentView === 'status') {
+                        commitChanges();
+                    }
+                }
+                
+                // Space for stage/unstage in status view
+                if (e.key === ' ' && currentView === 'status') {
+                    e.preventDefault();
+                    const selectedFile = document.querySelector('#statusView .file-item.selected');
+                    if (selectedFile) {
+                        const filePath = selectedFile.querySelector('.file-path').textContent;
+                        if (selectedFile.classList.contains('staged')) {
+                            unstageFile(e, filePath);
+                        } else {
+                            stageFile(e, filePath);
+                        }
+                    }
+                }
+                
+                // d for diff in status view  
+                if (e.key === 'd' && currentView === 'status') {
+                    const selectedFile = document.querySelector('#statusView .file-item.selected');
+                    if (selectedFile) {
+                        const filePath = selectedFile.querySelector('.file-path').textContent;
+                        showFileDiff(e, filePath);
+                    }
+                }
+
+                // d for delete in branches/tags view
+                if (e.key === 'd') {
+                    if (currentView === 'branches') {
+                        deleteBranch();
+                    } else if (currentView === 'tags') {
+                        deleteTag();
+                    }
+                }
+
+                // r for reword in stash view
+                if (e.key === 'r' && currentView === 'stash') {
+                    rewordCommit();
+                }
+
+                // Ctrl+E for interactive rebase
+                if (e.ctrlKey && e.key === 'e' && currentView === 'stash') {
+                    e.preventDefault();
+                    showInteractiveRebase();
+                }
+
+                // Arrow keys for navigation in lists
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (currentView === 'branches') {
+                        const direction = e.key === 'ArrowUp' ? -1 : 1;
+                        const newIndex = Math.max(0, Math.min(3, selectedBranchIndex + direction));
+                        if (newIndex !== selectedBranchIndex) {
+                            const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
+                            selectBranch(newIndex, branchNames[newIndex]);
+                        }
+                    } else if (currentView === 'tags') {
+                        // Check if we're focusing on the Git Log or the sidebar
+                        if (document.activeElement.closest('#tagsGitLog') || (!document.activeElement.closest('#dynamicList'))) {
+                            // Navigate in Git Log
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const newIndex = Math.max(0, Math.min(3, selectedTagCommitIndex + direction));
+                            if (newIndex !== selectedTagCommitIndex) {
+                                const commitHashes = ['18c4a3a', '8502563', '5f49518', '9bd566f'];
+                                selectTagCommit(commitHashes[newIndex]);
+                            }
+                        } else {
+                            // Navigate in sidebar tags list
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const newIndex = Math.max(0, Math.min(2, selectedTagIndex + direction));
+                            if (newIndex !== selectedTagIndex) {
+                                const tagNames = ['v2.1.0', 'v2.0.5', 'v2.0.0'];
+                                selectTag(newIndex, tagNames[newIndex]);
+                            }
+                        }
+                    } else if (currentView === 'stash' && isStashMode) {
+                        const direction = e.key === 'ArrowUp' ? -1 : 1;
+                        const newIndex = Math.max(0, Math.min(1, selectedStashIndex + direction));
+                        if (newIndex !== selectedStashIndex) {
+                            const stashNames = ['stash@{0}', 'stash@{1}'];
+                            selectStash(newIndex, stashNames[newIndex]);
+                        }
+                    } else if (currentView === 'stash' && !isStashMode) {
+                        const direction = e.key === 'ArrowUp' ? -1 : 1;
+                        const newIndex = Math.max(0, Math.min(2, selectedCommitIndex + direction));
+                        if (newIndex !== selectedCommitIndex) {
+                            const commitHashes = ['18c4a3a', '8502563', '5f49518'];
+                            selectCommit(newIndex, commitHashes[newIndex]);
+                        }
+                    } else if (currentView === 'remotes') {
+                        // Check if we're focusing on the Git Log or the sidebar
+                        if (document.activeElement.closest('#remotesGitLog') || (!document.activeElement.closest('#dynamicList'))) {
+                            // Navigate in Git Log
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const newIndex = Math.max(0, Math.min(3, selectedRemoteCommitIndex + direction));
+                            if (newIndex !== selectedRemoteCommitIndex) {
+                                const commitHashes = ['18c4a3a', '8502563', '5f49518', '9bd566f'];
+                                selectRemoteCommit(commitHashes[newIndex]);
+                            }
+                        } else {
+                            // Navigate in sidebar remotes list
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const newIndex = Math.max(0, Math.min(1, selectedRemoteIndex + direction));
+                            if (newIndex !== selectedRemoteIndex) {
+                                const remoteNames = ['origin', 'upstream'];
+                                selectRemote(newIndex, remoteNames[newIndex]);
+                            }
+                        }
+                    } else if (currentView === 'history') {
+                        const direction = e.key === 'ArrowUp' ? -1 : 1;
+                        const newIndex = Math.max(0, Math.min(2, selectedHistoryIndex + direction));
+                        if (newIndex !== selectedHistoryIndex) {
+                            const searchTerms = ['fix.*ui', 'author:costa', 'since:2024-09-01'];
+                            selectHistory(newIndex, searchTerms[newIndex]);
+                        }
+                    } else if (currentView === 'status') {
+                        // Navigate through files in status view
+                        const direction = e.key === 'ArrowUp' ? -1 : 1;
+                        const allFiles = document.querySelectorAll('#statusView .file-item');
+                        const maxIndex = allFiles.length - 1;
+                        const newIndex = Math.max(0, Math.min(maxIndex, selectedFileIndex + direction));
+                        
+                        if (newIndex !== selectedFileIndex && allFiles.length > 0) {
+                            selectedFileIndex = newIndex;
+                            // Clear previous selection
+                            allFiles.forEach(item => item.classList.remove('selected'));
+                            // Select new file
+                            allFiles[newIndex].classList.add('selected');
+                        }
+                    }
+                }
+
+                // Escape to close modals
+                if (e.key === 'Escape') {
+                    closeAllModals();
+                }
+
+                // AI Commit editing shortcuts
+                if (document.getElementById('aiCommitModal').classList.contains('active')) {
+                    // Ctrl+Enter to apply edited message
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        if (document.getElementById('aiEditActions').style.display !== 'none') {
+                            applyEditedMessage();
+                        }
+                    }
+                    
+                    // Escape to cancel edit
+                    if (e.key === 'Escape' && document.getElementById('editAICommit').style.display !== 'none') {
+                        e.preventDefault();
+                        cancelEdit();
+                        return; // Prevent modal close
+                    }
+                }
+
+                // Diff mode switching when modal is open
+                if (document.getElementById('diffModal').classList.contains('active')) {
+                    if (e.key === '1') {
+                        e.preventDefault();
+                        switchDiffMode('unified');
+                    } else if (e.key === '2') {
+                        e.preventDefault();
+                        switchDiffMode('side-by-side');
+                    } else if (e.key === '3') {
+                        e.preventDefault();
+                        switchDiffMode('split');
+                    } else if (e.key === 'q') {
+                        e.preventDefault();
+                        closeDiffModal();
+                    } else if (e.key === 'n') {
+                        e.preventDefault();
+                        nextFile();
+                    } else if (e.key === 'p') {
+                        e.preventDefault();
+                        previousFile();
+                    } else if (e.key === 'f') {
+                        e.preventDefault();
+                        toggleFileList();
+                    }
+                }
+            });
+        }
+
+        // Modal functions
+        function showDiff() {
+            document.getElementById('diffCommitHash').textContent = selectedCommit;
+            document.getElementById('diffModal').classList.add('active');
+            // Reset to unified mode and first file
+            currentFileIndex = 0;
+            updateFileDisplay();
+            switchDiffMode('unified');
+            // Hide file list by default
+            document.getElementById('fileListPanel').style.display = 'none';
+        }
+
+        function closeDiffModal() {
+            document.getElementById('diffModal').classList.remove('active');
+        }
+
+        // File management for diff viewer
+        let currentFileIndex = 0;
+        const files = [
+            { path: 'src/tui/layout/manager.rs', status: 'Modified', added: 15, removed: 5 },
+            { path: 'src/components/sidebar.rs', status: 'Modified', added: 8, removed: 12 },
+            { path: 'docs/design.md', status: 'Added', added: 45, removed: 0 }
+        ];
+
+        function toggleFileList() {
+            const panel = document.getElementById('fileListPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function selectFile(index) {
+            currentFileIndex = index;
+            updateFileDisplay();
+            toggleFileList();
+        }
+
+        function nextFile() {
+            if (currentFileIndex < files.length - 1) {
+                currentFileIndex++;
+                updateFileDisplay();
+            }
+        }
+
+        function previousFile() {
+            if (currentFileIndex > 0) {
+                currentFileIndex--;
+                updateFileDisplay();
+            }
+        }
+
+        function updateFileDisplay() {
+            const file = files[currentFileIndex];
+            document.getElementById('currentFilePath').textContent = file.path;
+            document.getElementById('fileChanges').textContent = `+${file.added} lines, -${file.removed} lines`;
+            document.getElementById('fileStatus').textContent = file.status;
+            document.getElementById('currentFileIndex').textContent = currentFileIndex + 1;
+
+            // Update file list selection
+            document.querySelectorAll('.file-item').forEach((item, index) => {
+                item.style.background = index === currentFileIndex ? '#094771' : '#1e1e1e';
+            });
+        }
+
+        // Diff Mode Switching
+        let currentDiffMode = 'unified';
+        
+        function switchDiffMode(mode) {
+            currentDiffMode = mode;
+            
+            // Hide all views
+            document.getElementById('unifiedView').style.display = 'none';
+            document.getElementById('sideBySideView').style.display = 'none';
+            document.getElementById('splitView').style.display = 'none';
+            
+            // Show selected view
+            switch(mode) {
+                case 'unified':
+                    document.getElementById('unifiedView').style.display = 'block';
+                    document.getElementById('diffMode').textContent = 'Unified';
+                    document.getElementById('diffModeStatus').textContent = 'Unified';
+                    break;
+                case 'side-by-side':
+                    document.getElementById('sideBySideView').style.display = 'block';
+                    document.getElementById('diffMode').textContent = 'Side-by-Side';
+                    document.getElementById('diffModeStatus').textContent = 'Side-by-Side';
+                    break;
+                case 'split':
+                    document.getElementById('splitView').style.display = 'block';
+                    document.getElementById('diffMode').textContent = 'Split';
+                    document.getElementById('diffModeStatus').textContent = 'Split';
+                    break;
+            }
+            
+            // Update button styles
+            document.querySelectorAll('#diffModal button').forEach(btn => {
+                if (btn.textContent.includes('Unified') && mode === 'unified' ||
+                    btn.textContent.includes('Side-by-Side') && mode === 'side-by-side' ||
+                    btn.textContent.includes('Split') && mode === 'split') {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn');
+                } else if (btn.textContent.includes('Unified') || 
+                          btn.textContent.includes('Side-by-Side') || 
+                          btn.textContent.includes('Split')) {
+                    btn.classList.remove('btn');
+                    btn.classList.add('btn-secondary');
+                }
+            });
+        }
+
+        function rewordCommit() {
+            // Clear any previous state and ensure clean modal opening
+            closeAllModals();
+            
+            // Set up the reword modal
+            document.getElementById('rewordCommitHash').textContent = selectedCommit;
+            
+            // Get commit message based on selected commit
+            const commitMessages = {
+                '18c4a3a': 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单',
+                '8502563': 'fix(src): 修复TUI界面焦点管理和视图切换问题',
+                '5f49518': 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数',
+                '9bd566f': 'fix(tui_enhanced): 修复左侧面板显示问题和 AI commit 相关代码不完整问题'
+            };
+            
+            document.getElementById('newMessage').value = commitMessages[selectedCommit] || 'fix: 修复问题';
+            document.getElementById('commitBody').value = '';
+            
+            document.getElementById('rewordModal').classList.add('active');
+        }
+
+        function closeRewordModal() {
+            document.getElementById('rewordModal').classList.remove('active');
+        }
+
+        function editCommit() {
+            showCustomAlert(`正在编辑提交: <strong>${selectedCommit}</strong>`, '提交编辑', '✏️');
+        }
+
+        function squashCommit() {
+            showCustomAlert(`正在合并提交: <strong>${selectedCommit}</strong>`, '提交合并', '🔨');
+        }
+
+        function showInteractiveRebase() {
+            document.getElementById('rebaseModal').classList.add('active');
+        }
+
+        function closeRebaseModal() {
+            document.getElementById('rebaseModal').classList.remove('active');
+        }
+
+        function startRebase() {
+            showCustomAlert('正在启动交互式变基操作...', '交互式变基', '🔄');
+            closeRebaseModal();
+        }
+
+        function saveReword() {
+            const newMessage = document.getElementById('newMessage').value;
+            const body = document.getElementById('commitBody').value;
+            showCustomAlert(`正在保存新的提交消息：<br><strong>"${newMessage}"</strong>${body ? '<br><br>' + body : ''}`, '保存消息', '💾');
+            closeRewordModal();
+        }
+
+        function aiEnhance() {
+            const messageTextarea = document.querySelector('#rewordModal textarea');
+            const originalMessage = messageTextarea.value.trim();
+            
+            if (!originalMessage) {
+                showCustomAlert('请先输入提交消息后再进行 AI 增强', 'AI 增强', '⚠️');
+                return;
+            }
+            
+            // Show loading state
+            const aiButton = document.querySelector('#rewordModal button[onclick="aiEnhance()"]');
+            const originalText = aiButton.textContent;
+            aiButton.textContent = 'AI 增强中...';
+            aiButton.disabled = true;
+            
+            // Simulate AI enhancement process
+            setTimeout(() => {
+                // Generate enhanced commit message suggestions based on original message
+                const enhancements = generateEnhancedCommitSuggestions(originalMessage);
+                
+                // Create enhancement modal
+                showEnhancementSuggestions(originalMessage, enhancements);
+                
+                // Restore button state
+                aiButton.textContent = originalText;
+                aiButton.disabled = false;
+            }, 1500);
+        }
+        
+        function generateEnhancedCommitSuggestions(originalMessage) {
+            const suggestions = [];
+            
+            // Analyze the original message type and provide enhanced versions
+            const lowerMessage = originalMessage.toLowerCase();
+            
+            if (lowerMessage.includes('fix') || lowerMessage.includes('修复')) {
+                suggestions.push({
+                    type: 'fix',
+                    message: `fix(core): ${originalMessage.replace(/^(fix|修复):?\s*/i, '')}`,
+                    description: '标准化修复类型格式'
+                });
+                suggestions.push({
+                    type: 'fix',
+                    message: `fix(ui): ${originalMessage.replace(/^(fix|修复):?\s*/i, '')}`,
+                    description: 'UI 修复类型格式'
+                });
+            } else if (lowerMessage.includes('feat') || lowerMessage.includes('功能') || lowerMessage.includes('新增')) {
+                suggestions.push({
+                    type: 'feat',
+                    message: `feat(api): ${originalMessage.replace(/^(feat|功能|新增):?\s*/i, '')}`,
+                    description: 'API 功能增强格式'
+                });
+                suggestions.push({
+                    type: 'feat',
+                    message: `feat(ui): ${originalMessage.replace(/^(feat|功能|新增):?\s*/i, '')}`,
+                    description: 'UI 功能增强格式'
+                });
+            } else if (lowerMessage.includes('refactor') || lowerMessage.includes('重构')) {
+                suggestions.push({
+                    type: 'refactor',
+                    message: `refactor(core): ${originalMessage.replace(/^(refactor|重构):?\s*/i, '')}`,
+                    description: '核心重构格式'
+                });
+            } else {
+                // Generic enhancements
+                suggestions.push({
+                    type: 'feat',
+                    message: `feat(core): ${originalMessage}`,
+                    description: '功能增强格式'
+                });
+                suggestions.push({
+                    type: 'fix',
+                    message: `fix(ui): ${originalMessage}`,
+                    description: 'Bug 修复格式'
+                });
+                suggestions.push({
+                    type: 'refactor',
+                    message: `refactor(code): ${originalMessage}`,
+                    description: '代码重构格式'
+                });
+            }
+            
+            return suggestions;
+        }
+        
+        function showEnhancementSuggestions(originalMessage, suggestions) {
+            // Create enhancement modal HTML
+            const enhancementModal = document.createElement('div');
+            enhancementModal.className = 'modal active';
+            enhancementModal.id = 'enhancementModal';
+            enhancementModal.innerHTML = `
+                <div class="modal-content" style="max-width: 800px;">
+                    <div class="modal-header">
+                        <span>🚀 AI 提交消息增强</span>
+                        <button class="close-btn" onclick="closeEnhancementModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+                        <div style="margin-bottom: 20px;">
+                            <label style="font-weight: bold; color: #64b5f6;">原始消息:</label>
+                            <div style="background: #2d2d2d; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
+                                ${originalMessage}
+                            </div>
+                        </div>
+                        
+                        <label style="font-weight: bold; color: #64b5f6;">AI 增强建议:</label>
+                        <div class="enhancement-suggestions" style="margin-top: 10px;">
+                            ${suggestions.map((suggestion, index) => `
+                                <div class="enhancement-item" onclick="selectEnhancement(${index})" style="
+                                    background: #2d2d2d;
+                                    border: 1px solid #404040;
+                                    border-radius: 6px;
+                                    padding: 12px;
+                                    margin-bottom: 10px;
+                                    cursor: pointer;
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='#363636'" onmouseout="this.style.background='#2d2d2d'">
+                                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <span class="commit-type" style="
+                                            background: ${suggestion.type === 'feat' ? '#4caf50' : suggestion.type === 'fix' ? '#f44336' : '#ff9800'};
+                                            color: white;
+                                            padding: 2px 8px;
+                                            border-radius: 12px;
+                                            font-size: 12px;
+                                            margin-right: 10px;
+                                        ">${suggestion.type}</span>
+                                        <span style="color: #aaa; font-size: 12px;">${suggestion.description}</span>
+                                    </div>
+                                    <div style="font-family: monospace; color: #e0e0e0;">
+                                        ${suggestion.message}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeEnhancementModal()">取消</button>
+                        <button class="btn btn-info" onclick="useOriginalMessage()">保持原样</button>
+                        <button class="btn btn-primary" id="useSelectedBtn" onclick="useSelectedEnhancement()" style="display: none;">使用选中</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(enhancementModal);
+            
+            // Store suggestions for later use
+            window.enhancementData = {
+                originalMessage,
+                suggestions,
+                selectedIndex: -1
+            };
+        }
+        
+        function selectEnhancement(index) {
+            // Remove previous selection
+            document.querySelectorAll('.enhancement-item').forEach(item => {
+                item.style.border = '1px solid #404040';
+            });
+            
+            // Highlight selected
+            const selectedItem = document.querySelectorAll('.enhancement-item')[index];
+            selectedItem.style.border = '2px solid #64b5f6';
+            
+            // Show use selected button
+            document.getElementById('useSelectedBtn').style.display = 'inline-block';
+            
+            // Store selected index
+            window.enhancementData.selectedIndex = index;
+        }
+        
+        function useSelectedEnhancement() {
+            if (window.enhancementData && window.enhancementData.selectedIndex >= 0) {
+                const selectedSuggestion = window.enhancementData.suggestions[window.enhancementData.selectedIndex];
+                const messageTextarea = document.querySelector('#rewordModal textarea');
+                messageTextarea.value = selectedSuggestion.message;
+                
+                closeEnhancementModal();
+                showCustomAlert(`已应用 AI 增强建议<br><strong>${selectedSuggestion.type}</strong> 类型格式`, 'AI 增强', '✅');
+            }
+        }
+        
+        function useOriginalMessage() {
+            closeEnhancementModal();
+            showCustomAlert('已保持原始提交消息', 'AI 增强', '💬');
+        }
+        
+        function closeEnhancementModal() {
+            const modal = document.getElementById('enhancementModal');
+            if (modal) {
+                modal.remove();
+            }
+            window.enhancementData = null;
+        }
+
+        function showAICommit() {
+            document.getElementById('aiCommitModal').classList.add('active');
+        }
+
+        function closeAIModal() {
+            document.getElementById('aiCommitModal').classList.remove('active');
+            // Reset state
+            document.getElementById('aiProgress').style.display = 'none';
+            document.getElementById('aiSuggestions').style.display = 'none';
+            document.getElementById('editAICommit').style.display = 'none';
+            document.getElementById('aiCommitActions').style.display = 'none';
+            document.getElementById('aiEditActions').style.display = 'none';
+            document.getElementById('aiCommitMessage').value = '';
+            selectedAISuggestion = null;
+            
+            // Clear selections
+            document.querySelectorAll('.ai-suggestion-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+        }
+
+        function generateAICommit() {
+            const progress = document.getElementById('aiProgress');
+            const suggestions = document.getElementById('aiSuggestions');
+            const progressFill = document.getElementById('progressFill');
+            
+            progress.style.display = 'block';
+            suggestions.style.display = 'none';
+            
+            // Simulate progress
+            let width = 0;
+            const interval = setInterval(() => {
+                width += 10;
+                progressFill.style.width = width + '%';
+                
+                if (width >= 100) {
+                    clearInterval(interval);
+                    progress.style.display = 'none';
+                    suggestions.style.display = 'block';
+                }
+            }, 200);
+        }
+
+        function selectSuggestion(element, index) {
+            // Clear previous selection
+            document.querySelectorAll('.ai-suggestion-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            element.classList.add('selected');
+            selectedAISuggestion = index;
+            
+            // Show action buttons
+            document.getElementById('aiCommitActions').style.display = 'flex';
+            document.getElementById('aiCommitActions').style.gap = '8px';
+        }
+
+        function editAIMessage() {
+            if (selectedAISuggestion) {
+                const selectedElement = document.querySelector('.ai-suggestion-item.selected');
+                const title = selectedElement.querySelector('.ai-suggestion-title').textContent;
+                
+                // Extract just the commit message part (remove number and star)
+                const commitMessage = title.replace(/^\d+\.\s*/, '').replace(/\s*⭐$/, '');
+                
+                // Show edit area and populate message
+                document.getElementById('editAICommit').style.display = 'block';
+                document.getElementById('aiCommitMessage').value = commitMessage;
+                document.getElementById('aiCommitMessage').focus();
+                
+                // Switch button groups
+                document.getElementById('aiCommitActions').style.display = 'none';
+                document.getElementById('aiEditActions').style.display = 'flex';
+                document.getElementById('aiEditActions').style.gap = '8px';
+            }
+        }
+
+        function applyEditedMessage() {
+            const editedMessage = document.getElementById('aiCommitMessage').value.trim();
+            if (editedMessage) {
+                showCustomAlert(`已使用编辑的提交消息：<br><strong>"${editedMessage}"</strong>`, 'AI 提交', '✏️');
+                closeAIModal();
+            } else {
+                showCustomAlert('提交消息不能为空！', '提交错误', '⚠️');
+            }
+        }
+
+        function cancelEdit() {
+            // Hide edit area
+            document.getElementById('editAICommit').style.display = 'none';
+            document.getElementById('aiCommitMessage').value = '';
+            
+            // Switch back to suggestion actions
+            document.getElementById('aiEditActions').style.display = 'none';
+            document.getElementById('aiCommitActions').style.display = 'flex';
+            document.getElementById('aiCommitActions').style.gap = '8px';
+        }
+
+        function regenerateAI() {
+            // Reset selections and regenerate
+            selectedAISuggestion = null;
+            document.querySelectorAll('.ai-suggestion-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Hide actions and restart generation
+            document.getElementById('aiCommitActions').style.display = 'none';
+            document.getElementById('editAICommit').style.display = 'none';
+            
+            // Restart generation process
+            generateAICommit();
+        }
+
+        function useAICommit() {
+            if (selectedAISuggestion) {
+                const selectedElement = document.querySelector('.ai-suggestion-item.selected');
+                const title = selectedElement.querySelector('.ai-suggestion-title').textContent;
+                const commitMessage = title.replace(/^\d+\.\s*/, '').replace(/\s*⭐$/, '');
+                
+                showCustomAlert(`已使用 AI 建议：<br><strong>"${commitMessage}"</strong>`, 'AI 提交', '🤖');
+                closeAIModal();
+            }
+        }
+
+        function commitChanges() {
+            // Check if there are staged files
+            const stagedFiles = document.querySelectorAll('#stagedFiles .file-item');
+            if (stagedFiles.length === 0) {
+                showCustomAlert('没有已暂存的文件可以提交！<br>请先暂存一些文件。', '提交错误', '⚠️');
+                return;
+            }
+            
+            updateCommitFilesList();
+            document.getElementById('commitModal').classList.add('active');
+            document.getElementById('commitMessage').focus();
+        }
+
+        // File Status Functions
+        let selectedFileIndex = 0;
+
+        function toggleFileStatus(element, filePath) {
+            // Clear previous selection
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+        }
+
+        function stageFile(event, filePath) {
+            event.stopPropagation();
+            showCustomAlert(`已暂存文件: <strong>${filePath}</strong>`, '文件操作', '📁');
+            // Move file from unstaged to staged
+            // In real implementation, this would make git add call
+            refreshFileStatus();
+        }
+
+        function unstageFile(event, filePath) {
+            event.stopPropagation();
+            showCustomAlert(`已取消暂存文件: <strong>${filePath}</strong>`, '文件操作', '↩️');
+            // Move file from staged to unstaged
+            // In real implementation, this would make git reset call
+            refreshFileStatus();
+        }
+
+        function discardFile(event, filePath) {
+            event.stopPropagation();
+            showCustomConfirm(
+                `确定要放弃文件 "${filePath}" 的更改吗？<br><br><strong>⚠️ 此操作无法撤销！</strong>`,
+                () => {
+                    showCustomAlert(`已放弃文件更改: ${filePath}`, '文件操作', '✅');
+                    // In real implementation, this would make git checkout call
+                    refreshFileStatus();
+                },
+                '放弃文件更改',
+                '⚠️'
+            );
+        }
+
+        function deleteFile(event, filePath) {
+            event.stopPropagation();
+            showCustomConfirm(
+                `确定要删除文件 "${filePath}" 吗？<br><br><strong>⚠️ 此操作无法撤销！</strong>`,
+                () => {
+                    showCustomAlert(`已删除文件: ${filePath}`, '文件操作', '🗑️');
+                    // In real implementation, this would delete the file
+                    refreshFileStatus();
+                },
+                '删除文件',
+                '🗑️'
+            );
+        }
+
+        function showFileDiff(event, filePath) {
+            event.stopPropagation();
+            showCustomAlert(`正在显示文件差异视图: <br><strong>${filePath}</strong>`, '差异视图', '📋');
+            // In real implementation, this would show file-specific diff
+            showDiff();
+        }
+
+        function stageAllFiles() {
+            showCustomAlert('正在暂存所有未暂存的文件...', '文件操作', '📁');
+            // In real implementation, this would make git add . call
+            refreshFileStatus();
+        }
+
+        function unstageAllFiles() {
+            showCustomAlert('正在取消暂存所有已暂存的文件...', '文件操作', '↩️');
+            // In real implementation, this would make git reset call
+            refreshFileStatus();
+        }
+
+        function discardAllFiles() {
+            showCustomConfirm(
+                '确定要放弃所有未暂存的更改吗？<br><br><strong>⚠️ 此操作无法撤销！</strong>',
+                () => {
+                    showCustomAlert('已放弃所有未暂存的更改', '文件操作', '🗑️');
+                    // In real implementation, this would make git checkout . call
+                    refreshFileStatus();
+                },
+                '放弃所有更改',
+                '⚠️'
+            );
+        }
+
+        function refreshFileStatus() {
+            // In real implementation, this would refresh git status
+            console.log('Refreshing file status...');
+        }
+
+        function closeCommitModal() {
+            document.getElementById('commitModal').classList.remove('active');
+            document.getElementById('commitMessage').value = '';
+            document.getElementById('pushAfterCommit').checked = false;
+        }
+
+        function executeCommit() {
+            const message = document.getElementById('commitMessage').value.trim();
+            if (!message) {
+                showCustomAlert('提交消息不能为空！<br>请输入有效的提交消息。', '提交错误', '⚠️');
+                return;
+            }
+            
+            const pushAfter = document.getElementById('pushAfterCommit').checked;
+            
+            if (pushAfter) {
+                showCustomAlert(`提交已创建！<br><strong>"${message}"</strong><br><br>正在推送到远程仓库...`, '提交成功', '🚀');
+            } else {
+                showCustomAlert(`提交已创建！<br><strong>"${message}"</strong>`, '提交成功', '✅');
+            }
+            
+            closeCommitModal();
+            // In real implementation, this would execute git commit
+            refreshFileStatus();
+        }
+
+        function updateCommitFilesList() {
+            const stagedFiles = document.querySelectorAll('#stagedFiles .file-item');
+            const commitFilesList = document.getElementById('commitFilesList');
+            
+            commitFilesList.innerHTML = '';
+            stagedFiles.forEach(file => {
+                const filePath = file.querySelector('.file-path').textContent;
+                const fileStatus = file.querySelector('.file-status').textContent;
+                
+                const fileItem = document.createElement('div');
+                fileItem.className = 'commit-file-item';
+                fileItem.innerHTML = `
+                    <span class="file-status-icon">✓</span>
+                    <span class="file-path">${filePath}</span>
+                    <span class="file-status">${fileStatus}</span>
+                `;
+                commitFilesList.appendChild(fileItem);
+            });
+        }
+
+        function toggleStashMode() {
+            isStashMode = !isStashMode;
+            const button = event.target;
+            button.textContent = isStashMode ? 'Switch to Git Log' : 'Switch to Stash';
+            
+            const title = document.querySelector('#stashView h3');
+            title.textContent = isStashMode ? 'Stash Entries' : 'Git Log';
+            
+            // Initialize first stash selection when switching to stash mode
+            if (isStashMode) {
+                selectedStashIndex = 0;
+                updateDynamicList('stash');
+                updateStashDetails(0, 'stash@{0}');
+            } else {
+                // Initialize first commit selection when switching to git log mode
+                selectedCommitIndex = 0;
+                updateDynamicList('stash');
+                updateCommitDetails(0, '18c4a3a');
+                // Remove stash details when switching back to git log
+                const stashDetails = document.querySelector('.stash-details');
+                if (stashDetails) {
+                    stashDetails.remove();
+                }
+            }
+        }
+
+        function refreshView() {
+            const syncStatus = document.getElementById('syncStatus');
+            syncStatus.classList.add('refreshing');
+            syncStatus.querySelector('.status-text').textContent = 'Refreshing...';
+            
+            setTimeout(() => {
+                syncStatus.classList.remove('refreshing');
+                syncStatus.querySelector('.status-text').textContent = 'Ready';
+                showCustomAlert(`已刷新 ${currentView} 视图`, '刷新', '🔄');
+            }, 1500);
+        }
+
+        function closeAllModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        }
+
+        // Branch and Tag Management
+        function selectBranch(index, branchName) {
+            selectedBranchIndex = index;
+            document.getElementById('selectedBranch').textContent = (index === 0 ? '★ ' : '') + branchName;
+            updateDynamicList('branches');
+            updateBranchDetails(index, branchName);
+        }
+
+        function selectTag(index, tagName) {
+            selectedTagIndex = index;
+            document.getElementById('selectedTag').textContent = tagName;
+            updateDynamicList('tags');
+            updateTagDetails(index, tagName);
+        }
+
+        function selectStash(index, stashName) {
+            selectedStashIndex = index;
+            updateDynamicList('stash');
+            updateStashDetails(index, stashName);
+        }
+
+        function selectCommit(index, commitHash) {
+            selectedCommitIndex = index;
+            selectedCommit = commitHash;
+            updateDynamicList('stash');
+            updateCommitDetails(index, commitHash);
+        }
+
+        function selectTagCommit(commitHash) {
+            // Update selection in tags git log
+            document.querySelectorAll('#tagsGitLog .commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`#tagsGitLog .commit-item[data-hash="${commitHash}"]`).classList.add('selected');
+            selectedCommit = commitHash;
+            
+            // Update the selectedTagCommitIndex
+            const commits = ['18c4a3a', '8502563', '5f49518', '9bd566f'];
+            selectedTagCommitIndex = commits.indexOf(commitHash);
+            
+            // Update global selected commit for diff viewer
+            updateGlobalSelectedCommit(commitHash);
+        }
+
+        function selectRemoteCommit(commitHash) {
+            // Update selection in remotes git log
+            document.querySelectorAll('#remotesGitLog .commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`#remotesGitLog .commit-item[data-hash="${commitHash}"]`).classList.add('selected');
+            selectedCommit = commitHash;
+            
+            // Update the selectedRemoteCommitIndex
+            const commits = ['18c4a3a', '8502563', '5f49518', '9bd566f'];
+            selectedRemoteCommitIndex = commits.indexOf(commitHash);
+            
+            // Update global selected commit for diff viewer
+            updateGlobalSelectedCommit(commitHash);
+        }
+
+        function updateGlobalSelectedCommit(commitHash) {
+            // Update the main git log selection as well to keep consistency
+            document.querySelectorAll('#gitLog .commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            const mainCommit = document.querySelector(`#gitLog .commit-item[data-hash="${commitHash}"]`);
+            if (mainCommit) {
+                mainCommit.classList.add('selected');
+            }
+        }
+
+        // Branch Git Log Functions
+        function selectBranchCommit(commitHash) {
+            // Update selection in branches git log
+            document.querySelectorAll('#branchesGitLog .commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`#branchesGitLog .commit-item[data-hash="${commitHash}"]`).classList.add('selected');
+            selectedCommit = commitHash;
+            
+            // Update global selected commit for diff viewer
+            updateGlobalSelectedCommit(commitHash);
+        }
+
+        function editBranchCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            rewordCommit();
+        }
+
+        function resetBranchCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            resetCommit();
+        }
+
+        function cherryPickBranchCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            cherryPickCommit();
+        }
+
+        // Tag Git Log Functions  
+        function editTagCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            rewordCommit();
+        }
+
+        function resetTagCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            resetCommit();
+        }
+
+        function cherryPickTagCommit(commitHash) {
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            cherryPickCommit();
+        }
+
+        // Main Git Log Functions (for Stash view)
+        function selectMainCommit(commitHash) {
+            // Update selection in main git log
+            document.querySelectorAll('#gitLog .commit-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`#gitLog .commit-item[data-hash="${commitHash}"]`).classList.add('selected');
+            
+            // Update global selected commit
+            selectedCommit = commitHash;
+            document.getElementById('selectedCommitHash').textContent = commitHash;
+            
+            // Update commit details in the sidebar
+            updateMainCommitDetails(commitHash);
+            
+            // Also update the sidebar selection to keep it in sync
+            const commitHashes = ['18c4a3a', '8502563', '5f49518'];
+            const index = commitHashes.indexOf(commitHash);
+            if (index !== -1) {
+                selectedCommitIndex = index;
+                updateDynamicList('stash');
+            }
+        }
+
+        function updateMainCommitDetails(commitHash) {
+            const commitDetails = {
+                '18c4a3a': {
+                    hash: '18c4a3a',
+                    date: '2024-09-11 01:44:32',
+                    message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单',
+                    author: 'costa',
+                    changes: '3 files changed, 12 insertions(+), 5 deletions(-)',
+                    branch: 'main'
+                },
+                '8502563': {
+                    hash: '8502563',
+                    date: '2024-09-11 01:44:32',
+                    message: 'fix(src): 修复TUI界面焦点管理和视图切换问题',
+                    author: 'costa',
+                    changes: '2 files changed, 8 insertions(+), 3 deletions(-)',
+                    branch: 'main'
+                },
+                '5f49518': {
+                    hash: '5f49518',
+                    date: '2024-09-11 01:44:32',
+                    message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数',
+                    author: 'costa',
+                    changes: '4 files changed, 15 insertions(+), 2 deletions(-)',
+                    branch: 'main'
+                }
+            };
+            
+            const details = commitDetails[commitHash] || commitDetails['18c4a3a'];
+            
+            // Update the commit details section in stash view
+            const stashView = document.getElementById('stashView');
+            let detailsSection = stashView.querySelector('.commit-details');
+            if (!detailsSection) {
+                const header = stashView.querySelector('h3');
+                detailsSection = document.createElement('div');
+                detailsSection.className = 'commit-details';
+                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
+                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            }
+            
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected Commit: <span id="selectedCommitHash">${commitHash}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>📝 Commit Details:</div>
+                        <div>• Hash: ${details.hash}</div>
+                        <div>• Date: ${details.date}</div>
+                        <div>• Message: ${details.message}</div>
+                        <div>• Author: ${details.author}</div>
+                        <div>• Changes: ${details.changes}</div>
+                        <div>• Branch: ${details.branch}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn" onclick="showDiff()">Show Diff</button>
+                    <button class="btn" onclick="rewordCommit()">Edit Message</button>
+                    <button class="btn btn-danger" onclick="resetCommit()">Reset to This</button>
+                    <button class="btn" onclick="cherryPickCommit()">Cherry Pick</button>
+                </div>
+            `;
+        }
+
+        function selectRemote(index, remoteName) {
+            selectedRemoteIndex = index;
+            updateDynamicList('remotes');
+            updateRemoteDetails(index, remoteName);
+        }
+
+        function selectHistory(index, searchTerm) {
+            selectedHistoryIndex = index;
+            updateDynamicList('history');
+            updateHistoryDetails(index, searchTerm);
+        }
+
+        function updateBranchDetails(index, branchName) {
+            // 模拟不同分支的详细信息
+            const branchDetails = {
+                0: { // main
+                    upstream: 'origin/main',
+                    ahead: 2,
+                    behind: 0,
+                    lastCommit: 'fix(ui): 修复侧边栏布局问题',
+                    author: 'costa',
+                    date: '2024-09-11'
+                },
+                1: { // feature/auth
+                    upstream: 'origin/feature/auth',
+                    ahead: 5,
+                    behind: 1,
+                    lastCommit: 'feat(auth): 添加用户认证系统',
+                    author: 'alice',
+                    date: '2024-09-10'
+                },
+                2: { // develop
+                    upstream: 'origin/develop',
+                    ahead: 0,
+                    behind: 3,
+                    lastCommit: 'merge: 合并多个功能分支',
+                    author: 'bob',
+                    date: '2024-09-09'
+                },
+                3: { // hotfix/v1.2
+                    upstream: 'origin/hotfix/v1.2',
+                    ahead: 1,
+                    behind: 0,
+                    lastCommit: 'hotfix: 修复关键安全漏洞',
+                    author: 'charlie',
+                    date: '2024-09-08'
+                }
+            };
+
+            const details = branchDetails[index] || branchDetails[0];
+            
+            // 更新分支详情显示
+            const branchView = document.getElementById('branchesView');
+            const detailsSection = branchView.querySelector('div[style*="background: #252526"]');
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected: <span id="selectedBranch">${(index === currentBranchIndex ? '★ ' : '') + branchName}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>📊 Branch Details:</div>
+                        <div>• Upstream: ${details.upstream}</div>
+                        <div>• Ahead: ${details.ahead} commits | Behind: ${details.behind} commits</div>
+                        <div>• Last commit: ${details.lastCommit}</div>
+                        <div>• Author: ${details.author} | Date: ${details.date}</div>
+                        <div style="color: ${index === currentBranchIndex ? '#4ec9b0' : '#969696'};">• Status: ${index === currentBranchIndex ? 'Current Branch' : 'Available'}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateTagDetails(index, tagName) {
+            // 模拟不同标签的详细信息
+            const tagDetails = {
+                0: { // v2.1.0
+                    date: '2024-09-11 15:45:32',
+                    commit: '18c4a3a',
+                    message: 'Latest release with UI improvements',
+                    tagger: 'costa <costa@helltalk.com>'
+                },
+                1: { // v2.0.5
+                    date: '2024-09-08 12:30:15',
+                    commit: '8502563',
+                    message: 'Bug fixes and performance improvements',
+                    tagger: 'alice <alice@helltalk.com>'
+                },
+                2: { // v2.0.0
+                    date: '2024-08-15 09:15:45',
+                    commit: '5f49518',
+                    message: 'Major version release',
+                    tagger: 'bob <bob@helltalk.com>'
+                }
+            };
+
+            const details = tagDetails[index] || tagDetails[0];
+            
+            // 更新标签详情显示
+            const tagView = document.getElementById('tagsView');
+            const detailsSection = tagView.querySelector('div[style*="background: #252526"]');
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected: <span id="selectedTag">${tagName}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>🏷️ Tag Details:</div>
+                        <div>• Date: ${details.date}</div>
+                        <div>• Commit: ${details.commit}</div>
+                        <div>• Message: ${details.message}</div>
+                        <div>• Tagger: ${details.tagger}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateStashDetails(index, stashName) {
+            // 模拟不同 stash 的详细信息
+            const stashDetails = {
+                0: { // stash@{0}
+                    branch: 'feature/auth',
+                    date: '2024-09-11 14:23:15',
+                    message: 'WIP: feature development in progress',
+                    files: '3 files changed, 15 insertions(+), 8 deletions(-)',
+                    author: 'costa <costa@helltalk.com>'
+                },
+                1: { // stash@{1}
+                    branch: 'develop',
+                    date: '2024-09-10 16:45:32',
+                    message: 'temp changes before switching branch',
+                    files: '2 files changed, 7 insertions(+), 3 deletions(-)',
+                    author: 'alice <alice@helltalk.com>'
+                }
+            };
+
+            const details = stashDetails[index] || stashDetails[0];
+            
+            // 更新 stash 详情显示
+            const stashView = document.getElementById('stashView');
+            // 查找当前的详情区域，如果不存在则创建
+            let detailsSection = stashView.querySelector('.stash-details');
+            if (!detailsSection) {
+                // 在 h3 之后添加详情区域
+                const header = stashView.querySelector('h3');
+                detailsSection = document.createElement('div');
+                detailsSection.className = 'stash-details';
+                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
+                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            }
+            
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected Stash: <span id="selectedStash">${stashName}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>💾 Stash Details:</div>
+                        <div>• Branch: ${details.branch}</div>
+                        <div>• Date: ${details.date}</div>
+                        <div>• Message: ${details.message}</div>
+                        <div>• Changes: ${details.files}</div>
+                        <div>• Author: ${details.author}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn btn-secondary" onclick="applyStash()">Apply Stash</button>
+                    <button class="btn btn-secondary" onclick="popStash()">Pop Stash</button>
+                    <button class="btn btn-danger" onclick="dropStash()">Drop Stash</button>
+                    <button class="btn btn-secondary" onclick="showStashDiff()">Show Diff</button>
+                </div>
+            `;
+        }
+
+        function updateCommitDetails(index, commitHash) {
+            // 模拟不同 commit 的详细信息
+            const commitDetails = {
+                0: { // 18c4a3a
+                    hash: '18c4a3a',
+                    date: '2024-09-11 01:44:32',
+                    message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单',
+                    author: 'costa <costa@helltalk.com>',
+                    files: '3 files changed, 12 insertions(+), 5 deletions(-)',
+                    branch: 'main'
+                },
+                1: { // 8502563
+                    hash: '8502563',
+                    date: '2024-09-11 01:44:15',
+                    message: 'fix(src): 修复TUI界面焦点管理和视图切换问题',
+                    author: 'costa <costa@helltalk.com>',
+                    files: '2 files changed, 8 insertions(+), 3 deletions(-)',
+                    branch: 'main'
+                },
+                2: { // 5f49518
+                    hash: '5f49518',
+                    date: '2024-09-10 15:30:45',
+                    message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数',
+                    author: 'alice <alice@helltalk.com>',
+                    files: '1 file changed, 15 insertions(+), 0 deletions(-)',
+                    branch: 'develop'
+                }
+            };
+
+            const details = commitDetails[index] || commitDetails[0];
+            
+            // 更新 commit 详情显示
+            const stashView = document.getElementById('stashView');
+            // 查找当前的详情区域，如果不存在则创建
+            let detailsSection = stashView.querySelector('.commit-details');
+            if (!detailsSection) {
+                // 在 h3 之后添加详情区域
+                const header = stashView.querySelector('h3');
+                detailsSection = document.createElement('div');
+                detailsSection.className = 'commit-details';
+                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
+                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            }
+            
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected Commit: <span id="selectedCommitHash">${commitHash}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>📝 Commit Details:</div>
+                        <div>• Hash: ${details.hash}</div>
+                        <div>• Date: ${details.date}</div>
+                        <div>• Message: ${details.message}</div>
+                        <div>• Author: ${details.author}</div>
+                        <div>• Changes: ${details.files}</div>
+                        <div>• Branch: ${details.branch}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn btn-secondary" onclick="showDiff()">Show Diff</button>
+                    <button class="btn btn-secondary" onclick="rewordCommit()">Edit Message</button>
+                    <button class="btn btn-danger" onclick="resetCommit()">Reset to This</button>
+                    <button class="btn btn-secondary" onclick="cherryPickCommit()">Cherry Pick</button>
+                </div>
+            `;
+        }
+
+        function updateRemoteDetails(index, remoteName) {
+            // 模拟不同 remote 的详细信息
+            const remoteDetails = {
+                0: { // origin
+                    name: 'origin',
+                    url: 'https://github.com/costalong/ai-commit.git',
+                    type: 'push/fetch',
+                    status: 'up to date',
+                    lastFetch: '2024-09-11 15:30:25',
+                    branches: ['main', 'develop', 'feature/auth']
+                },
+                1: { // upstream
+                    name: 'upstream',
+                    url: 'https://github.com/upstream/ai-commit.git',
+                    type: 'fetch only',
+                    status: '2 commits ahead',
+                    lastFetch: '2024-09-11 12:15:10',
+                    branches: ['main', 'develop']
+                }
+            };
+
+            const details = remoteDetails[index] || remoteDetails[0];
+            
+            // 更新 remote 详情显示
+            const remotesView = document.getElementById('remotesView');
+            // 查找当前的详情区域，如果不存在则创建
+            let detailsSection = remotesView.querySelector('.remote-details');
+            if (!detailsSection) {
+                // 在 h3 之后添加详情区域
+                const header = remotesView.querySelector('h3');
+                detailsSection = document.createElement('div');
+                detailsSection.className = 'remote-details';
+                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
+                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            }
+            
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected Remote: <span id="selectedRemote">${remoteName}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>📡 Remote Details:</div>
+                        <div>• Name: ${details.name}</div>
+                        <div>• URL: ${details.url}</div>
+                        <div>• Type: ${details.type}</div>
+                        <div>• Status: ${details.status}</div>
+                        <div>• Last Fetch: ${details.lastFetch}</div>
+                        <div>• Branches: ${details.branches.join(', ')}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn btn-secondary" onclick="fetchRemote()">Fetch</button>
+                    <button class="btn btn-secondary" onclick="pullRemote()">Pull</button>
+                    <button class="btn btn-secondary" onclick="pushRemote()">Push</button>
+                    <button class="btn btn-danger" onclick="removeRemote()">Remove</button>
+                </div>
+            `;
+        }
+
+        function updateHistoryDetails(index, searchTerm) {
+            // 模拟不同搜索历史的详细信息
+            const historyDetails = {
+                0: { // fix.*ui
+                    term: 'fix.*ui',
+                    type: 'Regex Pattern',
+                    lastUsed: '2024-09-11 14:45:30',
+                    results: '5 commits found',
+                    description: 'Search for UI fix commits using regex pattern',
+                    scope: 'commit messages'
+                },
+                1: { // author:costa
+                    term: 'author:costa',
+                    type: 'Author Filter',
+                    lastUsed: '2024-09-11 12:20:15',
+                    results: '23 commits found',
+                    description: 'Filter commits by author costa',
+                    scope: 'commit author'
+                },
+                2: { // since:2024-09-01
+                    term: 'since:2024-09-01',
+                    type: 'Date Filter',
+                    lastUsed: '2024-09-10 16:30:45',
+                    results: '15 commits found',
+                    description: 'Show commits since September 1st, 2024',
+                    scope: 'commit date'
+                }
+            };
+
+            const details = historyDetails[index] || historyDetails[0];
+            
+            // 更新搜索历史详情显示
+            const historyView = document.getElementById('historyView');
+            // 查找当前的详情区域，如果不存在则创建
+            let detailsSection = historyView.querySelector('.history-details');
+            if (!detailsSection) {
+                // 在 h3 之后添加详情区域
+                const header = historyView.querySelector('h3');
+                detailsSection = document.createElement('div');
+                detailsSection.className = 'history-details';
+                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
+                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            }
+            
+            detailsSection.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; color: #4ec9b0;">Selected Search: <span id="selectedSearch">${searchTerm}</span></div>
+                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
+                        <div>🔍 Search Details:</div>
+                        <div>• Term: ${details.term}</div>
+                        <div>• Type: ${details.type}</div>
+                        <div>• Last Used: ${details.lastUsed}</div>
+                        <div>• Results: ${details.results}</div>
+                        <div>• Description: ${details.description}</div>
+                        <div>• Scope: ${details.scope}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn btn-secondary" onclick="executeSearch()">Execute Search</button>
+                    <button class="btn btn-secondary" onclick="editSearch()">Edit Search</button>
+                    <button class="btn btn-secondary" onclick="saveSearch()">Save Search</button>
+                    <button class="btn btn-danger" onclick="deleteSearch()">Delete</button>
+                </div>
+            `;
+        }
+
+        function checkoutBranch() {
+            const branch = document.getElementById('selectedBranch').textContent.replace('★ ', '');
+            showCustomConfirm(
+                `确定要切换到分支 <strong>"${branch}"</strong> 吗？`,
+                () => {
+                    showCustomAlert(`已切换到分支: <strong>${branch}</strong>`, '分支切换', '🌿');
+                    // Update UI to show current branch
+                    document.querySelector('.repo-info-item:nth-child(2) span:last-child').textContent = branch;
+                    // Move the star to the new current branch
+                    moveStarToCurrentBranch(branch);
+                },
+                '切换分支',
+                '🌿'
+            );
+        }
+
+        function moveStarToCurrentBranch(currentBranch) {
+            // 更新左侧分支列表，移动星标
+            const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
+            const currentIndex = branchNames.indexOf(currentBranch);
+            
+            if (currentIndex !== -1) {
+                // 更新全局的当前分支索引
+                currentBranchIndex = currentIndex;
+                // 重新渲染分支列表以显示新的星标位置
+                updateDynamicList('branches');
+                // 更新分支详情显示
+                updateBranchDetails(currentIndex, currentBranch);
+            }
+        }
+
+        function checkoutTag() {
+            const tag = document.getElementById('selectedTag').textContent;
+            showCustomConfirm(
+                `确定要切换到标签 <strong>"${tag}"</strong> 吗？<br><br>⚠️ 注意：这将使您处于 "detached HEAD" 状态`,
+                () => {
+                    showCustomAlert(`已切换到标签: <strong>${tag}</strong><br><br>⚠️ 您现在处于 "detached HEAD" 状态`, '标签切换', '🏷️');
+                    // Update UI to show detached HEAD state
+                    document.querySelector('.repo-info-item:nth-child(2) span:last-child').textContent = `${tag} (detached)`;
+                    // Clear star from all branches since we're not on any branch
+                    currentBranchIndex = -1;
+                    if (currentView === 'branches') {
+                        updateDynamicList('branches');
+                    }
+                },
+                '切换标签',
+                '🏷️'
+            );
+        }
+
+        function createBranch() {
+            const branchName = prompt('Enter new branch name:');
+            if (branchName) {
+                showCustomAlert(`已创建新分支: <strong>${branchName}</strong>`, '创建分支', '🌱');
+                // Add to list
+                selectedBranchIndex = 1; // Select the new branch
+                updateDynamicList('branches');
+            }
+        }
+
+        function createTag() {
+            const tagName = prompt('Enter new tag name (e.g., v1.0.0):');
+            if (tagName) {
+                const message = prompt('Enter tag message (optional):');
+                alert(`Created new tag: ${tagName}${message ? '\nMessage: ' + message : ''}`);
+                updateDynamicList('tags');
+            }
+        }
+
+        function applyStash() {
+            const stashName = document.getElementById('selectedStash').textContent;
+            if (confirm(`Apply stash: ${stashName}?`)) {
+                alert(`Applied stash: ${stashName}\nChanges have been applied to your working directory.`);
+            }
+        }
+
+        function popStash() {
+            const stashName = document.getElementById('selectedStash').textContent;
+            if (confirm(`Pop stash: ${stashName}?\nThis will apply and remove the stash.`)) {
+                alert(`Popped stash: ${stashName}\nChanges applied and stash removed.`);
+                // Simulate removing stash from list
+                selectedStashIndex = Math.max(0, selectedStashIndex - 1);
+                updateDynamicList('stash');
+            }
+        }
+
+        function dropStash() {
+            const stashName = document.getElementById('selectedStash').textContent;
+            showCustomConfirm(
+                `确定要删除储藏 <strong>"${stashName}"</strong> 吗？<br><br><strong>⚠️ 这将永久删除该储藏！</strong>`,
+                () => {
+                    showCustomAlert(`已删除储藏: "${stashName}"<br>储藏已永久删除。`, '储藏操作', '🗑️');
+                    // Simulate removing stash from list
+                    selectedStashIndex = Math.max(0, selectedStashIndex - 1);
+                    updateDynamicList('stash');
+                },
+                '删除储藏',
+                '🗑️'
+            );
+        }
+
+        function showStashDiff() {
+            const stashName = document.getElementById('selectedStash').textContent;
+            alert(`Showing diff for stash: ${stashName}\n(This would normally open a diff viewer)`);
+            // In a real implementation, this would open the diff modal
+            showDiff();
+        }
+
+        function resetCommit() {
+            const commitHash = document.getElementById('selectedCommitHash').textContent;
+            showCustomConfirm(
+                `确定要重置到提交 <strong>${commitHash}</strong> 吗？<br><br><strong>⚠️ 此操作将放弃该提交之后的所有更改！</strong><br><br>此操作无法撤销，请谨慎操作。`,
+                () => {
+                    showCustomAlert(`已重置到提交: ${commitHash}<br>该提交之后的所有更改已被放弃。`, '重置操作', '🔄');
+                },
+                '重置提交',
+                '⚠️'
+            );
+        }
+
+        function cherryPickCommit() {
+            const commitHash = document.getElementById('selectedCommitHash').textContent;
+            showCustomConfirm(
+                `确定要挑选提交 <strong>${commitHash}</strong> 吗？<br><br>这将把该提交的更改应用到当前分支。`,
+                () => {
+                    showCustomAlert(`已挑选提交: ${commitHash}<br>更改已应用到当前分支。`, 'Cherry Pick', '🍒');
+                },
+                '挑选提交',
+                '🍒'
+            );
+        }
+
+        // Remote operations
+        function fetchRemote() {
+            const remoteName = document.getElementById('selectedRemote').textContent;
+            alert(`Fetching from remote: ${remoteName}\nFetching latest changes...`);
+        }
+
+        function pullRemote() {
+            const remoteName = document.getElementById('selectedRemote').textContent;
+            if (confirm(`Pull from remote: ${remoteName}?`)) {
+                alert(`Pulled from remote: ${remoteName}\nLatest changes merged into current branch.`);
+            }
+        }
+
+        function pushRemote() {
+            const remoteName = document.getElementById('selectedRemote').textContent;
+            if (confirm(`Push to remote: ${remoteName}?`)) {
+                alert(`Pushed to remote: ${remoteName}\nLocal changes uploaded.`);
+            }
+        }
+
+        function removeRemote() {
+            const remoteName = document.getElementById('selectedRemote').textContent;
+            if (confirm(`Remove remote: ${remoteName}?\nThis will delete the remote reference!`)) {
+                alert(`Removed remote: ${remoteName}\nRemote reference deleted.`);
+            }
+        }
+
+        // Search history operations
+        function executeSearch() {
+            const searchTerm = document.getElementById('selectedSearch').textContent;
+            alert(`Executing search: ${searchTerm}\nSearching repository...`);
+        }
+
+        function editSearch() {
+            const searchTerm = document.getElementById('selectedSearch').textContent;
+            const newTerm = prompt(`Edit search term:`, searchTerm);
+            if (newTerm && newTerm !== searchTerm) {
+                alert(`Updated search term from "${searchTerm}" to "${newTerm}"`);
+            }
+        }
+
+        function saveSearch() {
+            const searchTerm = document.getElementById('selectedSearch').textContent;
+            const name = prompt(`Save search as:`);
+            if (name) {
+                alert(`Saved search "${searchTerm}" as "${name}"`);
+            }
+        }
+
+        function deleteSearch() {
+            const searchTerm = document.getElementById('selectedSearch').textContent;
+            if (confirm(`Delete search: ${searchTerm}?`)) {
+                alert(`Deleted search: ${searchTerm}`);
+            }
+        }
+
+        function deleteBranch() {
+            const branch = document.getElementById('selectedBranch').textContent.replace('★ ', '');
+            if (branch === 'main') {
+                showCustomAlert('无法删除主分支！<br>主分支不能被删除。', '删除分支', '⚠️');
+                return;
+            }
+            showCustomConfirm(
+                `确定要删除分支 <strong>"${branch}"</strong> 吗？<br><br>⚠️ 此操作无法撤销！`,
+                () => {
+                    showCustomAlert(`已删除分支: <strong>${branch}</strong>`, '删除分支', '🗑️');
+                    selectedBranchIndex = 0;
+                    updateDynamicList('branches');
+                },
+                '删除分支',
+                '🗑️'
+            );
+        }
+
+        function deleteTag() {
+            const tag = document.getElementById('selectedTag').textContent;
+            showCustomConfirm(
+                `确定要删除标签 <strong>"${tag}"</strong> 吗？<br><br>⚠️ 此操作无法撤销！`,
+                () => {
+                    showCustomAlert(`已删除标签: <strong>${tag}</strong>`, '删除标签', '🗑️');
+                    selectedTagIndex = 0;
+                    updateDynamicList('tags');
+                },
+                '删除标签',
+                '🗑️'
+            );
+        }
+    </script>
+</body>
+</html>
