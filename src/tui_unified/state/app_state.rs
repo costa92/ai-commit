@@ -28,6 +28,9 @@ pub struct AppState {
     // 运行时状态
     pub loading_tasks: HashMap<String, LoadingTask>,
     pub notifications: Vec<Notification>,
+    
+    // 新布局状态
+    pub new_layout: NewLayoutState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +41,51 @@ pub enum ViewType {
     Remotes,
     Stash,
     QueryHistory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarSection {
+    Branches,
+    Tags,
+    Stash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]  
+pub enum ContentMode {
+    GitLog,
+    StashDetail,
+    DiffViewer,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewLayoutState {
+    pub sidebar_section: SidebarSection,
+    pub content_mode: ContentMode,
+    pub sidebar_scroll: std::collections::HashMap<SidebarSection, usize>,
+    pub content_scroll: usize,
+    pub sidebar_selection: std::collections::HashMap<SidebarSection, usize>,
+}
+
+impl Default for NewLayoutState {
+    fn default() -> Self {
+        let mut sidebar_scroll = std::collections::HashMap::new();
+        sidebar_scroll.insert(SidebarSection::Branches, 0);
+        sidebar_scroll.insert(SidebarSection::Tags, 0);
+        sidebar_scroll.insert(SidebarSection::Stash, 0);
+        
+        let mut sidebar_selection = std::collections::HashMap::new();
+        sidebar_selection.insert(SidebarSection::Branches, 0);
+        sidebar_selection.insert(SidebarSection::Tags, 0);
+        sidebar_selection.insert(SidebarSection::Stash, 0);
+        
+        Self {
+            sidebar_section: SidebarSection::Branches,
+            content_mode: ContentMode::GitLog,
+            sidebar_scroll,
+            content_scroll: 0,
+            sidebar_selection,
+        }
+    }
 }
 
 
@@ -166,6 +214,7 @@ impl AppState {
             config: config.clone(),
             loading_tasks: HashMap::new(),
             notifications: Vec::new(),
+            new_layout: NewLayoutState::default(),
         })
     }
     

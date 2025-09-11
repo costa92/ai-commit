@@ -108,6 +108,35 @@ pub struct DiffViewerComponent {
 }
 
 impl DiffViewerComponent {
+    /// 安全地截断字符串，确保不会破坏UTF-8字符边界
+    fn safe_truncate_path(path: &str, max_len: usize) -> String {
+        if path.chars().count() <= max_len {
+            path.to_string()
+        } else {
+            // 使用字符计数而不是字节长度来安全截断
+            let chars: Vec<char> = path.chars().collect();
+            if chars.len() > max_len {
+                let suffix_len = max_len.saturating_sub(3); // 为"..."留出空间
+                let start_index = chars.len().saturating_sub(suffix_len);
+                let suffix: String = chars[start_index..].iter().collect();
+                format!("...{}", suffix)
+            } else {
+                path.to_string()
+            }
+        }
+    }
+
+    /// 安全地截断内容，确保不会破坏UTF-8字符边界
+    fn safe_truncate_content(content: &str, max_len: usize) -> String {
+        if content.chars().count() <= max_len {
+            content.to_string()
+        } else {
+            let chars: Vec<char> = content.chars().collect();
+            let truncated: String = chars[..max_len.saturating_sub(3)].iter().collect();
+            format!("{}...", truncated)
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             focused: false,
@@ -1287,11 +1316,7 @@ impl DiffViewerComponent {
                 };
                 
                 // 文件路径（截断长路径）
-                let display_name = if file.path.len() > 25 {
-                    format!("...{}", &file.path[file.path.len()-22..])
-                } else {
-                    file.path.clone()
-                };
+                let display_name = Self::safe_truncate_path(&file.path, 25);
                 
                 let content = format!("{} {}", status_icon, display_name);
                 
@@ -1336,11 +1361,7 @@ impl DiffViewerComponent {
         // 构建标题，显示当前选中的文件名（截断长路径）
         let title = if let Some(file_index) = self.selected_file {
             if let Some(file) = self.diff_files.get(file_index) {
-                let display_path = if file.path.len() > 40 {
-                    format!("...{}", &file.path[file.path.len()-37..])
-                } else {
-                    file.path.clone()
-                };
+                let display_path = Self::safe_truncate_path(&file.path, 40);
                 format!("🔻 Old (-): {}", display_path)
             } else {
                 "🔻 Old (-)".to_string()
@@ -1373,11 +1394,7 @@ impl DiffViewerComponent {
         // 构建标题，显示当前选中的文件名（截断长路径）
         let title = if let Some(file_index) = self.selected_file {
             if let Some(file) = self.diff_files.get(file_index) {
-                let display_path = if file.path.len() > 40 {
-                    format!("...{}", &file.path[file.path.len()-37..])
-                } else {
-                    file.path.clone()
-                };
+                let display_path = Self::safe_truncate_path(&file.path, 40);
                 format!("🔺 New (+): {}", display_path)
             } else {
                 "🔺 New (+)".to_string()
@@ -1462,11 +1479,7 @@ impl DiffViewerComponent {
             for (i, line) in file.lines.iter().enumerate() {
                 if i < 5 {  // 只显示前5行避免过多信息
                     old_lines.push(format!("  {}: {:?} - {}", i, line.line_type, 
-                        if line.content.len() > 50 { 
-                            format!("{}...", &line.content[..50]) 
-                        } else { 
-                            line.content.clone() 
-                        }));
+                        Self::safe_truncate_content(&line.content, 50)));
                 }
             }
             if file.lines.len() > 5 {
@@ -1516,11 +1529,7 @@ impl DiffViewerComponent {
             for (i, line) in file.lines.iter().enumerate() {
                 if i < 5 {  // 只显示前5行避免过多信息
                     new_lines.push(format!("  {}: {:?} - {}", i, line.line_type, 
-                        if line.content.len() > 50 { 
-                            format!("{}...", &line.content[..50]) 
-                        } else { 
-                            line.content.clone() 
-                        }));
+                        Self::safe_truncate_content(&line.content, 50)));
                 }
             }
             if file.lines.len() > 5 {
