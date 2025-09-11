@@ -1171,7 +1171,6 @@ impl TuiUnifiedApp {
         use ratatui::{
             widgets::{Block, Borders, Paragraph},
             layout::{Constraint, Direction, Layout},
-            text::{Line, Span},
             style::{Color, Style}
         };
 

@@ -9,11 +9,15 @@ use crate::tui_unified::{
     }
 };
 
-/// 侧边栏面板 - 显示导航菜单和仓库状态
+/// 侧边栏面板 - 显示导航菜单、仓库状态和分支列表
 pub struct SidebarPanel {
     focused: bool,
     selected_index: usize,
     menu_items: Vec<MenuItem>,
+    // 分支列表相关字段
+    branches_focused: bool,
+    selected_branch_index: usize,
+    show_branches: bool,
 }
 
 struct MenuItem {
@@ -56,6 +60,9 @@ impl SidebarPanel {
             focused: false,
             selected_index: 0,
             menu_items,
+            branches_focused: false,
+            selected_branch_index: 0,
+            show_branches: true, // 默认显示分支列表
         }
     }
     
@@ -74,6 +81,72 @@ impl SidebarPanel {
             self.selected_index = new_index;
         }
     }
+    
+    /// 渲染分支列表
+    fn render_branches_list(&mut self, frame: &mut Frame, area: Rect, state: &AppState) {
+        use ratatui::{
+            widgets::{List, ListItem, ListState},
+            text::Text,
+            style::{Color, Style, Modifier}
+        };
+        
+        // 获取分支列表
+        let branches = &state.repo_state.branches;
+        let current_branch = &state.repo_state.current_branch;
+        
+        // 创建分支列表项
+        let branch_items: Vec<ListItem> = branches
+            .iter()
+            .enumerate()
+            .map(|(i, branch)| {
+                let is_current = branch.name == *current_branch;
+                let is_selected = i == self.selected_branch_index && self.branches_focused;
+                
+                // 格式化分支显示
+                let prefix = if is_current { "★ " } else { "  " };
+                let content = format!("{}{}", prefix, branch.name);
+                
+                let style = if is_selected && self.branches_focused {
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                } else if is_current {
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                
+                ListItem::new(Text::raw(content)).style(style)
+            })
+            .collect();
+        
+        // 边框样式
+        let border_style = if self.branches_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        
+        // 创建标题
+        let title = format!("🌿 Branches ({})", branches.len());
+        
+        // 渲染分支列表
+        let mut list_state = ListState::default();
+        if self.branches_focused && !branches.is_empty() {
+            list_state.select(Some(self.selected_branch_index));
+        }
+        
+        frame.render_stateful_widget(
+            List::new(branch_items)
+                .block(
+                    Block::default()
+                        .title(title)
+                        .borders(Borders::ALL)
+                        .border_style(border_style)
+                ),
+            area,
+            &mut list_state
+        );
+    }
+    
 }
 
 impl Component for SidebarPanel {
@@ -124,19 +197,30 @@ impl Component for SidebarPanel {
         let full_content = format!("{}\n📋 Navigation:\n", status_content);
         let status_paragraph = Paragraph::new(Text::raw(full_content));
 
-        // 计算布局：上半部分显示状态，下半部分显示菜单
-        let status_height = area.height.saturating_sub(10);
+        // 计算布局：三部分显示 - 状态、分支列表、菜单
+        let status_height = if area.height > 30 { 8 } else { 6 };
+        let branches_height = if self.show_branches && area.height > 20 { 
+            (area.height - status_height).saturating_sub(8) 
+        } else { 0 };
+        let menu_height = area.height.saturating_sub(status_height + branches_height);
+        
         let status_area = Rect {
             x: area.x,
             y: area.y,
             width: area.width,
             height: status_height,
         };
-        let menu_area = Rect {
+        let branches_area = Rect {
             x: area.x,
             y: area.y + status_height,
             width: area.width,
-            height: area.height - status_height,
+            height: branches_height,
+        };
+        let menu_area = Rect {
+            x: area.x,
+            y: area.y + status_height + branches_height,
+            width: area.width,
+            height: menu_height,
         };
 
         // 渲染状态信息
@@ -144,6 +228,11 @@ impl Component for SidebarPanel {
             status_paragraph.block(Block::default().title("Repository").borders(Borders::ALL).border_style(style)),
             status_area
         );
+
+        // 渲染分支列表
+        if self.show_branches && branches_height > 2 {
+            self.render_branches_list(frame, branches_area, state);
+        }
 
         // 渲染菜单列表
         frame.render_widget(
@@ -156,46 +245,97 @@ impl Component for SidebarPanel {
         use crossterm::event::KeyCode;
         
         match key.code {
+            KeyCode::Tab => {
+                // Tab键在菜单和分支列表之间切换焦点
+                if self.show_branches && !state.repo_state.branches.is_empty() {
+                    self.branches_focused = !self.branches_focused;
+                }
+                EventResult::Handled
+            }
             KeyCode::Up | KeyCode::Char('k') => {
-                if self.selected_index > 0 {
-                    self.selected_index -= 1;
+                if self.branches_focused {
+                    // 分支列表导航
+                    if !state.repo_state.branches.is_empty() {
+                        if self.selected_branch_index > 0 {
+                            self.selected_branch_index -= 1;
+                        } else {
+                            self.selected_branch_index = state.repo_state.branches.len() - 1;
+                        }
+                    }
                 } else {
-                    self.selected_index = self.menu_items.len() - 1;
+                    // 菜单导航
+                    if self.selected_index > 0 {
+                        self.selected_index -= 1;
+                    } else {
+                        self.selected_index = self.menu_items.len() - 1;
+                    }
                 }
                 EventResult::Handled
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.selected_index < self.menu_items.len() - 1 {
-                    self.selected_index += 1;
+                if self.branches_focused {
+                    // 分支列表导航
+                    if !state.repo_state.branches.is_empty() {
+                        if self.selected_branch_index < state.repo_state.branches.len() - 1 {
+                            self.selected_branch_index += 1;
+                        } else {
+                            self.selected_branch_index = 0;
+                        }
+                    }
                 } else {
-                    self.selected_index = 0;
+                    // 菜单导航
+                    if self.selected_index < self.menu_items.len() - 1 {
+                        self.selected_index += 1;
+                    } else {
+                        self.selected_index = 0;
+                    }
                 }
                 EventResult::Handled
             }
             KeyCode::Enter => {
-                // 根据选中的菜单项切换视图
-                match self.selected_index {
-                    0 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog),
-                    1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
-                    2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
-                    3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
-                    4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
-                    _ => {}
-                }
-                EventResult::Handled
-            }
-            KeyCode::Char(c) if c >= '1' && c <= '5' => {
-                let index = (c as u8 - b'1') as usize;
-                if index < self.menu_items.len() {
-                    self.selected_index = index;
-                    // 直接切换视图
-                    match index {
+                if self.branches_focused {
+                    // 切换到选中的分支
+                    if let Some(branch) = state.repo_state.branches.get(self.selected_branch_index) {
+                        // 由于switch_to_branch是async方法，我们需要在这里使用state的通知系统
+                        // 创建一个分支切换请求
+                        state.request_branch_switch(branch.name.clone());
+                    }
+                } else {
+                    // 根据选中的菜单项切换视图
+                    match self.selected_index {
                         0 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog),
                         1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
                         2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
                         3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
                         4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
                         _ => {}
+                    }
+                }
+                EventResult::Handled
+            }
+            KeyCode::Char('b') => {
+                // 'b'键切换分支列表显示/隐藏
+                self.show_branches = !self.show_branches;
+                if !self.show_branches {
+                    self.branches_focused = false;
+                }
+                EventResult::Handled
+            }
+            KeyCode::Char(c) if c >= '1' && c <= '5' => {
+                // 数字键快速切换视图（只在菜单模式下工作）
+                if !self.branches_focused {
+                    let index = (c as u8 - b'1') as usize;
+                    if index < self.menu_items.len() {
+                        self.selected_index = index;
+                        // 直接切换视图
+                        match index {
+                            0 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog),
+                            1 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Tags),
+                            2 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Remotes),
+                            3 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::Stash),
+                            4 => state.set_current_view(crate::tui_unified::state::app_state::ViewType::QueryHistory),
+                            _ => {}
+                        }
                     }
                 }
                 EventResult::Handled

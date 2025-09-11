@@ -1,6 +1,6 @@
 // Git 日志视图组件
 use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, style::{Color, Style, Modifier}, text::{Line, Span, Text}, widgets::{Block, Borders, List, ListItem, ListState}};
+use ratatui::{Frame, layout::Rect, style::{Color, Style, Modifier}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, ListState}};
 use crate::tui_unified::{
     state::{AppState, git_state::Commit},
     components::{
