@@ -164,37 +164,87 @@ impl Component for SidebarPanel {
             Style::default().fg(Color::White)
         };
 
-        // 创建仓库状态信息
-        let repo_summary = state.repo_state.get_repo_summary();
-        let status_content = format!(
-            "📋 Repository: {}\n\n🔀 Branch: {}\n📝 Commits: {}\n🌲 Branches: {}\n🏷️ Tags: {}\n📡 Remotes: {}\n💾 Stashes: {}\n",
-            repo_summary.name,
-            if repo_summary.current_branch.is_empty() { "None" } else { &repo_summary.current_branch },
-            repo_summary.total_commits,
-            repo_summary.total_branches,
-            repo_summary.total_tags,
-            repo_summary.total_remotes,
-            repo_summary.total_stashes,
-        );
+        // 根据当前视图创建不同的内容
+        let (status_content, should_show_menu) = match state.current_view {
+            crate::tui_unified::state::app_state::ViewType::GitLog => {
+                // 在 Git Log 视图中，显示选中的分支信息和分支列表
+                let repo_summary = state.repo_state.get_repo_summary();
+                let selected_branch_info = if let Some(ref branch_name) = state.selected_items.selected_branch {
+                    format!(
+                        "📋 Repository: {}\n\n🔍 Viewing Branch: {}\n📝 Showing commits for: {}\n\n",
+                        repo_summary.name,
+                        branch_name,
+                        branch_name
+                    )
+                } else {
+                    format!(
+                        "📋 Repository: {}\n\n📝 All Commits: {}\n🌲 Total Branches: {}\n\n",
+                        repo_summary.name,
+                        repo_summary.total_commits,
+                        repo_summary.total_branches
+                    )
+                };
+                (selected_branch_info, false) // 不显示导航菜单，而显示分支列表
+            }
+            _ => {
+                // 其他视图显示标准的仓库状态信息
+                let repo_summary = state.repo_state.get_repo_summary();
+                let status_content = format!(
+                    "📋 Repository: {}\n\n🔀 Branch: {}\n📝 Commits: {}\n🌲 Branches: {}\n🏷️ Tags: {}\n📡 Remotes: {}\n💾 Stashes: {}\n",
+                    repo_summary.name,
+                    if repo_summary.current_branch.is_empty() { "None" } else { &repo_summary.current_branch },
+                    repo_summary.total_commits,
+                    repo_summary.total_branches,
+                    repo_summary.total_tags,
+                    repo_summary.total_remotes,
+                    repo_summary.total_stashes,
+                );
+                (status_content, true) // 显示导航菜单
+            }
+        };
 
-        // 创建菜单项列表
-        let menu_items: Vec<ListItem> = self.menu_items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let selected = if i == self.selected_index { "► " } else { "  " };
-                let content = format!("{}[{}] {}", selected, item.key, item.label);
-                ListItem::new(Text::raw(content))
-                    .style(if i == self.selected_index && self.focused {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default()
-                    })
-            })
-            .collect();
+        // 根据视图类型创建不同的列表项
+        let (list_items, list_title) = if should_show_menu {
+            // 显示导航菜单
+            let menu_items: Vec<ListItem> = self.menu_items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    let selected = if i == self.selected_index { "► " } else { "  " };
+                    let content = format!("{}[{}] {}", selected, item.key, item.label);
+                    ListItem::new(Text::raw(content))
+                        .style(if i == self.selected_index && self.focused {
+                            Style::default().fg(Color::Yellow)
+                        } else {
+                            Style::default()
+                        })
+                })
+                .collect();
+            (menu_items, "📋 Navigation:")
+        } else {
+            // 在 Git Log 视图中显示分支列表
+            let branch_items: Vec<ListItem> = state.repo_state.branches
+                .iter()
+                .enumerate()
+                .map(|(_i, branch)| {
+                    let indicator = if branch.is_current { "* " } else { "  " };
+                    let selected = if Some(&branch.name) == state.selected_items.selected_branch.as_ref() { "► " } else { "  " };
+                    let content = format!("{}{}{}", selected, indicator, branch.name);
+                    ListItem::new(Text::raw(content))
+                        .style(if Some(&branch.name) == state.selected_items.selected_branch.as_ref() && self.focused {
+                            Style::default().fg(Color::Yellow)
+                        } else if branch.is_current {
+                            Style::default().fg(Color::Green)
+                        } else {
+                            Style::default()
+                        })
+                })
+                .collect();
+            (branch_items, "🌲 Branches:")
+        };
 
         // 组合完整内容
-        let full_content = format!("{}\n📋 Navigation:\n", status_content);
+        let full_content = format!("{}\n{}:\n", status_content, list_title);
         let status_paragraph = Paragraph::new(Text::raw(full_content));
 
         // 计算布局：三部分显示 - 状态、分支列表、菜单
@@ -234,9 +284,9 @@ impl Component for SidebarPanel {
             self.render_branches_list(frame, branches_area, state);
         }
 
-        // 渲染菜单列表
+        // 渲染列表（菜单或分支列表）
         frame.render_widget(
-            List::new(menu_items).block(Block::default().title("Menu").borders(Borders::ALL).border_style(style)),
+            List::new(list_items).block(Block::default().title(list_title).borders(Borders::ALL).border_style(style)),
             menu_area
         );
     }

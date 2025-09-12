@@ -307,6 +307,96 @@
             color: #f14c4c;
         }
 
+        /* Enhanced Status View Styles */
+        .file-item.selected {
+            background: #094771;
+            border-color: #007acc;
+        }
+
+        .file-stats {
+            font-family: monospace;
+            margin-left: auto;
+            margin-right: 8px;
+        }
+
+        .status-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .status-card {
+            padding: 8px;
+            background: #2d2d30;
+            border-radius: 4px;
+            border-left: 3px solid;
+        }
+
+        .status-card.modified {
+            border-left-color: #f14c4c;
+        }
+
+        .status-card.untracked {
+            border-left-color: #ffcc02;
+        }
+
+        .status-card.staged {
+            border-left-color: #4ec9b0;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .section-title {
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-count {
+            color: #569cd6;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        .empty-state {
+            padding: 12px;
+            background: #2d2d30;
+            border-radius: 4px;
+            text-align: center;
+            color: #969696;
+            font-style: italic;
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #2d2d30;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .keyboard-shortcuts {
+            padding: 12px;
+            background: #1e1e1e;
+            border-radius: 4px;
+            border-left: 3px solid #569cd6;
+        }
+
+        .shortcut-list {
+            font-size: 12px;
+            color: #969696;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
         .btn-small.btn-danger:hover {
             background: #f14c4c;
             color: #ffffff;
@@ -659,9 +749,9 @@
         <!-- Header Navigation -->
         <div class="header-nav">
             <div class="nav-tabs">
-                <div class="nav-tab" data-view="branches">Branches</div>
+                <div class="nav-tab active" data-view="branches">Branches</div>
                 <div class="nav-tab" data-view="tags">Tags</div>
-                <div class="nav-tab active" data-view="stash">Stash</div>
+                <div class="nav-tab" data-view="stash">Stash</div>
                 <div class="nav-tab" data-view="status">Status</div>
                 <div class="nav-tab" data-view="remotes">Remotes</div>
                 <div class="nav-tab" data-view="history">History</div>
@@ -711,7 +801,7 @@
             <!-- Content Area -->
             <div class="content-area">
                 <!-- Branches View -->
-                <div class="view-container" id="branchesView">
+                <div class="view-container active" id="branchesView">
                     <h3>Branch Management</h3>
                     <div style="background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;">
                         <div style="margin-bottom: 12px;">
@@ -738,6 +828,9 @@
                     <!-- Git Log for Branches -->
                     <div style="margin-top: 16px;">
                         <h4 style="margin-bottom: 8px; color: #cccccc;">Git Log</h4>
+                        <div id="branchesFocusHint" style="font-size: 12px; color: #969696; margin-bottom: 8px; text-align: center;">
+                            <span class="kbd">Tab</span> Switch Focus | <span class="kbd">↑↓</span> Navigate | <span class="kbd">Enter</span> Show Diff
+                        </div>
                         <div class="git-log" id="branchesGitLog">
                             <div class="commit-item selected" data-hash="18c4a3a" onclick="selectBranchCommit('18c4a3a')">
                                 <span class="commit-status">📝</span>
@@ -872,7 +965,7 @@
                 </div>
 
                 <!-- Stash/Git Log View -->
-                <div class="view-container active" id="stashView">
+                <div class="view-container" id="stashView">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h3>Git Log</h3>
                         <div>
@@ -900,6 +993,27 @@
                             <span class="commit-message">feat(diff_viewer): 添加 Diff 修改块</span>
                         </div>
                     </div>
+                    
+                    <!-- Selected Commit Details -->
+                    <div id="selectedCommitDetails" style="margin: 16px 0; padding: 16px; background: #252526; border-radius: 4px; border: 1px solid #3e3e42; display: none;">
+                        <div style="color: #4ec9b0; font-weight: bold; margin-bottom: 8px;">
+                            Selected Commit: <span id="selectedCommitHash">5f49518</span>
+                        </div>
+                        <div style="font-size: 12px; color: #969696; line-height: 1.4;">
+                            <div><strong>Hash:</strong> <span id="detailCommitHash">5f49518</span></div>
+                            <div><strong>Date:</strong> <span id="detailCommitDate">[09-11 01:44]</span></div>
+                            <div><strong>Message:</strong> <span id="detailCommitMessage">feat(diff_viewer): 添加 Diff 修改块列表和解析函数</span></div>
+                            <div><strong>Author:</strong> <span id="detailCommitAuthor">costa</span></div>
+                            <div><strong>Changed:</strong> <span id="detailCommitStats">4 files changed, 15 insertions(+), 2 deletions(-)</span></div>
+                        </div>
+                        <div style="margin-top: 12px; display: flex; gap: 8px;">
+                            <button class="btn btn-primary" onclick="showDiff()">Show Diff</button>
+                            <button class="btn btn-secondary" onclick="editCommitMessage()">Edit Message</button>
+                            <button class="btn btn-secondary" onclick="resetToThis()">Reset to This</button>
+                            <button class="btn btn-secondary" onclick="cherryPickThis()">Cherry Pick</button>
+                        </div>
+                    </div>
+                    
                     <div class="quick-actions">
                         <span class="quick-action" onclick="rewordCommit()"><kbd>r</kbd> Reword</span>
                         <span class="quick-action" onclick="editCommit()"><kbd>e</kbd> Edit</span>
@@ -911,91 +1025,192 @@
 
                 <!-- Status View -->
                 <div class="view-container" id="statusView">
-                    <h3>Git Status</h3>
+                    <!-- Repository Summary -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px; background: #252526; border-radius: 4px;">
+                        <div>
+                            <h3 style="margin: 0; color: #4ec9b0;">📊 Git Status</h3>
+                            <div style="font-size: 12px; color: #969696; margin-top: 4px;">
+                                On branch <strong style="color: #569cd6;">main</strong> • Your branch is up to date with '<strong>origin/main</strong>'
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #969696;">
+                                <div>📝 <span id="modifiedCount">8</span> modified</div>
+                                <div>❓ <span id="untrackedCount">4</span> untracked</div>
+                                <div>✅ <span id="stagedCount">0</span> staged</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Working Directory Stats -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                        <div style="padding: 8px; background: #2d2d30; border-radius: 4px; border-left: 3px solid #f14c4c;">
+                            <div style="font-size: 11px; color: #969696;">MODIFIED</div>
+                            <div style="font-weight: bold; color: #f14c4c;">8 files</div>
+                        </div>
+                        <div style="padding: 8px; background: #2d2d30; border-radius: 4px; border-left: 3px solid #ffcc02;">
+                            <div style="font-size: 11px; color: #969696;">UNTRACKED</div>
+                            <div style="font-weight: bold; color: #ffcc02;">4 files</div>
+                        </div>
+                        <div style="padding: 8px; background: #2d2d30; border-radius: 4px; border-left: 3px solid #4ec9b0;">
+                            <div style="font-size: 11px; color: #969696;">STAGED</div>
+                            <div style="font-weight: bold; color: #4ec9b0;">0 files</div>
+                        </div>
+                    </div>
                     
-                    <!-- Staged Files -->
-                    <div style="margin-top: 16px;">
-                        <h4 style="margin-bottom: 8px; color: #4ec9b0;">Changes to be committed</h4>
+                    <!-- Staged Changes Section -->
+                    <div id="stagedSection" style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h4 style="margin: 0; color: #4ec9b0; display: flex; align-items: center;">
+                                <span style="margin-right: 8px;">📋</span>
+                                Changes to be committed <span style="color: #569cd6; font-size: 11px; margin-left: 8px;">(0)</span>
+                            </h4>
+                            <button class="btn-small" onclick="unstageAllFiles()" style="opacity: 0.7;">Reset All</button>
+                        </div>
                         <div class="file-status-list" id="stagedFiles">
-                            <div class="file-item staged" onclick="toggleFileStatus(this, 'src/tui/layout/manager.rs')">
-                                <span class="file-status-icon">✓</span>
-                                <span class="file-path">src/tui/layout/manager.rs</span>
-                                <span class="file-status">Modified</span>
-                                <span class="file-actions">
-                                    <button class="btn-small" onclick="unstageFile(event, 'src/tui/layout/manager.rs')">Unstage</button>
-                                    <button class="btn-small" onclick="showFileDiff(event, 'src/tui/layout/manager.rs')">Diff</button>
-                                </span>
-                            </div>
-                            <div class="file-item staged" onclick="toggleFileStatus(this, 'src/components/sidebar.rs')">
-                                <span class="file-status-icon">✓</span>
-                                <span class="file-path">src/components/sidebar.rs</span>
-                                <span class="file-status">Modified</span>
-                                <span class="file-actions">
-                                    <button class="btn-small" onclick="unstageFile(event, 'src/components/sidebar.rs')">Unstage</button>
-                                    <button class="btn-small" onclick="showFileDiff(event, 'src/components/sidebar.rs')">Diff</button>
-                                </span>
+                            <div style="padding: 12px; background: #2d2d30; border-radius: 4px; text-align: center; color: #969696; font-style: italic;">
+                                No changes staged for commit
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Unstaged Files -->
-                    <div style="margin-top: 16px;">
-                        <h4 style="margin-bottom: 8px; color: #f14c4c;">Changes not staged for commit</h4>
+                    <!-- Modified Files Section -->
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h4 style="margin: 0; color: #f14c4c; display: flex; align-items: center;">
+                                <span style="margin-right: 8px;">🔄</span>
+                                Changes not staged for commit <span style="color: #569cd6; font-size: 11px; margin-left: 8px;">(8)</span>
+                            </h4>
+                            <button class="btn-small" onclick="stageAllFiles()">Stage All</button>
+                        </div>
                         <div class="file-status-list" id="unstagedFiles">
-                            <div class="file-item unstaged" onclick="toggleFileStatus(this, 'docs/new-layout-design.md')">
-                                <span class="file-status-icon">○</span>
-                                <span class="file-path">docs/new-layout-design.md</span>
-                                <span class="file-status">Modified</span>
+                            <!-- Real Git Status Files -->
+                            <div class="file-item unstaged" onclick="selectFile(this)" data-file="docs/tui/new-layout-design.md">
+                                <span class="file-status-icon" style="color: #f14c4c;">M</span>
+                                <span class="file-path">docs/tui/new-layout-design.md</span>
+                                <span class="file-stats" style="color: #569cd6; font-size: 11px;">+425 -0</span>
                                 <span class="file-actions">
-                                    <button class="btn-small" onclick="stageFile(event, 'docs/new-layout-design.md')">Stage</button>
-                                    <button class="btn-small" onclick="showFileDiff(event, 'docs/new-layout-design.md')">Diff</button>
-                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'docs/new-layout-design.md')">Discard</button>
+                                    <button class="btn-small" onclick="stageFile(event, 'docs/tui/new-layout-design.md')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'docs/tui/new-layout-design.md')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'docs/tui/new-layout-design.md')">Restore</button>
+                                </span>
+                            </div>
+                            <div class="file-item unstaged" onclick="selectFile(this)" data-file="docs/tui/tui-demo.html">
+                                <span class="file-status-icon" style="color: #f14c4c;">M</span>
+                                <span class="file-path">docs/tui/tui-demo.html</span>
+                                <span class="file-stats" style="color: #569cd6; font-size: 11px;">+426 -179</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'docs/tui/tui-demo.html')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'docs/tui/tui-demo.html')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'docs/tui/tui-demo.html')">Restore</button>
+                                </span>
+                            </div>
+                            <div class="file-item unstaged" onclick="selectFile(this)" data-file="src/diff_viewer.rs">
+                                <span class="file-status-icon" style="color: #f14c4c;">M</span>
+                                <span class="file-path">src/diff_viewer.rs</span>
+                                <span class="file-stats" style="color: #569cd6; font-size: 11px;">+77 -0</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'src/diff_viewer.rs')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'src/diff_viewer.rs')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'src/diff_viewer.rs')">Restore</button>
+                                </span>
+                            </div>
+                            <div class="file-item unstaged" onclick="selectFile(this)" data-file="src/tui_unified/app.rs">
+                                <span class="file-status-icon" style="color: #f14c4c;">M</span>
+                                <span class="file-path">src/tui_unified/app.rs</span>
+                                <span class="file-stats" style="color: #569cd6; font-size: 11px;">+131 -0</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'src/tui_unified/app.rs')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'src/tui_unified/app.rs')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'src/tui_unified/app.rs')">Restore</button>
+                                </span>
+                            </div>
+                            <div class="file-item unstaged" onclick="selectFile(this)" data-file="src/tui_unified/components/panels/sidebar.rs">
+                                <span class="file-status-icon" style="color: #f14c4c;">M</span>
+                                <span class="file-path">src/tui_unified/components/panels/sidebar.rs</span>
+                                <span class="file-stats" style="color: #569cd6; font-size: 11px;">+110 -0</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'src/tui_unified/components/panels/sidebar.rs')">Stage</button>
+                                    <button class="btn-small" onclick="showFileDiff(event, 'src/tui_unified/components/panels/sidebar.rs')">Diff</button>
+                                    <button class="btn-small btn-danger" onclick="discardFile(event, 'src/tui_unified/components/panels/sidebar.rs')">Restore</button>
                                 </span>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Untracked Files -->
-                    <div style="margin-top: 16px;">
-                        <h4 style="margin-bottom: 8px; color: #969696;">Untracked files</h4>
+                    <!-- Untracked Files Section -->
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h4 style="margin: 0; color: #ffcc02; display: flex; align-items: center;">
+                                <span style="margin-right: 8px;">❓</span>
+                                Untracked files <span style="color: #569cd6; font-size: 11px; margin-left: 8px;">(4)</span>
+                            </h4>
+                            <button class="btn-small" onclick="addAllUntracked()">Add All</button>
+                        </div>
                         <div class="file-status-list" id="untrackedFiles">
-                            <div class="file-item untracked" onclick="toggleFileStatus(this, 'temp/debug.log')">
-                                <span class="file-status-icon">?</span>
-                                <span class="file-path">temp/debug.log</span>
-                                <span class="file-status">New file</span>
+                            <div class="file-item untracked" onclick="selectFile(this)" data-file="final_branch_gitlog_fix.md">
+                                <span class="file-status-icon" style="color: #ffcc02;">?</span>
+                                <span class="file-path">final_branch_gitlog_fix.md</span>
+                                <span class="file-stats" style="color: #969696; font-size: 11px;">new file</span>
                                 <span class="file-actions">
-                                    <button class="btn-small" onclick="stageFile(event, 'temp/debug.log')">Add</button>
-                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'temp/debug.log')">Delete</button>
+                                    <button class="btn-small" onclick="stageFile(event, 'final_branch_gitlog_fix.md')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'final_branch_gitlog_fix.md')">Delete</button>
                                 </span>
                             </div>
-                            <div class="file-item untracked" onclick="toggleFileStatus(this, '.env.local')">
-                                <span class="file-status-icon">?</span>
-                                <span class="file-path">.env.local</span>
-                                <span class="file-status">New file</span>
+                            <div class="file-item untracked" onclick="selectFile(this)" data-file="test_branch_gitlog_fix.md">
+                                <span class="file-status-icon" style="color: #ffcc02;">?</span>
+                                <span class="file-path">test_branch_gitlog_fix.md</span>
+                                <span class="file-stats" style="color: #969696; font-size: 11px;">new file</span>
                                 <span class="file-actions">
-                                    <button class="btn-small" onclick="stageFile(event, '.env.local')">Add</button>
-                                    <button class="btn-small btn-danger" onclick="deleteFile(event, '.env.local')">Delete</button>
+                                    <button class="btn-small" onclick="stageFile(event, 'test_branch_gitlog_fix.md')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'test_branch_gitlog_fix.md')">Delete</button>
+                                </span>
+                            </div>
+                            <div class="file-item untracked" onclick="selectFile(this)" data-file="test_diff_fix">
+                                <span class="file-status-icon" style="color: #ffcc02;">?</span>
+                                <span class="file-path">test_diff_fix</span>
+                                <span class="file-stats" style="color: #969696; font-size: 11px;">new file</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'test_diff_fix')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'test_diff_fix')">Delete</button>
+                                </span>
+                            </div>
+                            <div class="file-item untracked" onclick="selectFile(this)" data-file="test_diff_fix.rs">
+                                <span class="file-status-icon" style="color: #ffcc02;">?</span>
+                                <span class="file-path">test_diff_fix.rs</span>
+                                <span class="file-stats" style="color: #969696; font-size: 11px;">new file</span>
+                                <span class="file-actions">
+                                    <button class="btn-small" onclick="stageFile(event, 'test_diff_fix.rs')">Add</button>
+                                    <button class="btn-small btn-danger" onclick="deleteFile(event, 'test_diff_fix.rs')">Delete</button>
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="quick-actions" style="margin-top: 16px;">
-                        <button class="btn" onclick="commitChanges()">Commit</button>
-                        <button class="btn" onclick="showAICommit()">AI Commit</button>
-                        <button class="btn" onclick="stageAllFiles()">Add All</button>
-                        <button class="btn" onclick="unstageAllFiles()">Reset</button>
-                        <button class="btn btn-danger" onclick="discardAllFiles()">Discard</button>
-                        <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+
+                    <!-- Action Bar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #2d2d30; border-radius: 4px; margin-bottom: 16px;">
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" onclick="commitChanges()" style="background: #4ec9b0;">📝 Commit</button>
+                            <button class="btn" onclick="showAICommit()" style="background: #569cd6;">🤖 AI Commit</button>
+                            <button class="btn btn-secondary" onclick="stageAllFiles()">📋 Stage All</button>
+                            <button class="btn btn-secondary" onclick="unstageAllFiles()">🔄 Reset</button>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-danger" onclick="discardAllFiles()">🗑️ Discard All</button>
+                            <button class="btn btn-secondary" onclick="refreshView()">🔄 Refresh</button>
+                        </div>
                     </div>
                     
-                    <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px;">
-                        <div style="font-size: 12px; color: #969696;">
-                            <span class="kbd">Enter</span> Toggle | 
-                            <span class="kbd">Space</span> Stage/Unstage | 
-                            <span class="kbd">d</span> Diff |
-                            <span class="kbd">c</span> Commit | 
-                            <span class="kbd">↑↓</span> Navigate
+                    <!-- Keyboard Shortcuts -->
+                    <div style="padding: 12px; background: #1e1e1e; border-radius: 4px; border-left: 3px solid #569cd6;">
+                        <div style="font-size: 12px; color: #969696; display: flex; flex-wrap: gap: 16px;">
+                            <span><span class="kbd">Space</span> Stage/Unstage</span>
+                            <span><span class="kbd">Enter</span> Select</span>
+                            <span><span class="kbd">d</span> Diff</span>
+                            <span><span class="kbd">c</span> Commit</span>
+                            <span><span class="kbd">a</span> Stage All</span>
+                            <span><span class="kbd">r</span> Restore</span>
+                            <span><span class="kbd">↑↓</span> Navigate</span>
                         </div>
                     </div>
                 </div>
@@ -1538,7 +1753,7 @@
 
     <script>
         // Global state
-        let currentView = 'stash';
+        let currentView = 'branches';
         let selectedCommit = '18c4a3a';
         let selectedAISuggestion = null;
         let customConfirmCallback = null;
@@ -1602,10 +1817,19 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeNavigation();
             initializeKeyboardShortcuts();
-            updateDynamicList('stash');
+            updateDynamicList('branches');
+            
+            // Initialize branches view with default selection
+            selectBranch(0, 'main');
+            
+            // Initialize main Git Log with default branch commits
+            updateMainGitLogForBranch(0, 'main');
             
             // Initialize the first commit as selected
             selectMainCommit('18c4a3a');
+            
+            // Initialize branches view focus state
+            updateBranchesVisuialFocus();
         });
 
         // Navigation
@@ -1661,6 +1885,15 @@
                         firstFile.classList.add('selected');
                     }
                 }, 100);
+            } else if (view === 'stash') {
+                // 当切换到主 Git Log 视图时，更新显示当前选中分支的提交历史
+                const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
+                const selectedBranchName = branchNames[selectedBranchIndex] || 'main';
+                updateMainGitLogForBranch(selectedBranchIndex, selectedBranchName);
+            } else if (view === 'branches') {
+                // 切换到branches视图时，重置焦点为侧边栏
+                branchesFocusOnGitLog = false;
+                updateBranchesVisuialFocus();
             }
         }
 
@@ -1671,6 +1904,8 @@
         let selectedRemoteIndex = 0;
         let selectedHistoryIndex = 0;
         let selectedTagCommitIndex = 0;  // Track selected commit in tags view
+        let selectedBranchCommitIndex = 0;  // Track selected commit in branches view
+        let branchesFocusOnGitLog = false;  // Track focus area in branches view (false = sidebar, true = git log)
         let selectedRemoteCommitIndex = 0;  // Track selected commit in remotes view
         let currentBranchIndex = 0; // 追踪当前实际所在的分支（带星标）
 
@@ -1679,6 +1914,23 @@
             let content = '';
 
             switch(view) {
+                case 'git-log':
+                    // Git Log 视图中显示当前选中分支信息和分支列表
+                    const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
+                    const selectedBranchName = branchNames[selectedBranchIndex] || 'main';
+                    content = `
+                        <div class="list-title">Git Log - ${selectedBranchName}</div>
+                        <div style="margin-bottom: 12px; padding: 8px; background: #2d2d30; border-radius: 4px;">
+                            <div style="color: #4ec9b0; font-weight: bold;">🔍 Viewing Branch:</div>
+                            <div style="color: #cccccc; margin-top: 4px;">${selectedBranchName}</div>
+                        </div>
+                        <div class="list-title" style="margin-top: 16px;">Switch Branch:</div>
+                        <div class="list-item ${selectedBranchIndex === 0 ? 'selected' : ''}" onclick="selectBranch(0, 'main')"><span class="icon">${currentBranchIndex === 0 ? '★' : ' '}</span> main</div>
+                        <div class="list-item ${selectedBranchIndex === 1 ? 'selected' : ''}" onclick="selectBranch(1, 'feature/auth')"><span class="icon">${currentBranchIndex === 1 ? '★' : ' '}</span> feature/auth</div>
+                        <div class="list-item ${selectedBranchIndex === 2 ? 'selected' : ''}" onclick="selectBranch(2, 'develop')"><span class="icon">${currentBranchIndex === 2 ? '★' : ' '}</span> develop</div>
+                        <div class="list-item ${selectedBranchIndex === 3 ? 'selected' : ''}" onclick="selectBranch(3, 'hotfix/v1.2')"><span class="icon">${currentBranchIndex === 3 ? '★' : ' '}</span> hotfix/v1.2</div>
+                    `;
+                    break;
                 case 'branches':
                     content = `
                         <div class="list-title">Branches List</div>
@@ -1799,6 +2051,12 @@
                     refreshView();
                 }
 
+                // Tab for focus switching in branches view - only if no modal is open
+                if (e.key === 'Tab' && currentView === 'branches' && !isModalOpen) {
+                    e.preventDefault();
+                    toggleBranchesFocus();
+                }
+
                 // Enter for diff in stash view - only if no modal is open
                 if (e.key === 'Enter' && currentView === 'stash' && !isModalOpen) {
                     showDiff();
@@ -1806,7 +2064,14 @@
 
                 // Enter for checkout in branches view
                 if (e.key === 'Enter' && currentView === 'branches') {
-                    checkoutBranch();
+                    // Use focus tracking variable instead of DOM detection
+                    if (branchesFocusOnGitLog) {
+                        // Show diff for selected commit in branches git log
+                        showDiff();
+                    } else {
+                        // Checkout branch if in sidebar
+                        checkoutBranch();
+                    }
                 }
 
                 // Enter for diff/checkout in tags view
@@ -1888,11 +2153,24 @@
                 if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                     e.preventDefault();
                     if (currentView === 'branches') {
-                        const direction = e.key === 'ArrowUp' ? -1 : 1;
-                        const newIndex = Math.max(0, Math.min(3, selectedBranchIndex + direction));
-                        if (newIndex !== selectedBranchIndex) {
-                            const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
-                            selectBranch(newIndex, branchNames[newIndex]);
+                        // Use focus tracking variable instead of DOM detection
+                        if (branchesFocusOnGitLog) {
+                            // Navigate in Branches Git Log
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const currentCommits = getBranchCommits(selectedBranchIndex);
+                            const maxIndex = currentCommits.length - 1;
+                            const newIndex = Math.max(0, Math.min(maxIndex, selectedBranchCommitIndex + direction));
+                            if (newIndex !== selectedBranchCommitIndex) {
+                                selectBranchCommit(currentCommits[newIndex].hash);
+                            }
+                        } else {
+                            // Navigate in sidebar branches list
+                            const direction = e.key === 'ArrowUp' ? -1 : 1;
+                            const newIndex = Math.max(0, Math.min(3, selectedBranchIndex + direction));
+                            if (newIndex !== selectedBranchIndex) {
+                                const branchNames = ['main', 'feature/auth', 'develop', 'hotfix/v1.2'];
+                                selectBranch(newIndex, branchNames[newIndex]);
+                            }
                         }
                     } else if (currentView === 'tags') {
                         // Check if we're focusing on the Git Log or the sidebar
@@ -2698,8 +2976,21 @@
         function selectBranch(index, branchName) {
             selectedBranchIndex = index;
             document.getElementById('selectedBranch').textContent = (index === 0 ? '★ ' : '') + branchName;
-            updateDynamicList('branches');
-            updateBranchDetails(index, branchName);
+            
+            // 更新当前视图的侧边栏
+            updateDynamicList(currentView);
+            
+            // 如果在 branches 视图，更新分支详情和右侧Git Log
+            if (currentView === 'branches') {
+                updateBranchDetails(index, branchName);
+                // 确保焦点指示器正确更新
+                updateBranchesVisuialFocus();
+            }
+            
+            // 如果在 git-log 视图，更新主Git Log内容以显示选中分支的提交
+            if (currentView === 'git-log') {
+                updateMainGitLogForBranch(index, branchName);
+            }
         }
 
         function selectTag(index, tagName) {
@@ -2774,6 +3065,10 @@
             document.querySelector(`#branchesGitLog .commit-item[data-hash="${commitHash}"]`).classList.add('selected');
             selectedCommit = commitHash;
             
+            // Update the selectedBranchCommitIndex
+            const currentCommits = getBranchCommits(selectedBranchIndex);
+            selectedBranchCommitIndex = currentCommits.findIndex(commit => commit.hash === commitHash);
+            
             // Update global selected commit for diff viewer
             updateGlobalSelectedCommit(commitHash);
         }
@@ -2794,6 +3089,43 @@
             selectedCommit = commitHash;
             document.getElementById('selectedCommitHash').textContent = commitHash;
             cherryPickCommit();
+        }
+
+        function showBranchCommitDiff(commitHash) {
+            // 设置选中的提交并显示diff
+            selectBranchCommit(commitHash);
+            showDiff();
+        }
+
+        function toggleBranchesFocus() {
+            // 在分支列表和Git Log之间切换焦点
+            branchesFocusOnGitLog = !branchesFocusOnGitLog;
+            updateBranchesVisuialFocus();
+        }
+
+        function updateBranchesVisuialFocus() {
+            // 更新可视的焦点指示器
+            const sidebar = document.getElementById('dynamicList');
+            const gitLogArea = document.getElementById('branchesGitLog');
+            const focusHint = document.getElementById('branchesFocusHint');
+            
+            if (branchesFocusOnGitLog) {
+                // 焦点在Git Log区域
+                sidebar.style.opacity = '0.5';
+                sidebar.style.filter = 'brightness(0.7)';
+                gitLogArea.style.border = '2px solid #007acc';
+                gitLogArea.style.borderRadius = '4px';
+                gitLogArea.style.boxShadow = '0 0 8px rgba(0, 122, 204, 0.3)';
+                focusHint.innerHTML = '<span style="color: #007acc;">📍 Git Log Active</span> | <span class="kbd">Tab</span> Switch to Branches | <span class="kbd">↑↓</span> Navigate | <span class="kbd">Enter</span> Show Diff';
+            } else {
+                // 焦点在侧边栏
+                sidebar.style.opacity = '1';
+                sidebar.style.filter = 'none';
+                gitLogArea.style.border = '1px solid #3e3e42';
+                gitLogArea.style.borderRadius = '4px';
+                gitLogArea.style.boxShadow = 'none';
+                focusHint.innerHTML = '<span style="color: #4ec9b0;">📍 Branches Active</span> | <span class="kbd">Tab</span> Switch to Git Log | <span class="kbd">↑↓</span> Navigate | <span class="kbd">Enter</span> Checkout';
+            }
         }
 
         // Tag Git Log Functions  
@@ -2869,37 +3201,48 @@
             
             const details = commitDetails[commitHash] || commitDetails['18c4a3a'];
             
-            // Update the commit details section in stash view
-            const stashView = document.getElementById('stashView');
-            let detailsSection = stashView.querySelector('.commit-details');
-            if (!detailsSection) {
-                const header = stashView.querySelector('h3');
-                detailsSection = document.createElement('div');
-                detailsSection.className = 'commit-details';
-                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
-                header.parentNode.insertBefore(detailsSection, header.nextSibling);
+            // Update the commit details section in stash view (below Git Log)
+            const detailsDiv = document.getElementById('selectedCommitDetails');
+            if (detailsDiv) {
+                // Update the existing details div
+                detailsDiv.style.display = 'block';
             }
             
-            detailsSection.innerHTML = `
-                <div style="margin-bottom: 12px;">
-                    <div style="font-weight: bold; color: #4ec9b0;">Selected Commit: <span id="selectedCommitHash">${commitHash}</span></div>
-                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
-                        <div>📝 Commit Details:</div>
-                        <div>• Hash: ${details.hash}</div>
-                        <div>• Date: ${details.date}</div>
-                        <div>• Message: ${details.message}</div>
-                        <div>• Author: ${details.author}</div>
-                        <div>• Changes: ${details.changes}</div>
-                        <div>• Branch: ${details.branch}</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button class="btn" onclick="showDiff()">Show Diff</button>
-                    <button class="btn" onclick="rewordCommit()">Edit Message</button>
-                    <button class="btn btn-danger" onclick="resetCommit()">Reset to This</button>
-                    <button class="btn" onclick="cherryPickCommit()">Cherry Pick</button>
-                </div>
-            `;
+            // Update all detail fields
+            document.getElementById('selectedCommitHash').textContent = details.hash;
+            document.getElementById('detailCommitHash').textContent = details.hash;
+            document.getElementById('detailCommitDate').textContent = details.date;
+            document.getElementById('detailCommitMessage').textContent = details.message;
+            document.getElementById('detailCommitAuthor').textContent = details.author;
+            document.getElementById('detailCommitStats').textContent = details.changes;
+        }
+
+        function editCommitMessage() {
+            // Edit the selected commit message
+            if (selectedCommit) {
+                document.getElementById('selectedCommitHash').textContent = selectedCommit;
+                rewordCommit();
+            }
+        }
+
+        function resetToThis() {
+            // Reset to the selected commit
+            if (selectedCommit) {
+                showCustomConfirm(
+                    `Are you sure you want to reset to commit ${selectedCommit}?\\n\\nThis will undo all commits after this one.`,
+                    () => {
+                        showCustomAlert(`Reset to ${selectedCommit} completed!`, '✅ Reset Complete');
+                    },
+                    '🔄 Reset to Commit'
+                );
+            }
+        }
+
+        function cherryPickThis() {
+            // Cherry pick the selected commit
+            if (selectedCommit) {
+                showCustomAlert(`Cherry-picked commit ${selectedCommit}!`, '🍒 Cherry Pick Complete');
+            }
         }
 
         function selectRemote(index, remoteName) {
@@ -2969,6 +3312,146 @@
                     </div>
                 </div>
             `;
+            
+            // 更新分支对应的 Git Log
+            updateBranchGitLog(index, branchName);
+        }
+
+        function getBranchCommits(index) {
+            // 获取指定分支的提交列表
+            const branchCommits = {
+                0: [ // main
+                    { hash: '18c4a3a', status: '📝', date: '[09-11 01:44]', message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单', author: 'costa' },
+                    { hash: '8502563', status: '🔧', date: '[09-11 01:44]', message: 'fix(src): 修复TUI界面焦点管理和视图切换问题', author: 'costa' },
+                    { hash: '5f49518', status: '✨', date: '[09-11 01:44]', message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数', author: 'costa' },
+                    { hash: '9bd566f', status: '🎨', date: '[09-10 18:33]', message: 'style(ui): 优化界面布局和颜色主题', author: 'costa' }
+                ],
+                1: [ // feature/auth
+                    { hash: '2a1b3c4', status: '🔐', date: '[09-10 16:22]', message: 'feat(auth): 添加用户认证系统基础框架', author: 'alice' },
+                    { hash: '3b2c4d5', status: '🧪', date: '[09-10 14:15]', message: 'test(auth): 添加认证模块单元测试', author: 'alice' },
+                    { hash: '4c3d5e6', status: '📝', date: '[09-10 12:30]', message: 'docs(auth): 更新认证系统文档', author: 'alice' },
+                    { hash: '5d4e6f7', status: '🔒', date: '[09-09 18:45]', message: 'security(auth): 强化密码加密算法', author: 'alice' }
+                ],
+                2: [ // develop
+                    { hash: '6e5f7g8', status: '🔀', date: '[09-09 15:30]', message: 'merge: 合并多个功能分支到开发分支', author: 'bob' },
+                    { hash: '7f6g8h9', status: '🚀', date: '[09-09 13:20]', message: 'perf(core): 优化核心模块性能', author: 'bob' },
+                    { hash: '8g7h9i0', status: '🐛', date: '[09-09 11:15]', message: 'fix(api): 修复API接口响应问题', author: 'bob' },
+                    { hash: '9h8i0j1', status: '📦', date: '[09-08 16:45]', message: 'build(deps): 更新项目依赖包', author: 'bob' }
+                ],
+                3: [ // hotfix/v1.2
+                    { hash: '0i9j1k2', status: '🚨', date: '[09-08 14:20]', message: 'hotfix: 修复关键安全漏洞', author: 'charlie' },
+                    { hash: '1j0k2l3', status: '🔒', date: '[09-08 13:15]', message: 'security: 加强输入验证防止注入攻击', author: 'charlie' },
+                    { hash: '2k1l3m4', status: '🧹', date: '[09-08 12:30]', message: 'clean: 清理无用代码和注释', author: 'charlie' },
+                    { hash: '3l2m4n5', status: '📋', date: '[09-08 11:45]', message: 'log: 添加详细的安全审计日志', author: 'charlie' }
+                ]
+            };
+            return branchCommits[index] || branchCommits[0];
+        }
+
+        function updateBranchGitLog(index, branchName) {
+            // 模拟不同分支的提交历史
+            const branchCommits = {
+                0: [ // main
+                    { hash: '18c4a3a', status: '📝', date: '[09-11 01:44]', message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单', author: 'costa' },
+                    { hash: '8502563', status: '🔧', date: '[09-11 01:44]', message: 'fix(src): 修复TUI界面焦点管理和视图切换问题', author: 'costa' },
+                    { hash: '5f49518', status: '✨', date: '[09-11 01:44]', message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数', author: 'costa' },
+                    { hash: '9bd566f', status: '🎨', date: '[09-10 18:33]', message: 'style(ui): 优化界面布局和颜色主题', author: 'costa' }
+                ],
+                1: [ // feature/auth
+                    { hash: '2a1b3c4', status: '🔐', date: '[09-10 16:22]', message: 'feat(auth): 添加用户认证系统基础框架', author: 'alice' },
+                    { hash: '3b2c4d5', status: '🧪', date: '[09-10 14:15]', message: 'test(auth): 添加认证模块单元测试', author: 'alice' },
+                    { hash: '4c3d5e6', status: '📝', date: '[09-10 12:30]', message: 'docs(auth): 更新认证系统文档', author: 'alice' },
+                    { hash: '5d4e6f7', status: '🔒', date: '[09-09 18:45]', message: 'security(auth): 强化密码加密算法', author: 'alice' }
+                ],
+                2: [ // develop
+                    { hash: '6e5f7g8', status: '🔀', date: '[09-09 15:30]', message: 'merge: 合并多个功能分支到开发分支', author: 'bob' },
+                    { hash: '7f6g8h9', status: '🚀', date: '[09-09 13:20]', message: 'perf(core): 优化核心模块性能', author: 'bob' },
+                    { hash: '8g7h9i0', status: '🐛', date: '[09-09 11:15]', message: 'fix(api): 修复API接口响应问题', author: 'bob' },
+                    { hash: '9h8i0j1', status: '📦', date: '[09-08 16:45]', message: 'build(deps): 更新项目依赖包', author: 'bob' }
+                ],
+                3: [ // hotfix/v1.2
+                    { hash: '0i9j1k2', status: '🚨', date: '[09-08 14:20]', message: 'hotfix: 修复关键安全漏洞', author: 'charlie' },
+                    { hash: '1j0k2l3', status: '🔒', date: '[09-08 13:15]', message: 'security: 加强输入验证防止注入攻击', author: 'charlie' },
+                    { hash: '2k1l3m4', status: '🧹', date: '[09-08 12:30]', message: 'clean: 清理无用代码和注释', author: 'charlie' },
+                    { hash: '3l2m4n5', status: '📋', date: '[09-08 11:45]', message: 'log: 添加详细的安全审计日志', author: 'charlie' }
+                ]
+            };
+
+            const commits = branchCommits[index] || branchCommits[0];
+            const gitLogContainer = document.getElementById('branchesGitLog');
+            
+            // 更新Git Log内容
+            gitLogContainer.innerHTML = commits.map((commit, commitIndex) => `
+                <div class="commit-item ${commitIndex === 0 ? 'selected' : ''}" data-hash="${commit.hash}" onclick="selectBranchCommit('${commit.hash}')" ondblclick="showBranchCommitDiff('${commit.hash}')">
+                    <span class="commit-status">${commit.status}</span>
+                    <span class="commit-hash">${commit.hash}</span>
+                    <span class="commit-date">${commit.date}</span>
+                    <span class="commit-message">${commit.message}</span>
+                    <div class="commit-actions">
+                        <button class="btn btn-secondary" onclick="showBranchCommitDiff('${commit.hash}')" title="Show Diff">👁️</button>
+                        <button class="btn btn-secondary" onclick="editBranchCommit('${commit.hash}')" title="Edit">✏️</button>
+                        <button class="btn btn-secondary" onclick="resetBranchCommit('${commit.hash}')" title="Reset">🔄</button>
+                        <button class="btn btn-secondary" onclick="cherryPickBranchCommit('${commit.hash}')" title="Cherry Pick">🍒</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            // 更新全局选中的commit为第一个
+            if (commits.length > 0) {
+                selectedCommit = commits[0].hash;
+                selectedBranchCommitIndex = 0;  // 重置选中索引为第一个
+                updateGlobalSelectedCommit(selectedCommit);
+            }
+        }
+
+        function updateMainGitLogForBranch(index, branchName) {
+            // 更新主Git Log区域以显示选中分支的提交历史
+            // 这个函数在用户在git-log视图中从侧边栏选择不同分支时调用
+            const branchCommits = {
+                0: [ // main
+                    { hash: '18c4a3a', status: '📝', date: '[09-11 01:44]', message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单', author: 'costa' },
+                    { hash: '8502563', status: '🔧', date: '[09-11 01:44]', message: 'fix(src): 修复TUI界面焦点管理和视图切换问题', author: 'costa' },
+                    { hash: '5f49518', status: '✨', date: '[09-11 01:44]', message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数', author: 'costa' },
+                    { hash: '9bd566f', status: '🎨', date: '[09-10 18:33]', message: 'style(ui): 优化界面布局和颜色主题', author: 'costa' }
+                ],
+                1: [ // feature/auth
+                    { hash: '2a1b3c4', status: '🔐', date: '[09-10 16:22]', message: 'feat(auth): 添加用户认证系统基础框架', author: 'alice' },
+                    { hash: '3b2c4d5', status: '🧪', date: '[09-10 14:15]', message: 'test(auth): 添加认证模块单元测试', author: 'alice' },
+                    { hash: '4c3d5e6', status: '📝', date: '[09-10 12:30]', message: 'docs(auth): 更新认证系统文档', author: 'alice' },
+                    { hash: '5d4e6f7', status: '🔒', date: '[09-09 18:45]', message: 'security(auth): 强化密码加密算法', author: 'alice' }
+                ],
+                2: [ // develop
+                    { hash: '6e5f7g8', status: '🔀', date: '[09-09 15:30]', message: 'merge: 合并多个功能分支到开发分支', author: 'bob' },
+                    { hash: '7f6g8h9', status: '🚀', date: '[09-09 13:20]', message: 'perf(core): 优化核心模块性能', author: 'bob' },
+                    { hash: '8g7h9i0', status: '🐛', date: '[09-09 11:15]', message: 'fix(api): 修复API接口响应问题', author: 'bob' },
+                    { hash: '9h8i0j1', status: '📦', date: '[09-08 16:45]', message: 'build(deps): 更新项目依赖包', author: 'bob' }
+                ],
+                3: [ // hotfix/v1.2
+                    { hash: '0i9j1k2', status: '🚨', date: '[09-08 14:20]', message: 'hotfix: 修复关键安全漏洞', author: 'charlie' },
+                    { hash: '1j0k2l3', status: '🔒', date: '[09-08 13:15]', message: 'security: 加强输入验证防止注入攻击', author: 'charlie' },
+                    { hash: '2k1l3m4', status: '🧹', date: '[09-08 12:30]', message: 'clean: 清理无用代码和注释', author: 'charlie' },
+                    { hash: '3l2m4n5', status: '📋', date: '[09-08 11:45]', message: 'log: 添加详细的安全审计日志', author: 'charlie' }
+                ]
+            };
+
+            const commits = branchCommits[index] || branchCommits[0];
+            const mainGitLogContainer = document.getElementById('gitLog');
+            
+            // 更新主Git Log内容以显示选中分支的提交
+            mainGitLogContainer.innerHTML = commits.map((commit, commitIndex) => `
+                <div class="commit-item ${commitIndex === 0 ? 'selected' : ''}" data-hash="${commit.hash}" onclick="selectMainCommit('${commit.hash}')">
+                    <span class="commit-status">${commit.status}</span>
+                    <span class="commit-hash">${commit.hash}</span>
+                    <span class="commit-date">${commit.date}</span>
+                    <span class="commit-message">${commit.message}</span>
+                </div>
+            `).join('');
+            
+            // 更新全局选中的commit为第一个
+            if (commits.length > 0) {
+                selectedCommit = commits[0].hash;
+                updateGlobalSelectedCommit(selectedCommit);
+            }
         }
 
         function updateTagDetails(index, tagName) {
@@ -3075,63 +3558,33 @@
                     hash: '18c4a3a',
                     date: '2024-09-11 01:44:32',
                     message: 'fix(ui): 修复侧边栏布局问题，显示分支列表和导航菜单',
-                    author: 'costa <costa@helltalk.com>',
-                    files: '3 files changed, 12 insertions(+), 5 deletions(-)',
+                    author: 'costa',
+                    changes: '3 files changed, 12 insertions(+), 5 deletions(-)',
                     branch: 'main'
                 },
                 1: { // 8502563
                     hash: '8502563',
                     date: '2024-09-11 01:44:15',
                     message: 'fix(src): 修复TUI界面焦点管理和视图切换问题',
-                    author: 'costa <costa@helltalk.com>',
-                    files: '2 files changed, 8 insertions(+), 3 deletions(-)',
+                    author: 'costa',
+                    changes: '2 files changed, 8 insertions(+), 3 deletions(-)',
                     branch: 'main'
                 },
                 2: { // 5f49518
                     hash: '5f49518',
                     date: '2024-09-10 15:30:45',
                     message: 'feat(diff_viewer): 添加 Diff 修改块列表和解析函数',
-                    author: 'alice <alice@helltalk.com>',
-                    files: '1 file changed, 15 insertions(+), 0 deletions(-)',
+                    author: 'alice',
+                    changes: '1 file changed, 15 insertions(+), 0 deletions(-)',
                     branch: 'develop'
                 }
             };
 
             const details = commitDetails[index] || commitDetails[0];
             
-            // 更新 commit 详情显示
-            const stashView = document.getElementById('stashView');
-            // 查找当前的详情区域，如果不存在则创建
-            let detailsSection = stashView.querySelector('.commit-details');
-            if (!detailsSection) {
-                // 在 h3 之后添加详情区域
-                const header = stashView.querySelector('h3');
-                detailsSection = document.createElement('div');
-                detailsSection.className = 'commit-details';
-                detailsSection.style.cssText = 'background: #252526; padding: 16px; border-radius: 4px; margin: 16px 0;';
-                header.parentNode.insertBefore(detailsSection, header.nextSibling);
-            }
-            
-            detailsSection.innerHTML = `
-                <div style="margin-bottom: 12px;">
-                    <div style="font-weight: bold; color: #4ec9b0;">Selected Commit: <span id="selectedCommitHash">${commitHash}</span></div>
-                    <div style="font-size: 12px; color: #969696; margin-top: 8px;">
-                        <div>📝 Commit Details:</div>
-                        <div>• Hash: ${details.hash}</div>
-                        <div>• Date: ${details.date}</div>
-                        <div>• Message: ${details.message}</div>
-                        <div>• Author: ${details.author}</div>
-                        <div>• Changes: ${details.files}</div>
-                        <div>• Branch: ${details.branch}</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button class="btn btn-secondary" onclick="showDiff()">Show Diff</button>
-                    <button class="btn btn-secondary" onclick="rewordCommit()">Edit Message</button>
-                    <button class="btn btn-danger" onclick="resetCommit()">Reset to This</button>
-                    <button class="btn btn-secondary" onclick="cherryPickCommit()">Cherry Pick</button>
-                </div>
-            `;
+            // 使用统一的 updateMainCommitDetails 函数来更新详情显示
+            // 而不是创建重复的显示区域
+            updateMainCommitDetails(details.hash);
         }
 
         function updateRemoteDetails(index, remoteName) {
@@ -3332,6 +3785,171 @@
             if (confirm(`Apply stash: ${stashName}?`)) {
                 alert(`Applied stash: ${stashName}\nChanges have been applied to your working directory.`);
             }
+        }
+
+        // Enhanced Status View Functions
+        function selectFile(element) {
+            // Remove previous selection
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Add selection to clicked element
+            element.classList.add('selected');
+            
+            // Update selected file info if needed
+            const fileName = element.dataset.file;
+            console.log('Selected file:', fileName);
+        }
+
+        function updateStatusCounts() {
+            // Update the count displays in the status view
+            const modifiedFiles = document.querySelectorAll('#unstagedFiles .file-item').length;
+            const untrackedFiles = document.querySelectorAll('#untrackedFiles .file-item').length;
+            const stagedFiles = document.querySelectorAll('#stagedFiles .file-item:not([style*="italic"])').length;
+            
+            document.getElementById('modifiedCount').textContent = modifiedFiles;
+            document.getElementById('untrackedCount').textContent = untrackedFiles;
+            document.getElementById('stagedCount').textContent = stagedFiles;
+            
+            // Update section headers
+            document.querySelector('#stagedSection h4 span:last-child').textContent = `(${stagedFiles})`;
+            document.querySelector('[data-section="unstaged"] span:last-child').textContent = `(${modifiedFiles})`;
+            document.querySelector('[data-section="untracked"] span:last-child').textContent = `(${untrackedFiles})`;
+        }
+
+        function addAllUntracked() {
+            showCustomConfirm(
+                '确定要将所有未跟踪的文件添加到暂存区吗？',
+                () => {
+                    // Move all untracked files to staged
+                    const untrackedFiles = document.querySelectorAll('#untrackedFiles .file-item');
+                    const stagedContainer = document.getElementById('stagedFiles');
+                    
+                    // Clear "No changes staged" message if it exists
+                    const noChangesMsg = stagedContainer.querySelector('[style*="italic"]');
+                    if (noChangesMsg) {
+                        noChangesMsg.remove();
+                    }
+                    
+                    untrackedFiles.forEach(fileItem => {
+                        // Clone and modify for staged area
+                        const stagedItem = fileItem.cloneNode(true);
+                        stagedItem.className = 'file-item staged';
+                        stagedItem.querySelector('.file-status-icon').textContent = 'A';
+                        stagedItem.querySelector('.file-status-icon').style.color = '#4ec9b0';
+                        stagedItem.querySelector('.file-stats').textContent = 'added';
+                        stagedItem.querySelector('.file-stats').style.color = '#4ec9b0';
+                        
+                        // Update actions for staged file
+                        stagedItem.querySelector('.file-actions').innerHTML = `
+                            <button class="btn-small" onclick="unstageFile(event, '${fileItem.dataset.file}')">Unstage</button>
+                            <button class="btn-small" onclick="showFileDiff(event, '${fileItem.dataset.file}')">Diff</button>
+                        `;
+                        
+                        stagedContainer.appendChild(stagedItem);
+                        fileItem.remove();
+                    });
+                    
+                    updateStatusCounts();
+                    showCustomAlert('已将所有未跟踪文件添加到暂存区', '✅ Files Staged');
+                },
+                'Add All Untracked',
+                '📋'
+            );
+        }
+
+        function refreshStatusView() {
+            // Simulate refreshing git status
+            showCustomAlert('Git status refreshed', '🔄 Refresh Complete');
+            
+            // In a real implementation, this would fetch actual git status
+            // For demo purposes, we'll just show a refresh message
+            updateStatusCounts();
+        }
+
+        // Enhanced file operations with better feedback
+        function stageFile(event, fileName) {
+            event.stopPropagation();
+            
+            showCustomConfirm(
+                `Stage changes in <strong>${fileName}</strong>?`,
+                () => {
+                    // Move file from unstaged to staged section
+                    const fileItem = document.querySelector(`[data-file="${fileName}"]`);
+                    const stagedContainer = document.getElementById('stagedFiles');
+                    
+                    // Clear "No changes staged" message if it exists
+                    const noChangesMsg = stagedContainer.querySelector('[style*="italic"]');
+                    if (noChangesMsg) {
+                        noChangesMsg.remove();
+                    }
+                    
+                    // Clone and modify for staged area
+                    const stagedItem = fileItem.cloneNode(true);
+                    stagedItem.className = 'file-item staged';
+                    stagedItem.querySelector('.file-status-icon').style.color = '#4ec9b0';
+                    stagedItem.querySelector('.file-stats').style.color = '#4ec9b0';
+                    
+                    // Update actions for staged file
+                    stagedItem.querySelector('.file-actions').innerHTML = `
+                        <button class="btn-small" onclick="unstageFile(event, '${fileName}')">Unstage</button>
+                        <button class="btn-small" onclick="showFileDiff(event, '${fileName}')">Diff</button>
+                    `;
+                    
+                    stagedContainer.appendChild(stagedItem);
+                    fileItem.remove();
+                    
+                    updateStatusCounts();
+                    showCustomAlert(`Staged <strong>${fileName}</strong>`, '✅ File Staged');
+                },
+                'Stage File',
+                '📋'
+            );
+        }
+
+        function unstageFile(event, fileName) {
+            event.stopPropagation();
+            
+            showCustomConfirm(
+                `Unstage changes in <strong>${fileName}</strong>?`,
+                () => {
+                    // Move file from staged back to unstaged section
+                    const fileItem = document.querySelector(`#stagedFiles [data-file="${fileName}"]`);
+                    const unstagedContainer = document.getElementById('unstagedFiles');
+                    
+                    // Clone and modify for unstaged area
+                    const unstagedItem = fileItem.cloneNode(true);
+                    unstagedItem.className = 'file-item unstaged';
+                    unstagedItem.querySelector('.file-status-icon').style.color = '#f14c4c';
+                    unstagedItem.querySelector('.file-stats').style.color = '#569cd6';
+                    
+                    // Update actions for unstaged file
+                    unstagedItem.querySelector('.file-actions').innerHTML = `
+                        <button class="btn-small" onclick="stageFile(event, '${fileName}')">Stage</button>
+                        <button class="btn-small" onclick="showFileDiff(event, '${fileName}')">Diff</button>
+                        <button class="btn-small btn-danger" onclick="discardFile(event, '${fileName}')">Restore</button>
+                    `;
+                    
+                    unstagedContainer.appendChild(unstagedItem);
+                    fileItem.remove();
+                    
+                    // Show "no changes staged" if staged area is empty
+                    const stagedContainer = document.getElementById('stagedFiles');
+                    if (stagedContainer.children.length === 0) {
+                        stagedContainer.innerHTML = `
+                            <div style="padding: 12px; background: #2d2d30; border-radius: 4px; text-align: center; color: #969696; font-style: italic;">
+                                No changes staged for commit
+                            </div>
+                        `;
+                    }
+                    
+                    updateStatusCounts();
+                    showCustomAlert(`Unstaged <strong>${fileName}</strong>`, '🔄 File Unstaged');
+                },
+                'Unstage File',
+                '🔄'
+            );
         }
 
         function popStash() {

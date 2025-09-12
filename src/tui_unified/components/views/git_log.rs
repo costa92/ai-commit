@@ -20,6 +20,8 @@ pub struct GitLogView {
     list_state: ListState,
     focused: bool,
     selected_index: Option<usize>,
+    // 新增：当前过滤的分支
+    current_branch_filter: Option<String>,
 }
 
 impl GitLogView {
@@ -78,6 +80,7 @@ impl GitLogView {
             list_state,
             focused: false,
             selected_index: None,
+            current_branch_filter: None,
         }
     }
 
@@ -87,6 +90,58 @@ impl GitLogView {
 
     pub fn set_selected_index(&mut self, index: Option<usize>) {
         self.list_widget.set_selected_index(index);
+    }
+
+    /// 设置分支过滤
+    pub fn set_branch_filter(&mut self, branch_name: Option<String>) {
+        self.current_branch_filter = branch_name;
+        self.update_title();
+    }
+
+    /// 更新标题以反映当前分支过滤状态
+    fn update_title(&mut self) {
+        let title = if let Some(ref branch_name) = self.current_branch_filter {
+            format!("Git Log - {}", branch_name)
+        } else {
+            "Git Log".to_string()
+        };
+        
+        // 重新创建 ListWidget 来更新标题
+        let format_fn = Box::new(|commit: &Commit| -> String {
+            let short_hash = &commit.hash[..8.min(commit.hash.len())];
+            let timestamp = commit.date.format("%m-%d %H:%M").to_string();
+            let message = commit.message.lines().next().unwrap_or(&commit.message);
+            format!(
+                "{} [{}] {} - {}",
+                short_hash,
+                timestamp,
+                message,
+                commit.author
+            )
+        });
+
+        let style_fn = Box::new(|_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
+            if is_selected && is_focused {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else if is_selected {
+                Style::default().fg(Color::White).bg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::White)
+            }
+        });
+
+        let search_fn = Box::new(|commit: &Commit, query: &str| -> bool {
+            let query = query.to_lowercase();
+            commit.message.to_lowercase().contains(&query) ||
+            commit.author.to_lowercase().contains(&query) ||
+            commit.author_email.to_lowercase().contains(&query) ||
+            commit.hash.to_lowercase().contains(&query)
+        });
+
+        let current_items = self.commits.clone();
+        self.list_widget = ListWidget::new(title, format_fn, style_fn)
+            .with_search_fn(search_fn)
+            .with_items(current_items);
     }
 
     /// 更新commit列表数据
@@ -124,56 +179,6 @@ impl GitLogView {
         }
     }
 
-    fn update_title(&mut self) {
-        let title = if self.show_details {
-            "Git Log (Details)".to_string()
-        } else {
-            "Git Log".to_string()
-        };
-
-        // 需要重新创建 ListWidget 来更新标题
-        let format_fn: Box<dyn Fn(&Commit) -> String + Send> = if self.show_details {
-            Box::new(|commit: &Commit| -> String {
-                format!(
-                    "{}\n{} - {}\n{}\nFiles: {} | Date: {}",
-                    &commit.hash[..8.min(commit.hash.len())],
-                    commit.author,
-                    commit.author_email,
-                    commit.message,
-                    commit.files_changed,
-                    commit.date.format("%Y-%m-%d %H:%M")
-                )
-            })
-        } else {
-            Box::new(|commit: &Commit| -> String {
-                format!(
-                    "{} {} - {}",
-                    &commit.hash[..8.min(commit.hash.len())],
-                    commit.author,
-                    commit.message.lines().next().unwrap_or(&commit.message)
-                )
-            })
-        };
-
-        let style_fn = Box::new(|_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
-            if is_selected && is_focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
-
-        let current_items = self.list_widget.items().to_vec();
-        let selected = self.list_widget.selected_index();
-
-        self.list_widget = ListWidget::new(title, format_fn, style_fn).with_items(current_items);
-        
-        if let Some(_idx) = selected {
-            self.list_widget.set_items(self.list_widget.items().to_vec());
-        }
-    }
     
     /// 创建彩色的提交项显示（静态版本）
     fn create_colored_commit_item_static(commit: &Commit, is_selected: bool) -> ListItem {
