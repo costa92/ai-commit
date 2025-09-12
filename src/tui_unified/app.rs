@@ -244,11 +244,27 @@ impl TuiUnifiedApp {
 
                         let content_focused = self.focus_manager.current_panel == FocusPanel::Content;
                         
+                        // 确保选中分支状态是最新的
+                        self.branches_view.update_selected_branch_in_state(&mut state);
+                        
                         // 渲染分支列表
                         self.branches_view.set_focus(content_focused);
                         self.branches_view.render(frame, chunks[0], &*state);
                         
-                        // 渲染git log
+                        // 根据选中的分支更新Git Log并渲染
+                        let selected_branch = state.selected_items.selected_branch.clone();
+                        self.git_log_view.set_branch_filter(selected_branch.clone());
+                        
+                        // 获取并显示选中分支的提交历史
+                        let commits_to_show = if let Some(ref branch_name) = selected_branch {
+                            self.get_branch_commits_sync(branch_name).unwrap_or_else(|_| {
+                                state.repo_state.commits.clone()
+                            })
+                        } else {
+                            state.repo_state.commits.clone()
+                        };
+                        
+                        self.git_log_view.update_commits(commits_to_show);
                         self.git_log_view.set_focus(false); // git log在分支视图中不获得焦点
                         self.git_log_view.render(frame, chunks[1], &*state);
                     }
@@ -763,8 +779,32 @@ impl TuiUnifiedApp {
         if matches!(handled, EventResult::NotHandled) {
             match key.code {
                 KeyCode::Char('1') => {
+                    // 如果当前在 Branches 视图，更新选中分支到应用状态
+                    if state.get_current_view() == crate::tui_unified::state::app_state::ViewType::Branches {
+                        self.branches_view.update_selected_branch_in_state(&mut state);
+                    }
+                    
                     state.set_current_view(crate::tui_unified::state::app_state::ViewType::GitLog);
                     self.focus_manager.set_focus(FocusPanel::Content);
+                    
+                    // 根据选中的分支设置 Git Log 过滤
+                    let selected_branch = state.selected_items.selected_branch.clone();
+                    self.git_log_view.set_branch_filter(selected_branch.clone());
+                    
+                    // 如果有选中分支，获取该分支的提交历史；否则显示全部提交
+                    let commits_to_show = if let Some(ref branch_name) = selected_branch {
+                        // 异步获取分支提交历史 - 这里简化为同步调用
+                        self.get_branch_commits_sync(branch_name).unwrap_or_else(|_| {
+                            // 如果获取失败，回退到显示所有提交
+                            state.repo_state.commits.clone()
+                        })
+                    } else {
+                        state.repo_state.commits.clone()
+                    };
+                    
+                    // 更新 Git Log 显示的提交
+                    self.git_log_view.update_commits(commits_to_show);
+                    
                     // 确保GitLogView有正确的选择状态
                     if !state.repo_state.commits.is_empty() {
                         self.git_log_view.set_focus(true);
@@ -1983,6 +2023,15 @@ impl TuiUnifiedApp {
             let repo_path = std::env::current_dir()?;
             let _git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
             
+            // 添加调试信息
+            {
+                let mut state = self.state.write().await;
+                state.add_notification(
+                    format!("Creating diff viewer for commit: {}", &hash[..8.min(hash.len())]),
+                    crate::tui_unified::state::app_state::NotificationLevel::Info
+                );
+            }
+            
             // 创建DiffViewer实例
             match DiffViewer::new(&hash).await {
                 Ok(diff_viewer) => {
@@ -1992,19 +2041,95 @@ impl TuiUnifiedApp {
                     // 显示diff弹窗（传入空的内容，因为DiffViewer自己管理内容）
                     let mut state = self.state.write().await;
                     state.show_diff_modal(hash, String::new());
+                    state.add_notification(
+                        "Diff viewer created successfully".to_string(),
+                        crate::tui_unified::state::app_state::NotificationLevel::Info
+                    );
                 }
                 Err(e) => {
-                    // 显示错误通知
+                    // 显示详细错误通知
                     let mut state = self.state.write().await;
                     state.add_notification(
-                        format!("Failed to create diff viewer: {}", e),
+                        format!("Failed to create diff viewer for commit {}: {}", &hash[..8.min(hash.len())], e),
                         crate::tui_unified::state::app_state::NotificationLevel::Error
+                    );
+                    // 添加调试建议
+                    state.add_notification(
+                        "Try checking if the commit exists: git log --oneline".to_string(),
+                        crate::tui_unified::state::app_state::NotificationLevel::Warning
                     );
                 }
             }
         }
         
         Ok(())
+    }
+
+    /// 同步获取特定分支的提交历史
+    fn get_branch_commits_sync(&self, branch_name: &str) -> anyhow::Result<Vec<crate::tui_unified::state::git_state::Commit>> {
+        use std::process::Command;
+        use chrono::{DateTime, Utc};
+        
+        // 执行 git log 命令获取分支的提交历史
+        let output = Command::new("git")
+            .args([
+                "log",
+                branch_name,
+                "--pretty=format:%H╬%an╬%ae╬%ai╬%s",
+                "--max-count=100", // 限制提交数量
+            ])
+            .output()?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to get branch commits: {}", 
+                String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let mut commits = Vec::new();
+        let log_output = String::from_utf8_lossy(&output.stdout);
+        
+        for line in log_output.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            
+            let parts: Vec<&str> = line.split('╬').collect();
+            if parts.len() >= 5 {
+                let hash = parts[0].to_string();
+                let author = parts[1].to_string();
+                let author_email = parts[2].to_string();
+                let date_str = parts[3];
+                let message = parts[4].to_string();
+                
+                // 解析日期
+                if let Ok(date) = DateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S %z") {
+                    let short_hash = hash[..8.min(hash.len())].to_string();
+                    commits.push(crate::tui_unified::state::git_state::Commit {
+                        hash: hash.clone(),
+                        short_hash,
+                        author: author.clone(),
+                        author_email: author_email.clone(),
+                        committer: author.clone(), // 简化处理，使用author作为committer
+                        committer_email: author_email.clone(),
+                        date: date.with_timezone(&Utc),
+                        message: message.clone(),
+                        subject: message.lines().next().unwrap_or(&message).to_string(),
+                        body: if message.lines().count() > 1 {
+                            Some(message.lines().skip(1).collect::<Vec<_>>().join("\n"))
+                        } else {
+                            None
+                        },
+                        parents: Vec::new(), // 简化处理
+                        refs: Vec::new(), // 简化处理
+                        files_changed: 0, // 简化处理
+                        insertions: 0, // 简化处理
+                        deletions: 0, // 简化处理
+                    });
+                }
+            }
+        }
+        
+        Ok(commits)
     }
 
     async fn handle_direct_branch_switch_request(&mut self) -> Result<()> {
