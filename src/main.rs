@@ -1,5 +1,5 @@
-use ai_commit::commands;
 use ai_commit::cli::args::Args;
+use ai_commit::commands;
 use ai_commit::config::Config;
 use ai_commit::git;
 use clap::Parser;
@@ -132,7 +132,6 @@ async fn handle_worktree_operations(args: &Args, config: &Config) -> anyhow::Res
 
     Ok(false)
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

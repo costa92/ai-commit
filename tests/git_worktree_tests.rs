@@ -2,7 +2,7 @@ use ai_commit::git::worktree::*;
 use std::path::PathBuf;
 
 /// Git Worktree 模块集成测试
-/// 
+///
 /// 这些测试验证 worktree 模块各个子模块之间的协作
 /// 以及整体功能的正确性
 
@@ -39,7 +39,7 @@ mod worktree_integration_tests {
     #[test]
     fn test_worktree_list_options_completeness() {
         let mut options = WorktreeListOptions::default();
-        
+
         // 测试默认值
         assert!(!options.verbose);
         assert!(!options.porcelain);
@@ -77,9 +77,21 @@ mod worktree_integration_tests {
             // Bare worktree
             (PathBuf::from("/repo/bare"), "bare", "def456", true, false),
             // Detached HEAD
-            (PathBuf::from("/repo/detached"), "detached", "ghi789", false, true),
+            (
+                PathBuf::from("/repo/detached"),
+                "detached",
+                "ghi789",
+                false,
+                true,
+            ),
             // 复杂分支名
-            (PathBuf::from("/repo/feature"), "feature/ui/new-design", "jkl012", false, false),
+            (
+                PathBuf::from("/repo/feature"),
+                "feature/ui/new-design",
+                "jkl012",
+                false,
+                false,
+            ),
         ];
 
         for (path, branch, commit, is_bare, is_detached) in test_cases {
@@ -171,7 +183,7 @@ mod worktree_integration_tests {
             "a1b2c3d4e5f6789",
             "1234567890abcdef1234567890abcdef12345678",
             "0000000", // 特殊情况
-            "",         // 空提交哈希
+            "",        // 空提交哈希
         ];
 
         for commit in commit_formats {
@@ -194,7 +206,7 @@ mod worktree_integration_tests {
             (false, false), // 正常 worktree
             (true, false),  // bare worktree
             (false, true),  // detached HEAD
-            // 注意：(true, true) 理论上不应该存在，但我们不在数据结构层面限制
+                            // 注意：(true, true) 理论上不应该存在，但我们不在数据结构层面限制
         ];
 
         for (is_bare, is_detached) in status_combinations {
@@ -257,7 +269,7 @@ mod worktree_integration_tests {
     #[test]
     fn test_module_public_interface() {
         // 测试模块公共接口的可访问性
-        
+
         // 类型应该可访问
         let _info: WorktreeInfo = WorktreeInfo::new(
             PathBuf::from("/test"),

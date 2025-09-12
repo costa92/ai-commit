@@ -1,62 +1,70 @@
 // Git stash视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect};
 use crate::tui_unified::{
-    state::AppState,
     components::base::{
         component::{Component, ViewComponent, ViewType},
-        events::EventResult
+        events::EventResult,
     },
     components::widgets::list::ListWidget,
     git::models::Stash,
+    state::AppState,
 };
+use crossterm::event::KeyEvent;
+use ratatui::{layout::Rect, Frame};
 
 /// Git stash视图组件 - 显示stash列表
 pub struct StashView {
     list_widget: ListWidget<Stash>,
 }
 
+impl Default for StashView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StashView {
     pub fn new() -> Self {
         // 格式化函数：显示stash索引、消息和分支
         let format_fn = Box::new(|stash: &Stash| -> String {
-            format!("💾 stash@{{{}}}: On {} - {}", stash.index, stash.branch, stash.message)
+            format!(
+                "💾 stash@{{{}}}: On {} - {}",
+                stash.index, stash.branch, stash.message
+            )
         });
 
         // 样式函数：选中时高亮显示
-        let style_fn = Box::new(|_stash: &Stash, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
-            use ratatui::style::{Color, Style};
-            if is_selected && is_focused {
-                Style::default().fg(Color::Yellow).bg(Color::DarkGray)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
+        let style_fn = Box::new(
+            |_stash: &Stash, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
+                use ratatui::style::{Color, Style};
+                if is_selected && is_focused {
+                    Style::default().fg(Color::Yellow).bg(Color::DarkGray)
+                } else if is_selected {
+                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            },
+        );
 
         // 搜索函数：支持按消息和分支搜索
         let search_fn = Box::new(|stash: &Stash, query: &str| -> bool {
             let query = query.to_lowercase();
-            stash.message.to_lowercase().contains(&query) ||
-            stash.branch.to_lowercase().contains(&query) ||
-            format!("stash@{{{}}}", stash.index).contains(&query)
+            stash.message.to_lowercase().contains(&query)
+                || stash.branch.to_lowercase().contains(&query)
+                || format!("stash@{{{}}}", stash.index).contains(&query)
         });
 
-        let list_widget = ListWidget::new(
-            "Git Stash".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget =
+            ListWidget::new("Git Stash".to_string(), format_fn, style_fn).with_search_fn(search_fn);
 
-        Self {
-            list_widget,
-        }
+        Self { list_widget }
     }
 
     pub async fn load_stashes(&mut self, app_state: &AppState) {
         // 从状态中获取stashes数据并转换为Stash模型
-        let stashes: Vec<Stash> = app_state.repo_state.stashes
+        let stashes: Vec<Stash> = app_state
+            .repo_state
+            .stashes
             .iter()
             .map(|s| Stash {
                 index: s.index as u32,
@@ -64,7 +72,7 @@ impl StashView {
                 branch: s.branch.clone(),
             })
             .collect();
-        
+
         self.list_widget.set_items(stashes);
     }
 

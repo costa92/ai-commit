@@ -41,7 +41,7 @@ pub async fn handle_flow_commands(args: &Args, config: &Config) -> anyhow::Resul
 
     // 如果没有指定具体操作，显示当前状态
     show_flow_status(config).await?;
-    
+
     Ok(())
 }
 
@@ -80,14 +80,14 @@ async fn show_flow_status(config: &Config) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
     use crate::cli::args::Args;
+    use crate::config::Config;
 
     #[tokio::test]
     async fn test_show_flow_status() {
         let config = Config::new();
         let result = show_flow_status(&config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Flow status displayed successfully");
@@ -102,9 +102,9 @@ mod tests {
     async fn test_handle_flow_commands_no_args() {
         let config = Config::new();
         let args = create_empty_args();
-        
+
         let result = handle_flow_commands(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Handle flow commands succeeded (shows status)");

@@ -1,9 +1,9 @@
-use std::collections::VecDeque;
-use std::fs;
-use std::path::PathBuf;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
+use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 /// 查询历史记录条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,25 +39,25 @@ impl QueryHistory {
             max_entries,
             history_file,
         };
-        
+
         // 加载现有历史记录
         history.load_history()?;
-        
+
         Ok(history)
     }
 
     /// 获取历史文件路径
     fn get_history_file_path() -> anyhow::Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?;
-        
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?;
+
         let config_dir = home_dir.join(".ai-commit");
-        
+
         // 确保目录存在
         if !config_dir.exists() {
             fs::create_dir_all(&config_dir)?;
         }
-        
+
         Ok(config_dir.join("query_history.json"))
     }
 
@@ -74,7 +74,7 @@ impl QueryHistory {
 
         let entries: Vec<QueryHistoryEntry> = serde_json::from_str(&content)?;
         self.entries = VecDeque::from(entries);
-        
+
         // 确保不超过最大数量
         while self.entries.len() > self.max_entries {
             self.entries.pop_front();
@@ -92,7 +92,13 @@ impl QueryHistory {
     }
 
     /// 添加新的查询记录
-    pub fn add_entry(&mut self, query: String, query_type: Option<String>, result_count: Option<usize>, success: bool) -> anyhow::Result<()> {
+    pub fn add_entry(
+        &mut self,
+        query: String,
+        query_type: Option<String>,
+        result_count: Option<usize>,
+        success: bool,
+    ) -> anyhow::Result<()> {
         let entry = QueryHistoryEntry {
             query,
             timestamp: Local::now(),
@@ -117,11 +123,7 @@ impl QueryHistory {
 
     /// 获取最近的历史记录
     pub fn get_recent(&self, count: usize) -> Vec<&QueryHistoryEntry> {
-        self.entries
-            .iter()
-            .rev()
-            .take(count)
-            .collect()
+        self.entries.iter().rev().take(count).collect()
     }
 
     /// 搜索历史记录
@@ -145,7 +147,7 @@ impl QueryHistory {
         let total_queries = self.entries.len();
         let successful_queries = self.entries.iter().filter(|e| e.success).count();
         let failed_queries = total_queries - successful_queries;
-        
+
         let mut query_types = std::collections::HashMap::new();
         for entry in &self.entries {
             if let Some(ref query_type) = entry.query_type {
@@ -171,30 +173,31 @@ impl QueryHistory {
             return;
         }
 
-        println!("📜 Query History (showing last {} entries):", entries_to_show);
+        println!(
+            "📜 Query History (showing last {} entries):",
+            entries_to_show
+        );
         println!("{}", "─".repeat(60));
 
         for (i, entry) in recent.iter().enumerate() {
             let status_icon = if entry.success { "✅" } else { "❌" };
             let query_type = entry.query_type.as_deref().unwrap_or("query");
             let timestamp = entry.timestamp.format("%Y-%m-%d %H:%M:%S");
-            
-            println!("{} {} [{}] {}", 
-                status_icon,
-                timestamp,
-                query_type,
-                entry.query
+
+            println!(
+                "{} {} [{}] {}",
+                status_icon, timestamp, query_type, entry.query
             );
-            
+
             if let Some(count) = entry.result_count {
                 println!("   └─ Results: {}", count);
             }
-            
+
             if i < recent.len() - 1 {
                 println!();
             }
         }
-        
+
         println!("{}", "─".repeat(60));
         println!("Total queries in history: {}", self.entries.len());
     }
@@ -207,33 +210,33 @@ impl QueryHistory {
         }
 
         let recent: Vec<_> = self.get_recent(20).into_iter().cloned().collect();
-        
+
         println!("📜 Select a query from history:");
         println!("{}", "─".repeat(60));
-        
+
         for (i, entry) in recent.iter().enumerate() {
             let status_icon = if entry.success { "✅" } else { "❌" };
             println!("{:2}. {} {}", i + 1, status_icon, entry.query);
         }
-        
+
         println!("{}", "─".repeat(60));
         print!("Enter number (1-{}) or 'q' to quit: ", recent.len());
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
-        
+
         if input == "q" || input == "quit" {
             return Ok(None);
         }
-        
+
         if let Ok(num) = input.parse::<usize>() {
             if num > 0 && num <= recent.len() {
                 return Ok(Some(recent[num - 1].query.clone()));
             }
         }
-        
+
         println!("Invalid selection.");
         Ok(None)
     }
@@ -254,7 +257,8 @@ impl QueryHistoryStats {
         println!("📊 Query History Statistics:");
         println!("{}", "─".repeat(40));
         println!("Total queries:      {}", self.total_queries);
-        println!("Successful queries: {} ({:.1}%)", 
+        println!(
+            "Successful queries: {} ({:.1}%)",
             self.successful_queries,
             if self.total_queries > 0 {
                 (self.successful_queries as f64 / self.total_queries as f64) * 100.0
@@ -262,7 +266,8 @@ impl QueryHistoryStats {
                 0.0
             }
         );
-        println!("Failed queries:     {} ({:.1}%)",
+        println!(
+            "Failed queries:     {} ({:.1}%)",
             self.failed_queries,
             if self.total_queries > 0 {
                 (self.failed_queries as f64 / self.total_queries as f64) * 100.0
@@ -270,7 +275,7 @@ impl QueryHistoryStats {
                 0.0
             }
         );
-        
+
         if !self.query_types.is_empty() {
             println!("\nQuery types:");
             for (query_type, count) in &self.query_types {
@@ -297,7 +302,7 @@ mod tests {
             "author:john".to_string(),
             Some("filter".to_string()),
             Some(10),
-            true
+            true,
         );
         assert!(result.is_ok());
         assert_eq!(history.entries.len(), 1);
@@ -306,16 +311,13 @@ mod tests {
     #[test]
     fn test_max_entries_limit() {
         let mut history = QueryHistory::new(3).unwrap();
-        
+
         for i in 0..5 {
-            history.add_entry(
-                format!("query {}", i),
-                None,
-                None,
-                true
-            ).unwrap();
+            history
+                .add_entry(format!("query {}", i), None, None, true)
+                .unwrap();
         }
-        
+
         // Should only keep last 3 entries
         assert_eq!(history.entries.len(), 3);
         assert_eq!(history.entries[0].query, "query 2");
@@ -325,14 +327,20 @@ mod tests {
     #[test]
     fn test_search_history() {
         let mut history = QueryHistory::new(100).unwrap();
-        
-        history.add_entry("author:john".to_string(), None, None, true).unwrap();
-        history.add_entry("message:feat".to_string(), None, None, true).unwrap();
-        history.add_entry("author:jane".to_string(), None, None, true).unwrap();
-        
+
+        history
+            .add_entry("author:john".to_string(), None, None, true)
+            .unwrap();
+        history
+            .add_entry("message:feat".to_string(), None, None, true)
+            .unwrap();
+        history
+            .add_entry("author:jane".to_string(), None, None, true)
+            .unwrap();
+
         let results = history.search("author");
         assert_eq!(results.len(), 2);
-        
+
         let results = history.search("john");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].query, "author:john");
@@ -341,16 +349,13 @@ mod tests {
     #[test]
     fn test_get_recent() {
         let mut history = QueryHistory::new(100).unwrap();
-        
+
         for i in 0..5 {
-            history.add_entry(
-                format!("query {}", i),
-                None,
-                None,
-                true
-            ).unwrap();
+            history
+                .add_entry(format!("query {}", i), None, None, true)
+                .unwrap();
         }
-        
+
         let recent = history.get_recent(3);
         assert_eq!(recent.len(), 3);
         // Recent should be in reverse order (newest first)
@@ -362,11 +367,22 @@ mod tests {
     #[test]
     fn test_stats() {
         let mut history = QueryHistory::new(100).unwrap();
-        
-        history.add_entry("query1".to_string(), Some("filter".to_string()), None, true).unwrap();
-        history.add_entry("query2".to_string(), Some("filter".to_string()), None, true).unwrap();
-        history.add_entry("query3".to_string(), Some("search".to_string()), None, false).unwrap();
-        
+
+        history
+            .add_entry("query1".to_string(), Some("filter".to_string()), None, true)
+            .unwrap();
+        history
+            .add_entry("query2".to_string(), Some("filter".to_string()), None, true)
+            .unwrap();
+        history
+            .add_entry(
+                "query3".to_string(),
+                Some("search".to_string()),
+                None,
+                false,
+            )
+            .unwrap();
+
         let stats = history.get_stats();
         assert_eq!(stats.total_queries, 3);
         assert_eq!(stats.successful_queries, 2);
@@ -378,12 +394,16 @@ mod tests {
     #[test]
     fn test_clear_history() {
         let mut history = QueryHistory::new(100).unwrap();
-        
-        history.add_entry("query1".to_string(), None, None, true).unwrap();
-        history.add_entry("query2".to_string(), None, None, true).unwrap();
-        
+
+        history
+            .add_entry("query1".to_string(), None, None, true)
+            .unwrap();
+        history
+            .add_entry("query2".to_string(), None, None, true)
+            .unwrap();
+
         assert_eq!(history.entries.len(), 2);
-        
+
         history.clear().unwrap();
         assert_eq!(history.entries.len(), 0);
     }

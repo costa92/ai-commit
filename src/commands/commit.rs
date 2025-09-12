@@ -1,9 +1,7 @@
 use crate::cli::args::Args;
 use crate::config::Config;
+use crate::core::ai::agents::{AgentConfig, AgentContext, AgentManager, AgentTask, TaskType};
 use crate::{git, ui};
-use crate::core::ai::agents::{
-    AgentContext, AgentTask, AgentConfig, AgentManager, TaskType,
-};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -65,10 +63,14 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
 }
 
 /// 处理 tag 创建相关的 commit 逻辑
-pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str) -> anyhow::Result<()> {
+pub async fn handle_tag_creation_commit(
+    args: &Args,
+    config: &Config,
+    diff: &str,
+) -> anyhow::Result<()> {
     // 先生成下一个 tag 名字
     let tag_name = git::get_next_tag_name(args.new_tag.as_deref()).await?;
-    
+
     // 决定 commit message
     let commit_message = if !args.tag_note.is_empty() {
         // 用户提供了 tag_note，直接使用
@@ -78,7 +80,7 @@ pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str
         if !diff.trim().is_empty() {
             // 有代码变更，使用 Agent 生成 commit message
             let ai_message = generate_commit_message_with_agent(diff, config).await?;
-            
+
             if !ai_message.is_empty() {
                 // 用户确认 AI 生成的消息
                 match ui::confirm_commit_message(&ai_message, args.skip_confirm)? {
@@ -124,25 +126,22 @@ pub async fn handle_tag_creation_commit(args: &Args, config: &Config, diff: &str
 }
 
 /// 使用 Agent 生成 commit message
-async fn generate_commit_message_with_agent(
-    diff: &str,
-    config: &Config,
-) -> anyhow::Result<String> {
+async fn generate_commit_message_with_agent(diff: &str, config: &Config) -> anyhow::Result<String> {
     // 创建 Agent 管理器
     let mut agent_manager = AgentManager::with_default_context();
-    
+
     // 更新 Agent 配置
     let mut env_vars = std::env::vars().collect::<HashMap<String, String>>();
-    
+
     // 添加 API Key 配置
     if let Some(api_key) = config.get_api_key() {
         env_vars.insert("API_KEY".to_string(), api_key);
     }
-    
+
     // 设置 API URL
     let api_url = config.get_url();
     env_vars.insert("API_URL".to_string(), api_url);
-    
+
     let agent_config = AgentConfig {
         provider: config.provider.clone(),
         model: config.model.clone(),
@@ -152,30 +151,30 @@ async fn generate_commit_message_with_agent(
         max_retries: 3,
         timeout_secs: 60,
     };
-    
+
     let context = AgentContext {
         working_dir: std::env::current_dir()?,
         env_vars,
         config: agent_config,
         history: vec![],
     };
-    
+
     // 更新管理器上下文
     agent_manager.update_context(context);
-    
+
     // 获取或创建 Commit Agent
     let commit_agent = agent_manager.get_or_create_agent("commit").await?;
-    
+
     // 创建任务
     let task = AgentTask::new(TaskType::GenerateCommit, diff);
-    
+
     // 执行任务
     let result = commit_agent.execute(task, agent_manager.context()).await?;
-    
+
     if !result.success {
         anyhow::bail!("Agent failed to generate commit message");
     }
-    
+
     Ok(result.content)
 }
 
@@ -188,15 +187,18 @@ mod tests {
     async fn test_handle_commit_commands() {
         let config = Config::new();
         let args = create_test_args();
-        
+
         let result = handle_commit_commands(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Commit commands handled successfully");
             }
             Err(e) => {
-                println!("Commit commands failed (expected in test environment): {}", e);
+                println!(
+                    "Commit commands failed (expected in test environment): {}",
+                    e
+                );
             }
         }
     }
@@ -206,9 +208,9 @@ mod tests {
         let config = Config::new();
         let args = create_test_args();
         let test_diff = "diff --git a/test.txt b/test.txt\n+new line";
-        
+
         let result = handle_tag_creation_commit(&args, &config, test_diff).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Tag creation commit handled successfully");
@@ -218,14 +220,14 @@ mod tests {
             }
         }
     }
-    
+
     #[tokio::test]
     async fn test_generate_commit_message_with_agent() {
         let config = Config::new();
         let test_diff = "diff --git a/test.txt b/test.txt\n+new line";
-        
+
         let result = generate_commit_message_with_agent(test_diff, &config).await;
-        
+
         match result {
             Ok(message) => {
                 println!("Generated commit message: {}", message);
@@ -233,7 +235,10 @@ mod tests {
                 assert!(!message.is_empty());
             }
             Err(e) => {
-                println!("Agent commit generation failed (expected in test environment): {}", e);
+                println!(
+                    "Agent commit generation failed (expected in test environment): {}",
+                    e
+                );
             }
         }
     }

@@ -1,35 +1,70 @@
 // Git interface - real Git command implementations
+use super::models::*;
 use async_trait::async_trait;
 use tokio::process::Command;
-use super::models::*;
 
 #[async_trait]
 pub trait GitRepositoryAPI {
-    async fn get_commits(&self, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn get_commits(
+        &self,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
     async fn get_branches(&self) -> Result<Vec<Branch>, Box<dyn std::error::Error>>;
     async fn get_current_branch(&self) -> Result<String, Box<dyn std::error::Error>>;
     async fn switch_branch(&self, branch: &str) -> Result<(), Box<dyn std::error::Error>>;
     async fn get_status(&self) -> Result<String, Box<dyn std::error::Error>>;
-    async fn get_diff(&self, commit_hash: Option<&str>) -> Result<String, Box<dyn std::error::Error>>;
-    async fn get_commit_diff(&self, commit_hash: &str) -> Result<String, Box<dyn std::error::Error>>;
-    async fn get_file_diff(&self, file_path: &str, commit_hash: Option<&str>) -> Result<String, Box<dyn std::error::Error>>;
+    async fn get_diff(
+        &self,
+        commit_hash: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error>>;
+    async fn get_commit_diff(
+        &self,
+        commit_hash: &str,
+    ) -> Result<String, Box<dyn std::error::Error>>;
+    async fn get_file_diff(
+        &self,
+        file_path: &str,
+        commit_hash: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error>>;
     async fn get_tags(&self) -> Result<Vec<Tag>, Box<dyn std::error::Error>>;
     async fn get_remotes(&self) -> Result<Vec<Remote>, Box<dyn std::error::Error>>;
     async fn get_stashes(&self) -> Result<Vec<Stash>, Box<dyn std::error::Error>>;
-    
+
     // Task 2.1: Git Operations
-    async fn create_branch(&self, branch_name: &str, from_branch: Option<&str>) -> Result<(), Box<dyn std::error::Error>>;
-    async fn delete_branch(&self, branch_name: &str, force: bool) -> Result<(), Box<dyn std::error::Error>>;
+    async fn create_branch(
+        &self,
+        branch_name: &str,
+        from_branch: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>>;
+    async fn delete_branch(
+        &self,
+        branch_name: &str,
+        force: bool,
+    ) -> Result<(), Box<dyn std::error::Error>>;
     async fn stage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>>;
     async fn unstage_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>>;
     async fn stage_all(&self) -> Result<(), Box<dyn std::error::Error>>;
     async fn get_working_tree_status(&self) -> Result<Vec<FileStatus>, Box<dyn std::error::Error>>;
 
     // Task 2.2: Search and Filtering
-    async fn search_commits(&self, query: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
-    async fn filter_commits_by_author(&self, author: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
-    async fn filter_commits_by_date_range(&self, since: &str, until: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
-    async fn search_branches(&self, query: &str) -> Result<Vec<Branch>, Box<dyn std::error::Error>>;
+    async fn search_commits(
+        &self,
+        query: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn filter_commits_by_author(
+        &self,
+        author: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn filter_commits_by_date_range(
+        &self,
+        since: &str,
+        until: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>>;
+    async fn search_branches(&self, query: &str)
+        -> Result<Vec<Branch>, Box<dyn std::error::Error>>;
 }
 
 pub struct AsyncGitImpl {
@@ -42,7 +77,10 @@ impl AsyncGitImpl {
     }
 
     // Helper method to get file change count for a commit
-    async fn get_commit_files_changed(&self, hash: &str) -> Result<u32, Box<dyn std::error::Error>> {
+    async fn get_commit_files_changed(
+        &self,
+        hash: &str,
+    ) -> Result<u32, Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["show", "--name-only", "--format=", hash])
             .current_dir(&self.repo_path)
@@ -54,7 +92,8 @@ impl AsyncGitImpl {
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        let file_count = output_str.lines()
+        let file_count = output_str
+            .lines()
             .filter(|line| !line.trim().is_empty())
             .count();
 
@@ -62,7 +101,10 @@ impl AsyncGitImpl {
     }
 
     // Helper method to get detailed commit statistics (files changed, insertions, deletions)
-    async fn get_commit_stats(&self, hash: &str) -> Result<(usize, usize, usize), Box<dyn std::error::Error>> {
+    async fn get_commit_stats(
+        &self,
+        hash: &str,
+    ) -> Result<(usize, usize, usize), Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["show", "--numstat", "--format=", hash])
             .current_dir(&self.repo_path)
@@ -86,7 +128,7 @@ impl AsyncGitImpl {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 3 {
                 files_changed += 1;
-                
+
                 // Parse insertions and deletions
                 if let Ok(insertions) = parts[0].parse::<usize>() {
                     total_insertions += insertions;
@@ -103,7 +145,10 @@ impl AsyncGitImpl {
 
 #[async_trait]
 impl GitRepositoryAPI for AsyncGitImpl {
-    async fn get_commits(&self, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    async fn get_commits(
+        &self,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
         let limit_arg = limit.unwrap_or(50).to_string();
         let output = Command::new("git")
             .args([
@@ -112,7 +157,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
                 "--date=iso-strict",
                 "--stat=1,1", // Add minimal stat info for file counts
                 "-n",
-                &limit_arg
+                &limit_arg,
             ])
             .current_dir(&self.repo_path)
             .output()
@@ -152,13 +197,17 @@ impl GitRepositoryAPI for AsyncGitImpl {
                     Vec::new()
                 }; // For future use
                 let _refs: Vec<String> = if parts.len() > 10 && !parts[10].trim().is_empty() {
-                    parts[10].split(", ").map(|s| s.trim().to_string()).collect()
+                    parts[10]
+                        .split(", ")
+                        .map(|s| s.trim().to_string())
+                        .collect()
                 } else {
                     Vec::new()
                 }; // For future use
 
                 // Get detailed file stats for this commit
-                let (files_changed, _insertions, _deletions) = self.get_commit_stats(&hash).await.unwrap_or((0, 0, 0));
+                let (files_changed, _insertions, _deletions) =
+                    self.get_commit_stats(&hash).await.unwrap_or((0, 0, 0));
 
                 commits.push(Commit {
                     hash,
@@ -172,7 +221,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
         Ok(commits)
     }
-    
+
     async fn get_branches(&self) -> Result<Vec<Branch>, Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["branch", "-vv", "--color=never"])
@@ -195,42 +244,50 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
             let is_current = line.starts_with('*');
             let line = line.trim_start_matches('*').trim();
-            
+
             // Parse format: "branch_name commit_hash [upstream: ahead X, behind Y] commit_message"
             let parts: Vec<&str> = line.splitn(3, ' ').collect();
             if parts.len() >= 2 {
                 let name = parts[0].trim().to_string();
                 let _commit_hash = parts[1].trim().to_string(); // For future use
-                
+
                 let mut upstream = None;
-                let mut _ahead_count = 0; // For future use  
+                let mut _ahead_count = 0; // For future use
                 let mut _behind_count = 0; // For future use
 
                 // Extract upstream info if present
                 if let Some(bracket_start) = line.find('[') {
                     if let Some(bracket_end) = line.find(']') {
-                        let upstream_info = &line[bracket_start+1..bracket_end];
-                        
+                        let upstream_info = &line[bracket_start + 1..bracket_end];
+
                         // Parse upstream format: "origin/main: ahead 2, behind 1" or "origin/main"
                         if let Some(colon_pos) = upstream_info.find(':') {
                             upstream = Some(upstream_info[..colon_pos].trim().to_string());
-                            
-                            let status_info = &upstream_info[colon_pos+1..];
-                            
+
+                            let status_info = &upstream_info[colon_pos + 1..];
+
                             // Parse ahead/behind counts
                             if let Some(ahead_start) = status_info.find("ahead ") {
                                 let ahead_str = &status_info[ahead_start + 6..];
-                                if let Some(next_comma_or_end) = ahead_str.find(&[',', ']'][..]).or(Some(ahead_str.len())) {
-                                    if let Ok(count) = ahead_str[..next_comma_or_end].trim().parse::<usize>() {
+                                if let Some(next_comma_or_end) =
+                                    ahead_str.find(&[',', ']'][..]).or(Some(ahead_str.len()))
+                                {
+                                    if let Ok(count) =
+                                        ahead_str[..next_comma_or_end].trim().parse::<usize>()
+                                    {
                                         _ahead_count = count;
                                     }
                                 }
                             }
-                            
+
                             if let Some(behind_start) = status_info.find("behind ") {
                                 let behind_str = &status_info[behind_start + 7..];
-                                if let Some(next_comma_or_end) = behind_str.find(&[',', ']'][..]).or(Some(behind_str.len())) {
-                                    if let Ok(count) = behind_str[..next_comma_or_end].trim().parse::<usize>() {
+                                if let Some(next_comma_or_end) =
+                                    behind_str.find(&[',', ']'][..]).or(Some(behind_str.len()))
+                                {
+                                    if let Ok(count) =
+                                        behind_str[..next_comma_or_end].trim().parse::<usize>()
+                                    {
                                         _behind_count = count;
                                     }
                                 }
@@ -251,7 +308,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
         Ok(branches)
     }
-    
+
     async fn get_current_branch(&self) -> Result<String, Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -267,7 +324,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
         let branch_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
         Ok(branch_name)
     }
-    
+
     async fn switch_branch(&self, branch: &str) -> Result<(), Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["checkout", branch])
@@ -282,7 +339,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
         Ok(())
     }
-    
+
     async fn get_status(&self) -> Result<String, Box<dyn std::error::Error>> {
         let output = Command::new("git")
             .args(["status", "--porcelain"])
@@ -305,10 +362,10 @@ impl GitRepositoryAPI for AsyncGitImpl {
                 if line.len() >= 3 {
                     let status_code = &line[..2];
                     let file_path = &line[3..];
-                    
+
                     let status_text = match status_code {
                         " M" => "Modified",
-                        " A" => "Added", 
+                        " A" => "Added",
                         " D" => "Deleted",
                         "M " => "Modified (staged)",
                         "A " => "Added (staged)",
@@ -317,18 +374,21 @@ impl GitRepositoryAPI for AsyncGitImpl {
                         "MM" => "Modified (staged and unstaged)",
                         _ => "Unknown status",
                     };
-                    
+
                     formatted_status.push_str(&format!("{}: {}\n", status_text, file_path));
                 }
             }
             Ok(formatted_status)
         }
     }
-    
-    async fn get_diff(&self, commit_hash: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+
+    async fn get_diff(
+        &self,
+        commit_hash: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let mut args = vec!["diff"];
         let parent_hash;
-        
+
         if let Some(hash) = commit_hash {
             // 显示特定提交相对于其父提交的差异
             parent_hash = format!("{}^", hash);
@@ -352,7 +412,10 @@ impl GitRepositoryAPI for AsyncGitImpl {
         Ok(diff_content)
     }
 
-    async fn get_commit_diff(&self, commit_hash: &str) -> Result<String, Box<dyn std::error::Error>> {
+    async fn get_commit_diff(
+        &self,
+        commit_hash: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         // 获取特定提交的完整差异
         let output = Command::new("git")
             .args(["show", "--format=", commit_hash])
@@ -361,23 +424,31 @@ impl GitRepositoryAPI for AsyncGitImpl {
             .await?;
 
         if !output.status.success() {
-            return Err(format!("Git show failed for commit {}: {:?}", commit_hash, output.status).into());
+            return Err(format!(
+                "Git show failed for commit {}: {:?}",
+                commit_hash, output.status
+            )
+            .into());
         }
 
         let diff_content = String::from_utf8_lossy(&output.stdout).to_string();
         Ok(diff_content)
     }
 
-    async fn get_file_diff(&self, file_path: &str, commit_hash: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    async fn get_file_diff(
+        &self,
+        file_path: &str,
+        commit_hash: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let mut args = vec!["diff"];
         let parent_hash;
-        
+
         if let Some(hash) = commit_hash {
             parent_hash = format!("{}^", hash);
             args.push(&parent_hash);
             args.push(hash);
         }
-        
+
         args.push("--");
         args.push(file_path);
 
@@ -389,7 +460,11 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
         // Git diff 在有差异时返回状态码1，这是正常的
         if !output.status.success() && output.status.code() != Some(1) {
-            return Err(format!("Git file diff failed for {}: {:?}", file_path, output.status).into());
+            return Err(format!(
+                "Git file diff failed for {}: {:?}",
+                file_path, output.status
+            )
+            .into());
         }
 
         let diff_content = String::from_utf8_lossy(&output.stdout).to_string();
@@ -467,10 +542,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
                 // Only add each remote name once (prefer fetch URL)
                 if direction == "(fetch)" && !seen_names.contains(&name) {
                     seen_names.insert(name.clone());
-                    remotes.push(Remote {
-                        name,
-                        url,
-                    });
+                    remotes.push(Remote { name, url });
                 }
             }
         }
@@ -504,7 +576,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
                 let stash_ref = parts[0].trim();
                 let index = if let Some(start) = stash_ref.find('{') {
                     if let Some(end) = stash_ref.find('}') {
-                        stash_ref[start+1..end].parse::<usize>().unwrap_or(0)
+                        stash_ref[start + 1..end].parse::<usize>().unwrap_or(0)
                     } else {
                         0
                     }
@@ -514,10 +586,14 @@ impl GitRepositoryAPI for AsyncGitImpl {
 
                 let _hash = parts[1].trim().to_string(); // Keep for future use
                 let message = parts[2].trim().to_string();
-                
+
                 // Extract branch from message if available
                 let branch = if message.starts_with("WIP on ") {
-                    message.split_whitespace().nth(2).unwrap_or("unknown").to_string()
+                    message
+                        .split_whitespace()
+                        .nth(2)
+                        .unwrap_or("unknown")
+                        .to_string()
                 } else {
                     "unknown".to_string()
                 };
@@ -534,9 +610,13 @@ impl GitRepositoryAPI for AsyncGitImpl {
     }
 
     // Task 2.1: Git Operations Implementation
-    async fn create_branch(&self, branch_name: &str, from_branch: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    async fn create_branch(
+        &self,
+        branch_name: &str,
+        from_branch: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut args = vec!["checkout", "-b", branch_name];
-        
+
         if let Some(from) = from_branch {
             args.push(from);
         }
@@ -555,9 +635,13 @@ impl GitRepositoryAPI for AsyncGitImpl {
         Ok(())
     }
 
-    async fn delete_branch(&self, branch_name: &str, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    async fn delete_branch(
+        &self,
+        branch_name: &str,
+        force: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let delete_flag = if force { "-D" } else { "-d" };
-        
+
         let output = Command::new("git")
             .args(["branch", delete_flag, branch_name])
             .current_dir(&self.repo_path)
@@ -636,7 +720,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
             if line.len() >= 3 {
                 let status_code = &line[..2];
                 let file_path = &line[3..].to_string();
-                
+
                 let (status_text, staged) = match status_code {
                     " M" => ("Modified", false),
                     " A" => ("Added", false),
@@ -650,7 +734,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
                     "MD" => ("Modified+Deleted", false),
                     _ => ("Unknown", false),
                 };
-                
+
                 file_statuses.push(FileStatus::new(
                     file_path.clone(),
                     status_text.to_string(),
@@ -663,16 +747,21 @@ impl GitRepositoryAPI for AsyncGitImpl {
     }
 
     // Task 2.2: Search and Filtering Implementation
-    async fn search_commits(&self, query: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    async fn search_commits(
+        &self,
+        query: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
         let limit_arg = limit.unwrap_or(50).to_string();
         let output = Command::new("git")
             .args([
                 "log",
-                "--grep", query,
+                "--grep",
+                query,
                 "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
                 "--date=iso-strict",
                 "-n",
-                &limit_arg
+                &limit_arg,
             ])
             .current_dir(&self.repo_path)
             .output()
@@ -686,16 +775,21 @@ impl GitRepositoryAPI for AsyncGitImpl {
         self.parse_commits_output(&output.stdout).await
     }
 
-    async fn filter_commits_by_author(&self, author: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    async fn filter_commits_by_author(
+        &self,
+        author: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
         let limit_arg = limit.unwrap_or(50).to_string();
         let output = Command::new("git")
             .args([
                 "log",
-                "--author", author,
+                "--author",
+                author,
                 "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
                 "--date=iso-strict",
                 "-n",
-                &limit_arg
+                &limit_arg,
             ])
             .current_dir(&self.repo_path)
             .output()
@@ -709,11 +803,16 @@ impl GitRepositoryAPI for AsyncGitImpl {
         self.parse_commits_output(&output.stdout).await
     }
 
-    async fn filter_commits_by_date_range(&self, since: &str, until: &str, limit: Option<u32>) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    async fn filter_commits_by_date_range(
+        &self,
+        since: &str,
+        until: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
         let limit_arg = limit.unwrap_or(50).to_string();
         let since_arg = format!("--since={}", since);
         let until_arg = format!("--until={}", until);
-        
+
         let output = Command::new("git")
             .args([
                 "log",
@@ -722,7 +821,7 @@ impl GitRepositoryAPI for AsyncGitImpl {
                 "--pretty=format:%H|%h|%an|%ae|%cn|%ce|%ad|%s|%b|%P|%D",
                 "--date=iso-strict",
                 "-n",
-                &limit_arg
+                &limit_arg,
             ])
             .current_dir(&self.repo_path)
             .output()
@@ -736,25 +835,28 @@ impl GitRepositoryAPI for AsyncGitImpl {
         self.parse_commits_output(&output.stdout).await
     }
 
-    async fn search_branches(&self, query: &str) -> Result<Vec<Branch>, Box<dyn std::error::Error>> {
+    async fn search_branches(
+        &self,
+        query: &str,
+    ) -> Result<Vec<Branch>, Box<dyn std::error::Error>> {
         let all_branches = self.get_branches().await?;
-        
+
         // Filter branches by name containing the query
         let filtered_branches = all_branches
             .into_iter()
-            .filter(|branch| {
-                branch.name.to_lowercase().contains(&query.to_lowercase())
-            })
+            .filter(|branch| branch.name.to_lowercase().contains(&query.to_lowercase()))
             .collect();
 
         Ok(filtered_branches)
     }
-
 }
 
 impl AsyncGitImpl {
     // Helper method to parse commits output
-    async fn parse_commits_output(&self, output: &[u8]) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
+    async fn parse_commits_output(
+        &self,
+        output: &[u8],
+    ) -> Result<Vec<Commit>, Box<dyn std::error::Error>> {
         let output_str = String::from_utf8_lossy(output);
         let mut commits = Vec::new();
 
@@ -771,7 +873,8 @@ impl AsyncGitImpl {
                 let subject = parts[7].trim().to_string();
 
                 // Get detailed file stats for this commit
-                let (files_changed, _insertions, _deletions) = self.get_commit_stats(&hash).await.unwrap_or((0, 0, 0));
+                let (files_changed, _insertions, _deletions) =
+                    self.get_commit_stats(&hash).await.unwrap_or((0, 0, 0));
 
                 commits.push(Commit {
                     hash,

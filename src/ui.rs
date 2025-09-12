@@ -13,7 +13,7 @@ pub enum ConfirmResult {
 }
 
 /// 显示 AI 生成的 commit message 并请求用户确认
-/// 
+///
 /// 支持三种操作：
 /// - y/yes/回车: 确认使用 AI 生成的消息
 /// - n/no: 拒绝并取消操作
@@ -27,13 +27,13 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
     println!("🤖 AI: {}", message);
     print!("确认? [Y/n/e]: ");
     io::stdout().flush()?;
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let input = input.trim().to_lowercase();
-    
+
     match input.as_str() {
-        "y" | "yes" | "" => Ok(ConfirmResult::Confirmed(message.to_string())),  // 默认回车视为确认
+        "y" | "yes" | "" => Ok(ConfirmResult::Confirmed(message.to_string())), // 默认回车视为确认
         "n" | "no" => Ok(ConfirmResult::Rejected),
         "e" | "edit" => edit_commit_message(message),
         _ => {
@@ -44,7 +44,7 @@ pub fn confirm_commit_message(message: &str, skip_confirm: bool) -> anyhow::Resu
 }
 
 /// 允许用户使用外部编辑器编辑 commit message
-/// 
+///
 /// 功能特性：
 /// - 自动检测可用编辑器：EDITOR 环境变量 -> VISUAL 环境变量 -> vim -> vi -> nano
 /// - 预填充 AI 生成的内容到临时文件
@@ -54,26 +54,26 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
     use std::env;
     use std::fs;
     use std::process::Command;
-    
+
     // 创建临时文件
     let temp_dir = env::temp_dir();
     let temp_file = temp_dir.join("ai_commit_message.txt");
-    
+
     // 将初始消息写入临时文件
     fs::write(&temp_file, initial_message)?;
-    
+
     // 验证文件写入成功
     if !temp_file.exists() {
         return Err(anyhow::anyhow!("无法创建临时文件: {}", temp_file.display()));
     }
-    
+
     // 调试信息：显示临时文件路径和内容
     let debug_mode = env::var("AI_COMMIT_DEBUG").is_ok();
     if debug_mode {
         println!("DEBUG: 临时文件路径: {}", temp_file.display());
         println!("DEBUG: 预填充内容: '{}'", initial_message);
     }
-    
+
     // 获取编辑器命令，优先使用环境变量，然后尝试 vim、vi、nano
     let editor_result = env::var("EDITOR")
         .or_else(|_| env::var("VISUAL"))
@@ -81,7 +81,9 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
             // 使用简单的 which 命令检查编辑器可用性
             let editors = ["vim", "vi", "nano"];
             for editor in &editors {
-                if Command::new("which").arg(editor).output()
+                if Command::new("which")
+                    .arg(editor)
+                    .output()
                     .map(|output| output.status.success())
                     .unwrap_or(false)
                 {
@@ -90,15 +92,16 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
             }
             // 如果 which 不可用，直接尝试常见编辑器
             for editor in &editors {
-                if Command::new(editor).arg("--help").output().is_ok() ||
-                   Command::new(editor).arg("--version").output().is_ok() {
+                if Command::new(editor).arg("--help").output().is_ok()
+                    || Command::new(editor).arg("--version").output().is_ok()
+                {
                     return editor.to_string();
                 }
             }
             // 无可用编辑器
             "".to_string()
         });
-    
+
     // 如果没有找到编辑器，回退到命令行输入
     if editor_result.is_empty() {
         if debug_mode {
@@ -106,43 +109,50 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
         }
         return edit_commit_message_fallback(initial_message);
     }
-    
+
     // 直接启动编辑器，减少提示
     println!("启动编辑器编辑 commit message...");
-    
+
     // 为不同编辑器准备特定参数
     let mut cmd = Command::new(&editor_result);
     cmd.arg(&temp_file);
-    
+
     // 确保编辑器在正确的工作目录中运行
     if let Ok(current_dir) = env::current_dir() {
         cmd.current_dir(current_dir);
     }
-    
+
     // 为 vim/vi 添加特定参数以确保正确显示
     if editor_result == "vim" || editor_result == "vi" {
-        cmd.args(&["+set", "nobackup", "+set", "noswapfile", "+set", "nowritebackup"]);
+        cmd.args([
+            "+set",
+            "nobackup",
+            "+set",
+            "noswapfile",
+            "+set",
+            "nowritebackup",
+        ]);
     }
-    
+
     // 启动编辑器
     let status = cmd.status();
-    
+
     match status {
         Ok(status) if status.success() => {
             // 读取编辑后的内容
             let edited_content = fs::read_to_string(&temp_file)
                 .map_err(|e| anyhow::anyhow!("无法读取编辑后的内容: {}", e))?;
-            
+
             // 清理临时文件
             let _ = fs::remove_file(&temp_file);
-            
+
             let edited_message = edited_content.trim().to_string();
-            
+
             if edited_message.is_empty() {
                 println!("Commit message 为空，操作已取消。");
                 return Ok(ConfirmResult::Rejected);
             }
-            
+
             // 验证编辑的消息格式
             validate_and_confirm_edited_message(&edited_message)
         }
@@ -155,7 +165,10 @@ fn edit_commit_message(initial_message: &str) -> anyhow::Result<ConfirmResult> {
         Err(_) => {
             // 编辑器启动失败，回退到命令行输入
             let _ = fs::remove_file(&temp_file);
-            println!("无法启动编辑器 '{}'，回退到命令行输入模式...", editor_result);
+            println!(
+                "无法启动编辑器 '{}'，回退到命令行输入模式...",
+                editor_result
+            );
             edit_commit_message_fallback(initial_message)
         }
     }
@@ -167,11 +180,11 @@ fn edit_commit_message_fallback(initial_message: &str) -> anyhow::Result<Confirm
     println!("当前消息: {}", initial_message);
     print!("输入新消息 (回车保持原消息): ");
     io::stdout().flush()?;
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let input = input.trim();
-    
+
     if input.is_empty() {
         // 用户直接回车，使用原消息
         Ok(ConfirmResult::Confirmed(initial_message.to_string()))
@@ -193,7 +206,8 @@ fn validate_and_confirm_edited_message(edited_message: &str) -> anyhow::Result<C
 #[allow(dead_code)]
 fn is_valid_commit_message(message: &str) -> bool {
     // 检查是否符合 Conventional Commits 格式
-    let conventional_commit_regex = regex::Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+").unwrap();
+    let conventional_commit_regex =
+        regex::Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+").unwrap();
     conventional_commit_regex.is_match(message)
 }
 
@@ -204,20 +218,20 @@ pub fn show_menu_and_get_choice(options: &[&str]) -> anyhow::Result<usize> {
         println!("  {}: {}", i + 1, option);
     }
     println!();
-    
+
     loop {
         print!("请选择 (1-{}): ", options.len());
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         if let Ok(choice) = input.trim().parse::<usize>() {
             if choice >= 1 && choice <= options.len() {
                 return Ok(choice - 1);
             }
         }
-        
+
         println!("无效选择，请输入 1 到 {} 之间的数字", options.len());
     }
 }
@@ -227,11 +241,11 @@ pub fn confirm_action(prompt: &str) -> anyhow::Result<bool> {
     loop {
         print!("{} (y/n): ", prompt);
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let input = input.trim().to_lowercase();
-        
+
         match input.as_str() {
             "y" | "yes" => return Ok(true),
             "n" | "no" => return Ok(false),
@@ -269,22 +283,32 @@ mod tests {
     #[test]
     fn test_commit_message_validation_edge_cases() {
         // 边界情况测试
-        assert!(is_valid_commit_message("feat: a"));  // 最短有效消息
-        assert!(is_valid_commit_message("fix(component): 这是一个很长的提交消息，用来测试长消息的处理情况"));
-        assert!(!is_valid_commit_message("feat: "));  // 只有空格
-        assert!(!is_valid_commit_message("FEAT: 添加功能"));  // 大写类型
+        assert!(is_valid_commit_message("feat: a")); // 最短有效消息
+        assert!(is_valid_commit_message(
+            "fix(component): 这是一个很长的提交消息，用来测试长消息的处理情况"
+        ));
+        assert!(!is_valid_commit_message("feat: ")); // 只有空格
+        assert!(!is_valid_commit_message("FEAT: 添加功能")); // 大写类型
     }
 
-    #[test] 
+    #[test]
     fn test_commit_message_types() {
         let types = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
-        
+
         for commit_type in &types {
             let message = format!("{}: 测试消息", commit_type);
-            assert!(is_valid_commit_message(&message), "Type {} should be valid", commit_type);
-            
+            assert!(
+                is_valid_commit_message(&message),
+                "Type {} should be valid",
+                commit_type
+            );
+
             let message_with_scope = format!("{}(scope): 测试消息", commit_type);
-            assert!(is_valid_commit_message(&message_with_scope), "Type {} with scope should be valid", commit_type);
+            assert!(
+                is_valid_commit_message(&message_with_scope),
+                "Type {} with scope should be valid",
+                commit_type
+            );
         }
     }
 
@@ -294,7 +318,7 @@ mod tests {
         assert!(is_valid_commit_message("feat: 添加API接口/用户管理"));
         assert!(is_valid_commit_message("fix(ui): 修复按钮点击事件#123"));
         assert!(is_valid_commit_message("docs: 更新README.md文档"));
-        
+
         // 包含 emoji 的消息
         assert!(is_valid_commit_message("feat: 🎉 添加新功能"));
         assert!(is_valid_commit_message("fix: 🐛 修复bug"));

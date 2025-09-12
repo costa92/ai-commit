@@ -4,4 +4,4 @@ pub mod themes;
 
 pub use app_config::AppConfig;
 pub use key_bindings::KeyBindings;
-pub use themes::{Theme, ColorScheme, StyleScheme};
+pub use themes::{ColorScheme, StyleScheme, Theme};

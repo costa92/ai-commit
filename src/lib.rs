@@ -7,8 +7,5 @@ pub mod diff_viewer;
 pub mod git;
 pub mod internationalization;
 pub mod query_history;
-pub mod tui;
-pub mod tui_enhanced;
-pub mod tui_hierarchical;
 pub mod tui_unified;
 pub mod ui;

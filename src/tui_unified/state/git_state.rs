@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use chrono::{DateTime, Utc};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct GitRepoState {
@@ -181,7 +181,9 @@ impl GitRepoState {
     }
 
     pub fn get_commit_by_hash(&self, hash: &str) -> Option<&Commit> {
-        self.commits.iter().find(|c| c.hash.starts_with(hash) || c.short_hash == hash)
+        self.commits
+            .iter()
+            .find(|c| c.hash.starts_with(hash) || c.short_hash == hash)
     }
 
     pub fn get_tag_by_name(&self, name: &str) -> Option<&Tag> {
@@ -203,7 +205,9 @@ impl GitRepoState {
     }
 
     pub fn get_total_file_changes(&self) -> usize {
-        self.status.staged_files.len() + self.status.unstaged_files.len() + self.status.untracked_files.len()
+        self.status.staged_files.len()
+            + self.status.unstaged_files.len()
+            + self.status.untracked_files.len()
     }
 
     pub fn get_repo_summary(&self) -> RepoSummary {

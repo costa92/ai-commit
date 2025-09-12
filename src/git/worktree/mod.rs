@@ -1,5 +1,5 @@
 //! Git Worktree 管理模块
-//! 
+//!
 //! 提供完整的 Git worktree 管理功能，包括创建、列出、切换、删除等操作。
 //! 按功能单一原则，每个操作类型对应一个独立的文件。
 
@@ -24,7 +24,7 @@ mod tests {
     fn test_module_exports() {
         // 验证所有公共接口都能正确导出
         // 这个测试主要是编译时检查
-        
+
         // WorktreeInfo should be accessible
         let _info = WorktreeInfo::new(
             std::path::PathBuf::from("/test"),
@@ -33,7 +33,7 @@ mod tests {
             false,
             false,
         );
-        
+
         // WorktreeListOptions should be accessible
         let _options = WorktreeListOptions::default();
     }

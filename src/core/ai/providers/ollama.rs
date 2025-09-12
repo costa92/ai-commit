@@ -58,6 +58,12 @@ pub struct OllamaProvider {
     client: &'static Client,
 }
 
+impl Default for OllamaProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OllamaProvider {
     /// 创建新的 Ollama 提供商
     pub fn new() -> Self {
@@ -65,7 +71,7 @@ impl OllamaProvider {
             client: &HTTP_CLIENT,
         }
     }
-    
+
     /// 发送请求到 Ollama
     async fn send_request(
         &self,
@@ -78,49 +84,50 @@ impl OllamaProvider {
             stream: config.stream,
             options: OllamaOptions::default(),
         };
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&config.api_url)
             .json(&request)
             .timeout(Duration::from_secs(config.timeout_secs))
             .send()
             .await?;
-        
+
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
             anyhow::bail!("Ollama request failed: {} - {}", status, text);
         }
-        
+
         Ok(response)
     }
-    
+
     /// 处理流式响应
     #[allow(dead_code)]
-    async fn handle_stream_response(
-        response: reqwest::Response,
-    ) -> Result<String> {
+    async fn handle_stream_response(response: reqwest::Response) -> Result<String> {
         let mut message = String::with_capacity(2048);
         let mut stdout_handle = stdout();
         let mut stream = response.bytes_stream();
-        
+
         while let Some(item) = stream.next().await {
             let chunk = item?;
             let chunk_str = std::str::from_utf8(&chunk)?;
-            
+
             for line in chunk_str.lines() {
                 if let Ok(ollama_response) = serde_json::from_str::<OllamaResponse>(line) {
-                    stdout_handle.write_all(ollama_response.response.as_bytes()).await?;
+                    stdout_handle
+                        .write_all(ollama_response.response.as_bytes())
+                        .await?;
                     stdout_handle.flush().await?;
                     message.push_str(&ollama_response.response);
-                    
+
                     if ollama_response.done {
                         break;
                     }
                 }
             }
         }
-        
+
         stdout_handle.write_all(b"\n").await?;
         Ok(message)
     }
@@ -131,13 +138,13 @@ impl AIProvider for OllamaProvider {
     async fn generate(&self, prompt: &str, config: &ProviderConfig) -> Result<String> {
         let mut config = config.clone();
         config.stream = false;
-        
+
         let response = self.send_request(prompt, &config).await?;
         let ollama_response: OllamaResponse = response.json().await?;
-        
+
         Ok(ollama_response.response)
     }
-    
+
     async fn stream_generate(
         &self,
         prompt: &str,
@@ -145,28 +152,26 @@ impl AIProvider for OllamaProvider {
     ) -> Result<StreamResponse> {
         let mut config = config.clone();
         config.stream = true;
-        
+
         let response = self.send_request(prompt, &config).await?;
         let stream = response.bytes_stream();
-        
-        let mapped_stream = stream.map(move |item| {
-            match item {
-                Ok(chunk) => {
-                    let chunk_str = std::str::from_utf8(&chunk)
-                        .map_err(|e| anyhow::anyhow!("UTF-8 error: {}", e))?;
-                    
-                    let mut result = String::new();
-                    for line in chunk_str.lines() {
-                        if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
-                            result.push_str(&response.response);
-                        }
+
+        let mapped_stream = stream.map(move |item| match item {
+            Ok(chunk) => {
+                let chunk_str = std::str::from_utf8(&chunk)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 error: {}", e))?;
+
+                let mut result = String::new();
+                for line in chunk_str.lines() {
+                    if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
+                        result.push_str(&response.response);
                     }
-                    Ok(result)
                 }
-                Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
+                Ok(result)
             }
+            Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
         });
-        
+
         Ok(Box::pin(mapped_stream))
     }
 }
@@ -197,7 +202,7 @@ mod tests {
             stream: true,
             options: OllamaOptions::default(),
         };
-        
+
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("mistral"));
         assert!(json.contains("test prompt"));
@@ -209,7 +214,7 @@ mod tests {
     fn test_ollama_response_deserialization() {
         let json = r#"{"response": "test response", "done": true}"#;
         let response: OllamaResponse = serde_json::from_str(json).unwrap();
-        
+
         assert_eq!(response.response, "test response");
         assert!(response.done);
     }

@@ -1,6 +1,6 @@
+use crate::git::core::GitCore;
 use std::time::Duration;
 use tokio::time::sleep;
-use crate::git::core::GitCore;
 
 /// Git仓库监控器，类似GRV的实时更新功能
 pub struct GitWatcher;
@@ -38,7 +38,10 @@ pub enum ChangeType {
 impl GitWatcher {
     /// 开始监控仓库变化
     pub async fn start_watching(interval_seconds: u64) -> anyhow::Result<()> {
-        println!("👀 Starting repository monitoring (interval: {}s)", interval_seconds);
+        println!(
+            "👀 Starting repository monitoring (interval: {}s)",
+            interval_seconds
+        );
         println!("Press Ctrl+C to stop watching");
         println!("{}", "─".repeat(60));
 
@@ -51,7 +54,7 @@ impl GitWatcher {
             match Self::get_repo_status().await {
                 Ok(current_status) => {
                     let changes = Self::detect_changes(&last_status, &current_status);
-                    
+
                     if !changes.is_empty() {
                         println!("\n🔄 Changes detected:");
                         for change in changes {
@@ -72,9 +75,13 @@ impl GitWatcher {
 
     /// 获取仓库状态
     pub async fn get_repo_status() -> anyhow::Result<RepoStatus> {
-        let current_branch = GitCore::get_current_branch().await.unwrap_or_else(|_| "unknown".to_string());
+        let current_branch = GitCore::get_current_branch()
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
         let is_clean = GitCore::is_working_tree_clean().await.unwrap_or(false);
-        let latest_commit = GitCore::get_latest_commit_hash().await.unwrap_or_else(|_| "unknown".to_string());
+        let latest_commit = GitCore::get_latest_commit_hash()
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
 
         // 获取文件状态统计
         let (staged_files, unstaged_files, untracked_files) = Self::get_file_counts().await?;
@@ -142,7 +149,7 @@ impl GitWatcher {
             Ok(output) if output.status.success() => {
                 let count_output = String::from_utf8_lossy(&output.stdout);
                 let parts: Vec<&str> = count_output.trim().split('\t').collect();
-                
+
                 if parts.len() >= 2 {
                     let ahead = parts[0].parse::<u32>().unwrap_or(0);
                     let behind = parts[1].parse::<u32>().unwrap_or(0);
@@ -168,8 +175,7 @@ impl GitWatcher {
                 event_type: ChangeType::BranchSwitch,
                 description: format!(
                     "Switched from '{}' to '{}'",
-                    old_status.current_branch,
-                    new_status.current_branch
+                    old_status.current_branch, new_status.current_branch
                 ),
                 timestamp: now,
             });
@@ -193,8 +199,7 @@ impl GitWatcher {
                 event_type: ChangeType::FileStaged,
                 description: format!(
                     "Staged files: {} -> {}",
-                    old_status.staged_files,
-                    new_status.staged_files
+                    old_status.staged_files, new_status.staged_files
                 ),
                 timestamp: now,
             });
@@ -206,8 +211,7 @@ impl GitWatcher {
                 event_type: ChangeType::FileUnstaged,
                 description: format!(
                     "Unstaged files: {} -> {}",
-                    old_status.unstaged_files,
-                    new_status.unstaged_files
+                    old_status.unstaged_files, new_status.unstaged_files
                 ),
                 timestamp: now,
             });
@@ -225,15 +229,16 @@ impl GitWatcher {
                 event_type: change_type,
                 description: format!(
                     "Untracked files: {} -> {}",
-                    old_status.untracked_files,
-                    new_status.untracked_files
+                    old_status.untracked_files, new_status.untracked_files
                 ),
                 timestamp: now,
             });
         }
 
         // 检测远程跟踪变化
-        if old_status.ahead_count != new_status.ahead_count || old_status.behind_count != new_status.behind_count {
+        if old_status.ahead_count != new_status.ahead_count
+            || old_status.behind_count != new_status.behind_count
+        {
             changes.push(ChangeEvent {
                 event_type: ChangeType::RemoteUpdate,
                 description: format!(
@@ -254,10 +259,10 @@ impl GitWatcher {
     pub fn display_status(status: &RepoStatus) {
         println!("📊 Repository Status:");
         println!("{}", "─".repeat(40));
-        
+
         // 分支信息
         println!("🌿 Branch: {}", status.current_branch);
-        
+
         // 提交信息
         let commit_short = if status.latest_commit.len() > 8 {
             &status.latest_commit[..8]
@@ -265,10 +270,13 @@ impl GitWatcher {
             &status.latest_commit
         };
         println!("📝 Latest commit: {}", commit_short);
-        
+
         // 远程跟踪信息
         if status.ahead_count > 0 || status.behind_count > 0 {
-            println!("🔄 Remote: ahead {}, behind {}", status.ahead_count, status.behind_count);
+            println!(
+                "🔄 Remote: ahead {}, behind {}",
+                status.ahead_count, status.behind_count
+            );
         }
 
         // 文件状态
@@ -321,22 +329,34 @@ impl GitWatcher {
 
         // 检查是否有未提交的更改
         if status.staged_files > 0 {
-            notifications.push(format!("You have {} staged files ready to commit", status.staged_files));
+            notifications.push(format!(
+                "You have {} staged files ready to commit",
+                status.staged_files
+            ));
         }
 
         // 检查是否落后于远程
         if status.behind_count > 0 {
-            notifications.push(format!("Your branch is {} commits behind upstream", status.behind_count));
+            notifications.push(format!(
+                "Your branch is {} commits behind upstream",
+                status.behind_count
+            ));
         }
 
         // 检查是否领先于远程
         if status.ahead_count > 0 {
-            notifications.push(format!("Your branch is {} commits ahead of upstream", status.ahead_count));
+            notifications.push(format!(
+                "Your branch is {} commits ahead of upstream",
+                status.ahead_count
+            ));
         }
 
         // 检查未跟踪文件
         if status.untracked_files > 5 {
-            notifications.push(format!("You have {} untracked files", status.untracked_files));
+            notifications.push(format!(
+                "You have {} untracked files",
+                status.untracked_files
+            ));
         }
 
         Ok(notifications)
@@ -350,7 +370,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_repo_status() {
         let result = GitWatcher::get_repo_status().await;
-        
+
         match result {
             Ok(status) => {
                 assert!(!status.current_branch.is_empty());
@@ -360,7 +380,10 @@ mod tests {
                 println!("Clean: {}", status.is_clean);
             }
             Err(e) => {
-                println!("Repository status failed (expected in non-git environment): {}", e);
+                println!(
+                    "Repository status failed (expected in non-git environment): {}",
+                    e
+                );
             }
         }
     }
@@ -368,10 +391,13 @@ mod tests {
     #[tokio::test]
     async fn test_get_file_counts() {
         let result = GitWatcher::get_file_counts().await;
-        
+
         match result {
             Ok((staged, unstaged, untracked)) => {
-                println!("File counts: {} staged, {} unstaged, {} untracked", staged, unstaged, untracked);
+                println!(
+                    "File counts: {} staged, {} unstaged, {} untracked",
+                    staged, unstaged, untracked
+                );
             }
             Err(e) => {
                 println!("File counts failed: {}", e);
@@ -382,7 +408,7 @@ mod tests {
     #[tokio::test]
     async fn test_check_status() {
         let result = GitWatcher::check_status().await;
-        
+
         match result {
             Ok(_) => {
                 println!("Status check completed successfully");
@@ -396,10 +422,13 @@ mod tests {
     #[tokio::test]
     async fn test_needs_attention() {
         let result = GitWatcher::needs_attention().await;
-        
+
         match result {
             Ok(notifications) => {
-                println!("Attention check completed: {} notifications", notifications.len());
+                println!(
+                    "Attention check completed: {} notifications",
+                    notifications.len()
+                );
                 for notification in notifications {
                     println!("  - {}", notification);
                 }
@@ -435,15 +464,19 @@ mod tests {
         };
 
         let changes = GitWatcher::detect_changes(&old_status, &new_status);
-        
+
         // 应该检测到多个变化
         assert!(!changes.is_empty());
-        
+
         // 检查是否检测到分支切换
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::BranchSwitch)));
-        
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::BranchSwitch)));
+
         // 检查是否检测到新提交
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::NewCommit)));
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::NewCommit)));
 
         println!("Detected {} changes", changes.len());
         for change in changes {
@@ -491,14 +524,20 @@ mod tests {
         };
 
         let changes = GitWatcher::detect_changes(&identical_status, &identical_status);
-        assert!(changes.is_empty(), "Identical status should produce no changes");
+        assert!(
+            changes.is_empty(),
+            "Identical status should produce no changes"
+        );
 
         // Test only clean status change
         let mut clean_status = identical_status.clone();
         clean_status.is_clean = true;
 
         let changes = GitWatcher::detect_changes(&identical_status, &clean_status);
-        assert!(!changes.is_empty(), "Clean status change should be detected");
+        assert!(
+            !changes.is_empty(),
+            "Clean status change should be detected"
+        );
 
         // Test large file count changes
         let mut large_change_status = identical_status.clone();
@@ -527,13 +566,17 @@ mod tests {
         let mut branch_status = base_status.clone();
         branch_status.current_branch = "feature/new".to_string();
         let changes = GitWatcher::detect_changes(&base_status, &branch_status);
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::BranchSwitch)));
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::BranchSwitch)));
 
         // Test new commit detection
         let mut commit_status = base_status.clone();
         commit_status.latest_commit = "new456".to_string();
         let changes = GitWatcher::detect_changes(&base_status, &commit_status);
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::NewCommit)));
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::NewCommit)));
 
         // Test file changes detection
         let mut file_status = base_status.clone();
@@ -541,14 +584,18 @@ mod tests {
         file_status.unstaged_files = 3;
         file_status.untracked_files = 2;
         let changes = GitWatcher::detect_changes(&base_status, &file_status);
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::FileStaged)));
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::FileStaged)));
 
         // Test sync status detection
         let mut sync_status = base_status.clone();
         sync_status.ahead_count = 2;
         sync_status.behind_count = 1;
         let changes = GitWatcher::detect_changes(&base_status, &sync_status);
-        assert!(changes.iter().any(|c| matches!(c.event_type, ChangeType::NewCommit)));
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c.event_type, ChangeType::NewCommit)));
     }
 
     #[test]
@@ -575,21 +622,21 @@ mod tests {
         assert_ne!(status1.current_branch, status3.current_branch);
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_watcher_error_scenarios() {
         // Test file count errors by testing in non-git directory
         // This test may pass or fail depending on test environment
-        
+
         // Create a temporary directory that's not a git repo
         use std::env;
         use std::path::Path;
 
         let original_dir = env::current_dir().unwrap();
-        
+
         // Try to test in /tmp (not a git repo)
         if Path::new("/tmp").exists() {
             let _ = env::set_current_dir("/tmp");
-            
+
             let result = GitWatcher::get_file_counts().await;
             match result {
                 Ok(_) => println!("File counts succeeded unexpectedly in non-git dir"),
@@ -601,7 +648,7 @@ mod tests {
                 Ok(_) => println!("Repo status succeeded unexpectedly in non-git dir"),
                 Err(e) => println!("Repo status failed as expected in non-git dir: {}", e),
             }
-            
+
             // Restore original directory
             let _ = env::set_current_dir(original_dir);
         }
@@ -655,42 +702,34 @@ mod tests {
 
         // Handle each task separately due to different return types
         match status_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_status) => println!("Concurrent repo status operation succeeded"),
-                    Err(e) => println!("Concurrent repo status operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_status) => println!("Concurrent repo status operation succeeded"),
+                Err(e) => println!("Concurrent repo status operation failed: {}", e),
+            },
             Err(e) => println!("Status task join error: {}", e),
         }
 
         match counts_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_counts) => println!("Concurrent file counts operation succeeded"),
-                    Err(e) => println!("Concurrent file counts operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_counts) => println!("Concurrent file counts operation succeeded"),
+                Err(e) => println!("Concurrent file counts operation failed: {}", e),
+            },
             Err(e) => println!("Counts task join error: {}", e),
         }
 
         match check_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_) => println!("Concurrent check status operation succeeded"),
-                    Err(e) => println!("Concurrent check status operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_) => println!("Concurrent check status operation succeeded"),
+                Err(e) => println!("Concurrent check status operation failed: {}", e),
+            },
             Err(e) => println!("Check task join error: {}", e),
         }
 
         match attention_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_notifications) => println!("Concurrent needs attention operation succeeded"),
-                    Err(e) => println!("Concurrent needs attention operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_notifications) => println!("Concurrent needs attention operation succeeded"),
+                Err(e) => println!("Concurrent needs attention operation failed: {}", e),
+            },
             Err(e) => println!("Attention task join error: {}", e),
         }
     }
@@ -731,7 +770,10 @@ mod tests {
         };
 
         assert!(clean_status.is_clean);
-        assert_eq!(clean_status.staged_files + clean_status.unstaged_files + clean_status.untracked_files, 0);
+        assert_eq!(
+            clean_status.staged_files + clean_status.unstaged_files + clean_status.untracked_files,
+            0
+        );
     }
 
     #[test]
@@ -760,19 +802,26 @@ mod tests {
         };
 
         let changes = GitWatcher::detect_changes(&initial_status, &final_status);
-        
+
         // Should detect multiple types of changes
         assert!(!changes.is_empty());
-        
-        let change_types: std::collections::HashSet<_> = changes.iter()
+
+        let change_types: std::collections::HashSet<_> = changes
+            .iter()
             .map(|c| std::mem::discriminant(&c.event_type))
             .collect();
-        
-        // Should have detected multiple different types of changes
-        assert!(change_types.len() >= 2, "Should detect multiple change types");
 
-        println!("Complex scenario detected {} changes across {} types", 
-                 changes.len(), change_types.len());
+        // Should have detected multiple different types of changes
+        assert!(
+            change_types.len() >= 2,
+            "Should detect multiple change types"
+        );
+
+        println!(
+            "Complex scenario detected {} changes across {} types",
+            changes.len(),
+            change_types.len()
+        );
     }
 
     #[tokio::test]
@@ -781,17 +830,15 @@ mod tests {
         use tokio::time::{timeout, Duration};
 
         let watching_future = GitWatcher::start_watching(1);
-        
+
         // Set a short timeout to test interruption
         let result = timeout(Duration::from_millis(100), watching_future).await;
-        
+
         match result {
-            Ok(watch_result) => {
-                match watch_result {
-                    Ok(_) => println!("Watching completed unexpectedly quickly"),
-                    Err(e) => println!("Watching failed: {}", e),
-                }
-            }
+            Ok(watch_result) => match watch_result {
+                Ok(_) => println!("Watching completed unexpectedly quickly"),
+                Err(e) => println!("Watching failed: {}", e),
+            },
             Err(_) => {
                 // Timeout occurred, which is expected for the watching loop
                 println!("Watching timeout occurred as expected");

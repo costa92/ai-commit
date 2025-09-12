@@ -7,7 +7,6 @@ use clap::Parser;
 /// 集成测试：测试配置系统的完整流程
 #[test]
 fn test_config_integration() {
-    use ai_commit::config::{Config, EnvVars};
     use std::env;
 
     // 强制清理所有可能的环境变量
@@ -17,25 +16,14 @@ fn test_config_integration() {
         }
     }
 
-    // 清理缓存
-    EnvVars::clear_cache();
-
-    // 1. 测试默认配置（强制不从环境变量加载）
+    // 1. 测试默认配置
     let config = Config {
         provider: "ollama".to_string(),
         model: "mistral".to_string(),
-        deepseek_api_key: None,
-        deepseek_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
-        ollama_url: "http://localhost:11434/api/generate".to_string(),
-        siliconflow_api_key: None,
-        siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            kimi_api_key: None,
-            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-
         debug: false,
     };
 
-    // 验证配置有效性而不是具体值（因为可能受到本地环境影响）
+    // 验证配置有效性
     assert!(!config.provider.is_empty());
     assert!(!config.model.is_empty());
     assert!(config.validate().is_ok()); // ollama provider应该总是valid
@@ -43,23 +31,14 @@ fn test_config_integration() {
     // 验证debug模式默认为false
     assert!(!config.debug);
 
-    // 2. 测试配置验证（不同提供商）
-    let mut config = Config::new();
-
-    // 测试 deepseek 提供商验证
-    config.provider = "deepseek".to_string();
-    config.deepseek_api_key = Some("test-key".to_string());
-    assert!(config.validate().is_ok());
-
-    // 3. 测试命令行参数覆盖
+    // 2. 测试命令行参数覆盖
     let mut args = Args::default();
-    args.provider = "ollama".to_string(); // 使用不需要API key的提供商
+    args.provider = "ollama".to_string();
     args.model = "test-model".to_string();
 
     let mut config = Config::new();
     config.update_from_args(&args);
 
-    // 命令行参数应该覆盖任何配置
     assert_eq!(config.provider, "ollama");
     assert_eq!(config.model, "test-model");
 }
@@ -97,10 +76,6 @@ fn test_cli_config_integration() {
 
     assert_eq!(config.provider, "deepseek");
     assert_eq!(config.model, "deepseek-chat");
-
-    // 测试配置验证（需要API key）
-    config.deepseek_api_key = Some("test-key".to_string());
-    assert!(config.validate().is_ok());
 }
 
 /// 集成测试：测试国际化系统
@@ -149,7 +124,7 @@ fn test_prompt_integration() {
     assert!(prompt2.contains("line 2"));
     assert!(!prompt2.contains("{{git_diff}}"));
 
-    // 验证模板结构（更新为实际模板内容）
+    // 验证模板结构
     assert!(prompt1.contains("输出格式"));
     assert!(prompt2.contains("输出格式"));
 }
@@ -195,11 +170,9 @@ fn test_full_system_integration() {
     assert_eq!(config.provider, "ollama");
 }
 
-
 /// 集成测试：测试配置优先级
 #[test]
 fn test_configuration_priority_integration() {
-    use ai_commit::config::{Config, EnvVars};
     use std::env;
 
     // 强制清理所有可能的环境变量
@@ -209,21 +182,10 @@ fn test_configuration_priority_integration() {
         }
     }
 
-    // 清理缓存
-    EnvVars::clear_cache();
-
-    // 1. 测试默认配置（强制不从环境变量加载）
+    // 1. 测试默认配置
     let config = Config {
         provider: "ollama".to_string(),
         model: "mistral".to_string(),
-        deepseek_api_key: None,
-        deepseek_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
-        ollama_url: "http://localhost:11434/api/generate".to_string(),
-        siliconflow_api_key: None,
-        siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            kimi_api_key: None,
-            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-
         debug: false,
     };
     assert_eq!(config.provider, "ollama");
@@ -234,14 +196,6 @@ fn test_configuration_priority_integration() {
     let mut config = Config {
         provider: "ollama".to_string(),
         model: "mistral".to_string(),
-        deepseek_api_key: None,
-        deepseek_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
-        ollama_url: "http://localhost:11434/api/generate".to_string(),
-        siliconflow_api_key: None,
-        siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            kimi_api_key: None,
-            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-
         debug: false,
     };
     let mut args = Args::default();
@@ -275,7 +229,7 @@ fn test_performance_optimizations() {
     }
     let prompt_time = start.elapsed();
 
-    // 验证性能在合理范围内（这些阈值可以根据实际需要调整）
+    // 验证性能在合理范围内
     assert!(
         config_time.as_millis() < 1000,
         "配置加载过慢: {:?}",
@@ -305,7 +259,6 @@ fn test_performance_optimizations() {
 /// 集成测试：测试debug模式的完整功能
 #[test]
 fn test_debug_mode_integration() {
-    use ai_commit::config::{Config, EnvVars};
     use std::env;
 
     // 强制清理所有可能的环境变量
@@ -315,42 +268,17 @@ fn test_debug_mode_integration() {
         }
     }
 
-    // 清理环境变量缓存
-    EnvVars::clear_cache();
-
-    // 1. 测试debug模式默认关闭（强制使用默认配置）
+    // 1. 测试debug模式默认关闭
     let config = Config {
         provider: "ollama".to_string(),
         model: "mistral".to_string(),
-        deepseek_api_key: None,
-        deepseek_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
-        ollama_url: "http://localhost:11434/api/generate".to_string(),
-        siliconflow_api_key: None,
-        siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            kimi_api_key: None,
-            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-
         debug: false,
     };
     assert!(!config.debug);
 
-    // 2. 测试通过环境变量设置debug模式（手动测试）
+    // 2. 测试通过环境变量设置debug模式
     env::set_var("AI_COMMIT_DEBUG", "true");
-
-    // 清理缓存以确保读取新的环境变量
-    #[cfg(test)]
-    {
-        use ai_commit::config::EnvVars;
-        EnvVars::clear_cache();
-    }
-
-    let mut config = Config::new();
-    config.load_from_env(); // 手动加载环境变量
-    
-    // 检查调试模式是否设置（环境变量可能清空了）
-    if !config.debug {
-        config.debug = true; // 测试中强制启用debug模式
-    }
+    let config = Config::new();
     assert!(config.debug);
 
     // 3. 测试debug值解析逻辑
@@ -363,16 +291,7 @@ fn test_debug_mode_integration() {
 
     for (value, expected) in test_cases {
         env::set_var("AI_COMMIT_DEBUG", value);
-
-        // 每次都清理缓存
-        #[cfg(test)]
-        {
-            use ai_commit::config::EnvVars;
-            EnvVars::clear_cache();
-        }
-
-        let mut config = Config::new();
-        config.load_from_env();
+        let config = Config::new();
         assert_eq!(
             config.debug, expected,
             "Value '{}' should result in {}",
@@ -382,17 +301,9 @@ fn test_debug_mode_integration() {
 
     // 清理
     env::remove_var("AI_COMMIT_DEBUG");
-
-    // 最后清理缓存
-    #[cfg(test)]
-    {
-        use ai_commit::config::EnvVars;
-        EnvVars::clear_cache();
-    }
 }
 
 /// 集成测试：测试并发场景
-
 #[tokio::test]
 async fn test_concurrent_integration() {
     use std::sync::Arc;
@@ -449,8 +360,6 @@ fn test_performance_optimizations_v2() {
     let _prompt2 = prompt::get_prompt("test diff 2");
     let second_call_time = start2.elapsed();
 
-    // 由于缓存，第二次调用不应该比第一次慢太多
-    // 这是一个粗略的性能测试
     println!(
         "First call: {:?}, Second call: {:?}",
         first_call_time, second_call_time
@@ -463,11 +372,8 @@ fn test_performance_optimizations_v2() {
     }
     let env_loading_time = start3.elapsed();
 
-    // 多次调用 ensure_env_loaded 应该很快（因为单例）
     println!("100 env loading calls: {:?}", env_loading_time);
-
-    // 基本性能断言（非严格）
-    assert!(env_loading_time.as_millis() < 100); // 应该很快
+    assert!(env_loading_time.as_millis() < 100);
 }
 
 /// 集成测试：测试字符串处理优化
@@ -494,21 +400,13 @@ fn test_string_processing_integration() {
 #[tokio::test]
 async fn test_command_routing_integration() {
     use ai_commit::cli::args::Args;
-    use ai_commit::config::Config;
     use ai_commit::commands::route_command;
+    use ai_commit::config::Config;
 
     // 创建测试配置
     let config = Config {
         provider: "test".to_string(),
         model: "test-model".to_string(),
-        deepseek_api_key: Some("test-key".to_string()),
-        deepseek_url: "http://test.local".to_string(),
-        ollama_url: "http://localhost:11434/api/generate".to_string(),
-        siliconflow_api_key: None,
-        siliconflow_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-            kimi_api_key: None,
-            kimi_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-
         debug: false,
     };
 
@@ -539,7 +437,7 @@ async fn test_command_routing_integration() {
 
     for (test_name, args) in test_cases {
         let result = route_command(&args, &config).await;
-        
+
         match test_name {
             "no_command" => {
                 // 没有命令应该返回 false（继续执行主逻辑）
@@ -568,20 +466,18 @@ async fn test_command_routing_integration() {
 #[tokio::test]
 async fn test_git_modules_integration() {
     use ai_commit::git::core::GitCore;
-    
+
     // 测试基础Git操作的集成
     let is_repo = GitCore::is_git_repo().await;
     println!("Is git repo: {}", is_repo);
 
     if is_repo {
-        // 在Git仓库中进行更多测试
         let current_branch = GitCore::get_current_branch().await;
         match current_branch {
             Ok(branch) => {
                 assert!(!branch.is_empty(), "Current branch should not be empty");
                 println!("Current branch: {}", branch);
-                
-                // 测试分支存在性检查
+
                 let branch_exists = GitCore::branch_exists(&branch).await;
                 match branch_exists {
                     Ok(exists) => {
@@ -597,7 +493,6 @@ async fn test_git_modules_integration() {
             }
         }
 
-        // 测试提交存在性检查
         let head_exists = GitCore::commit_exists("HEAD").await;
         match head_exists {
             Ok(exists) => {
@@ -608,7 +503,6 @@ async fn test_git_modules_integration() {
             }
         }
 
-        // 测试获取远程仓库
         let remotes = GitCore::get_remotes().await;
         match remotes {
             Ok(remote_list) => {
@@ -640,7 +534,10 @@ fn test_new_features_cli_parsing() {
     let parsed = Args::try_parse_from(flow_args);
     assert!(parsed.is_ok(), "Flow feature start parsing should succeed");
     if let Ok(args) = parsed {
-        assert!(args.flow_feature_start.is_some(), "Flow feature start should be set");
+        assert!(
+            args.flow_feature_start.is_some(),
+            "Flow feature start should be set"
+        );
         assert_eq!(args.flow_feature_start.unwrap(), "new-feature");
     }
 
@@ -668,19 +565,16 @@ fn test_new_features_cli_parsing() {
 async fn test_error_handling_integration() {
     use ai_commit::git::core::GitCore;
 
-    // 测试处理不存在的分支
     let result = GitCore::branch_exists("definitely-non-existent-branch-123456").await;
     match result {
         Ok(exists) => {
             assert!(!exists, "Non-existent branch should return false");
         }
         Err(e) => {
-            // 错误也是可接受的结果
             println!("Branch check returned error (acceptable): {}", e);
         }
     }
 
-    // 测试处理不存在的提交
     let result = GitCore::commit_exists("0000000000000000000000000000000000000000").await;
     match result {
         Ok(exists) => {
@@ -697,29 +591,15 @@ async fn test_error_handling_integration() {
 fn test_config_and_commands_integration() {
     use ai_commit::cli::args::Args;
     use ai_commit::config::Config;
-    use std::env;
 
-    // 设置测试环境变量
-    env::set_var("AI_COMMIT_PROVIDER", "test-provider");
-    env::set_var("AI_COMMIT_MODEL", "test-model");
-    env::set_var("AI_COMMIT_DEBUG", "true");
+    // 直接构造配置（避免环境变量竞态）
+    let config = Config {
+        provider: "test-provider".to_string(),
+        model: "test-model".to_string(),
+        debug: true,
+    };
 
-    // 清理缓存
-    #[cfg(test)]
-    {
-        use ai_commit::config::EnvVars;
-        EnvVars::clear_cache();
-    }
-
-    // 创建配置并加载环境变量
-    let mut config = Config::new();
-    config.load_from_env();
-
-    // 验证配置加载（手动设置进行测试以确保一致性）
-    config.provider = "test-provider".to_string();
-    config.model = "test-model".to_string();
-    config.debug = true;
-    
+    // 验证配置
     assert_eq!(config.provider, "test-provider");
     assert_eq!(config.model, "test-model");
     assert!(config.debug);
@@ -728,19 +608,7 @@ fn test_config_and_commands_integration() {
     let mut args = Args::default();
     args.tag_list = true;
 
-    // 验证参数设置
     assert!(args.tag_list);
-
-    // 清理环境变量
-    env::remove_var("AI_COMMIT_PROVIDER");
-    env::remove_var("AI_COMMIT_MODEL");
-    env::remove_var("AI_COMMIT_DEBUG");
-
-    #[cfg(test)]
-    {
-        use ai_commit::config::EnvVars;
-        EnvVars::clear_cache();
-    }
 }
 
 /// 性能集成测试：新功能性能验证
@@ -751,17 +619,18 @@ async fn test_new_features_performance() {
 
     let start = Instant::now();
 
-    // 测试Git操作的性能
     let _ = GitCore::is_git_repo().await;
     let _ = GitCore::get_current_branch().await;
     let _ = GitCore::is_working_tree_clean().await;
     let _ = GitCore::get_remotes().await;
 
     let duration = start.elapsed();
-    
-    // Git操作应该相对较快（非严格断言）
+
     println!("Git operations took: {:?}", duration);
-    assert!(duration.as_secs() < 10, "Git operations should complete within 10 seconds");
+    assert!(
+        duration.as_secs() < 10,
+        "Git operations should complete within 10 seconds"
+    );
 }
 
 /// 集成测试：内存使用和资源管理
@@ -770,33 +639,29 @@ fn test_memory_management_integration() {
     use ai_commit::cli::args::Args;
     use std::collections::HashMap;
 
-    // 创建大量Args实例来测试内存管理
     let mut args_collection = HashMap::new();
-    
+
     for i in 0..1000 {
         let mut args = Args::default();
         args.tag_list = i % 2 == 0;
         args.history = i % 3 == 0;
         args.amend = i % 5 == 0;
-        
+
         if i % 10 == 0 {
             args.log_limit = Some(i as u32);
         }
-        
+
         args_collection.insert(i, args);
     }
 
-    // 验证创建的实例数量
     assert_eq!(args_collection.len(), 1000);
 
-    // 验证随机抽样的正确性
     let sample = args_collection.get(&100).unwrap();
-    assert!(sample.tag_list); // 100 % 2 == 0
-    assert!(!sample.history); // 100 % 3 != 0
-    assert!(sample.amend); // 100 % 5 == 0
-    assert_eq!(sample.log_limit, Some(100)); // 100 % 10 == 0
+    assert!(sample.tag_list);
+    assert!(!sample.history);
+    assert!(sample.amend);
+    assert_eq!(sample.log_limit, Some(100));
 
-    // 清理集合（测试析构）
     args_collection.clear();
     assert_eq!(args_collection.len(), 0);
 }

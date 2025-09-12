@@ -1,6 +1,6 @@
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use once_cell::sync::Lazy;
 
 /// 提供商配置信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,97 +102,105 @@ fn load_providers_from_config() -> HashMap<String, ProviderInfo> {
 /// 获取默认提供商配置（硬编码备份）
 fn get_default_providers() -> HashMap<String, ProviderInfo> {
     let mut providers = HashMap::new();
-    
+
     // Ollama 配置
-    providers.insert("ollama".to_string(), ProviderInfo {
-        name: "ollama".to_string(),
-        display_name: "Ollama".to_string(),
-        default_url: "http://localhost:11434/api/generate".to_string(),
-        requires_api_key: false,
-        default_model: "mistral".to_string(),
-        supported_models: vec![
-            "mistral".to_string(),
-            "llama3".to_string(),
-            "qwen2".to_string(),
-            "codellama".to_string(),
-            "gemma".to_string(),
-            "phi3".to_string(),
-        ],
-        api_format: ApiFormat::Ollama,
-        env_prefix: "AI_COMMIT_OLLAMA".to_string(),
-        description: "本地 Ollama 服务，无需 API Key".to_string(),
-    });
-    
+    providers.insert(
+        "ollama".to_string(),
+        ProviderInfo {
+            name: "ollama".to_string(),
+            display_name: "Ollama".to_string(),
+            default_url: "http://localhost:11434/api/generate".to_string(),
+            requires_api_key: false,
+            default_model: "mistral".to_string(),
+            supported_models: vec![
+                "mistral".to_string(),
+                "llama3".to_string(),
+                "qwen2".to_string(),
+                "codellama".to_string(),
+                "gemma".to_string(),
+                "phi3".to_string(),
+            ],
+            api_format: ApiFormat::Ollama,
+            env_prefix: "AI_COMMIT_OLLAMA".to_string(),
+            description: "本地 Ollama 服务，无需 API Key".to_string(),
+        },
+    );
+
     // Deepseek 配置
-    providers.insert("deepseek".to_string(), ProviderInfo {
-        name: "deepseek".to_string(),
-        display_name: "Deepseek".to_string(),
-        default_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
-        requires_api_key: true,
-        default_model: "deepseek-chat".to_string(),
-        supported_models: vec![
-            "deepseek-chat".to_string(),
-            "deepseek-coder".to_string(),
-        ],
-        api_format: ApiFormat::OpenAI,
-        env_prefix: "AI_COMMIT_DEEPSEEK".to_string(),
-        description: "深度求索 AI 服务，需要 API Key".to_string(),
-    });
-    
+    providers.insert(
+        "deepseek".to_string(),
+        ProviderInfo {
+            name: "deepseek".to_string(),
+            display_name: "Deepseek".to_string(),
+            default_url: "https://api.deepseek.com/v1/chat/completions".to_string(),
+            requires_api_key: true,
+            default_model: "deepseek-chat".to_string(),
+            supported_models: vec!["deepseek-chat".to_string(), "deepseek-coder".to_string()],
+            api_format: ApiFormat::OpenAI,
+            env_prefix: "AI_COMMIT_DEEPSEEK".to_string(),
+            description: "深度求索 AI 服务，需要 API Key".to_string(),
+        },
+    );
+
     // SiliconFlow 配置
-    providers.insert("siliconflow".to_string(), ProviderInfo {
-        name: "siliconflow".to_string(),
-        display_name: "SiliconFlow".to_string(),
-        default_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
-        requires_api_key: true,
-        default_model: "qwen/Qwen2-7B-Instruct".to_string(),
-        supported_models: vec![
-            "qwen/Qwen2-7B-Instruct".to_string(),
-            "qwen/Qwen2-72B-Instruct".to_string(),
-            "deepseek-ai/deepseek-coder-6.7b-instruct".to_string(),
-            "01-ai/Yi-34B-Chat-4bits".to_string(),
-        ],
-        api_format: ApiFormat::OpenAI,
-        env_prefix: "AI_COMMIT_SILICONFLOW".to_string(),
-        description: "硅基流动 AI 服务，需要 API Key".to_string(),
-    });
-    
+    providers.insert(
+        "siliconflow".to_string(),
+        ProviderInfo {
+            name: "siliconflow".to_string(),
+            display_name: "SiliconFlow".to_string(),
+            default_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            requires_api_key: true,
+            default_model: "qwen/Qwen2-7B-Instruct".to_string(),
+            supported_models: vec![
+                "qwen/Qwen2-7B-Instruct".to_string(),
+                "qwen/Qwen2-72B-Instruct".to_string(),
+                "deepseek-ai/deepseek-coder-6.7b-instruct".to_string(),
+                "01-ai/Yi-34B-Chat-4bits".to_string(),
+            ],
+            api_format: ApiFormat::OpenAI,
+            env_prefix: "AI_COMMIT_SILICONFLOW".to_string(),
+            description: "硅基流动 AI 服务，需要 API Key".to_string(),
+        },
+    );
+
     // Kimi 配置
-    providers.insert("kimi".to_string(), ProviderInfo {
-        name: "kimi".to_string(),
-        display_name: "Kimi".to_string(),
-        default_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
-        requires_api_key: true,
-        default_model: "moonshot-v1-8k".to_string(),
-        supported_models: vec![
-            "moonshot-v1-8k".to_string(),
-            "moonshot-v1-32k".to_string(),
-            "moonshot-v1-128k".to_string(),
-        ],
-        api_format: ApiFormat::OpenAI,
-        env_prefix: "AI_COMMIT_KIMI".to_string(),
-        description: "月之暗面 Kimi AI 服务，需要 API Key".to_string(),
-    });
-    
+    providers.insert(
+        "kimi".to_string(),
+        ProviderInfo {
+            name: "kimi".to_string(),
+            display_name: "Kimi".to_string(),
+            default_url: "https://api.moonshot.cn/v1/chat/completions".to_string(),
+            requires_api_key: true,
+            default_model: "moonshot-v1-8k".to_string(),
+            supported_models: vec![
+                "moonshot-v1-8k".to_string(),
+                "moonshot-v1-32k".to_string(),
+                "moonshot-v1-128k".to_string(),
+            ],
+            api_format: ApiFormat::OpenAI,
+            env_prefix: "AI_COMMIT_KIMI".to_string(),
+            description: "月之暗面 Kimi AI 服务，需要 API Key".to_string(),
+        },
+    );
+
     providers
 }
 
 /// 全局提供商配置映射
-pub static PROVIDER_REGISTRY: Lazy<HashMap<String, ProviderInfo>> = Lazy::new(|| {
-    load_providers_from_config()
-});
+pub static PROVIDER_REGISTRY: Lazy<HashMap<String, ProviderInfo>> =
+    Lazy::new(|| load_providers_from_config());
 
 impl ProviderInfo {
     /// 获取 API URL 环境变量名
     pub fn url_env_var(&self) -> String {
         format!("{}_URL", self.env_prefix)
     }
-    
+
     /// 获取 API Key 环境变量名  
     pub fn api_key_env_var(&self) -> String {
         format!("{}_API_KEY", self.env_prefix)
     }
-    
+
     /// 验证提供商是否配置正确
     pub fn validate(&self, api_key: Option<&str>) -> anyhow::Result<()> {
         if self.requires_api_key && api_key.is_none() {
@@ -214,27 +222,27 @@ impl ProviderRegistry {
     pub fn list_providers() -> Vec<&'static str> {
         PROVIDER_REGISTRY.keys().map(|s| s.as_str()).collect()
     }
-    
+
     /// 获取提供商信息
     pub fn get_provider(name: &str) -> Option<&'static ProviderInfo> {
         PROVIDER_REGISTRY.get(name)
     }
-    
+
     /// 检查提供商是否存在
     pub fn exists(name: &str) -> bool {
         PROVIDER_REGISTRY.contains_key(name)
     }
-    
+
     /// 获取所有提供商信息
     pub fn get_all() -> &'static HashMap<String, ProviderInfo> {
         &PROVIDER_REGISTRY
     }
-    
+
     /// 重新加载提供商配置（用于热重载）
     pub fn reload() -> anyhow::Result<()> {
         anyhow::bail!("热重载功能未实现，需要重启应用程序以加载新配置")
     }
-    
+
     /// 获取提供商配置文件路径信息
     pub fn get_config_info() -> String {
         format!(
@@ -267,7 +275,7 @@ mod tests {
     fn test_provider_info_validation() {
         let ollama = ProviderRegistry::get_provider("ollama").unwrap();
         assert!(ollama.validate(None).is_ok()); // Ollama 不需要 API key
-        
+
         let deepseek = ProviderRegistry::get_provider("deepseek").unwrap();
         assert!(deepseek.validate(None).is_err()); // Deepseek 需要 API key
         assert!(deepseek.validate(Some("test-key")).is_ok());
@@ -284,7 +292,7 @@ mod tests {
     fn test_api_formats() {
         let ollama = ProviderRegistry::get_provider("ollama").unwrap();
         assert_eq!(ollama.api_format, ApiFormat::Ollama);
-        
+
         let deepseek = ProviderRegistry::get_provider("deepseek").unwrap();
         assert_eq!(deepseek.api_format, ApiFormat::OpenAI);
     }
@@ -293,9 +301,11 @@ mod tests {
     fn test_provider_models() {
         let ollama = ProviderRegistry::get_provider("ollama").unwrap();
         assert!(ollama.supported_models.contains(&"mistral".to_string()));
-        
+
         let kimi = ProviderRegistry::get_provider("kimi").unwrap();
-        assert!(kimi.supported_models.contains(&"moonshot-v1-8k".to_string()));
+        assert!(kimi
+            .supported_models
+            .contains(&"moonshot-v1-8k".to_string()));
     }
 
     #[test]
@@ -327,7 +337,7 @@ mod tests {
             env_prefix: "AI_COMMIT_TEST".to_string(),
             description: "Test provider".to_string(),
         };
-        
+
         let info: ProviderInfo = config.into();
         assert_eq!(info.name, "test");
         assert_eq!(info.display_name, "Test Provider");

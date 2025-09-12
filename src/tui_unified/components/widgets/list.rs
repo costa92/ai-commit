@@ -1,12 +1,18 @@
 // 通用列表组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, widgets::{Block, Borders, List, ListItem, ListState}, text::Text, style::{Color, Style}};
 use crate::tui_unified::{
-    state::AppState,
     components::base::{
         component::{Component, ViewComponent},
-        events::EventResult
-    }
+        events::EventResult,
+    },
+    state::AppState,
+};
+use crossterm::event::KeyEvent;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    text::Text,
+    widgets::{Block, Borders, List, ListItem, ListState},
+    Frame,
 };
 
 /// 通用列表组件 - 可用于显示任意类型的列表数据
@@ -25,8 +31,8 @@ pub struct ListWidget<T> {
     show_search_results: bool,
 }
 
-impl<T> ListWidget<T> 
-where 
+impl<T> ListWidget<T>
+where
     T: Clone + Send + 'static,
 {
     pub fn new(
@@ -101,7 +107,9 @@ where
 
     fn get_effective_item(&self, index: usize) -> Option<&T> {
         if self.show_search_results {
-            self.filtered_items.get(index).and_then(|&i| self.items.get(i))
+            self.filtered_items
+                .get(index)
+                .and_then(|&i| self.items.get(i))
         } else {
             self.items.get(index)
         }
@@ -163,7 +171,7 @@ where
         }
 
         let current = self.selected_index.unwrap_or(0);
-        let new_index = if current >= 10 { current - 10 } else { 0 };
+        let new_index = current.saturating_sub(10);
         self.selected_index = Some(new_index);
         self.list_state.select(Some(new_index));
     }
@@ -198,7 +206,7 @@ where
 }
 
 impl<T> Component for ListWidget<T>
-where 
+where
     T: Clone + Send + 'static,
 {
     fn name(&self) -> &str {
@@ -228,7 +236,7 @@ where
                 Block::default()
                     .title(self.title.as_str())
                     .borders(Borders::ALL)
-                    .border_style(border_style)
+                    .border_style(border_style),
             )
             .highlight_style(if self.focused {
                 Style::default().fg(Color::Black).bg(Color::Yellow)
@@ -267,7 +275,7 @@ where
                 self.go_to_end();
                 EventResult::Handled
             }
-            _ => EventResult::NotHandled
+            _ => EventResult::NotHandled,
         }
     }
 
@@ -289,7 +297,7 @@ where
 }
 
 impl<T> ViewComponent for ListWidget<T>
-where 
+where
     T: Clone + Send + 'static,
 {
     fn view_type(&self) -> crate::tui_unified::components::base::component::ViewType {
@@ -312,7 +320,7 @@ where
 
         let query = query.to_lowercase();
         self.filtered_items.clear();
-        
+
         for (i, item) in self.items.iter().enumerate() {
             if (self.search_fn)(item, &query) {
                 self.filtered_items.push(i);
@@ -322,7 +330,7 @@ where
         self.current_search = Some(query);
         self.show_search_results = true;
         self.update_selection_after_filter();
-        
+
         EventResult::Handled
     }
 

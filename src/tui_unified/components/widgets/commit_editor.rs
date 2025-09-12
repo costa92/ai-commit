@@ -1,12 +1,9 @@
-use ratatui::{prelude::*, widgets::*};
-use crossterm::event::{KeyEvent, KeyCode};
 use crate::tui_unified::{
+    components::base::{component::Component, events::EventResult},
     state::AppState,
-    components::base::{
-        component::Component,
-        events::EventResult
-    }
 };
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{prelude::*, widgets::*};
 
 /// Commit 消息编辑器组件 - 支持多行编辑
 pub struct CommitEditor {
@@ -15,6 +12,12 @@ pub struct CommitEditor {
     cursor_col: usize,
     focused: bool,
     scroll_offset: usize,
+}
+
+impl Default for CommitEditor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CommitEditor {
@@ -140,8 +143,8 @@ impl Component for CommitEditor {
 
         // 计算可见区域
         let inner_height = area.height.saturating_sub(2) as usize;
-        let visible_lines = &self.lines[self.scroll_offset..
-            (self.scroll_offset + inner_height).min(self.lines.len())];
+        let visible_lines = &self.lines
+            [self.scroll_offset..(self.scroll_offset + inner_height).min(self.lines.len())];
 
         // 构建显示文本
         let mut text_lines = Vec::new();
@@ -150,22 +153,27 @@ impl Component for CommitEditor {
         }
 
         let paragraph = Paragraph::new(text_lines)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .title("Edit Commit Message")
-                .border_style(border_style))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Edit Commit Message")
+                    .border_style(border_style),
+            )
             .wrap(Wrap { trim: false });
 
         frame.render_widget(paragraph, area);
 
         // 渲染光标
-        if self.focused && self.cursor_line >= self.scroll_offset && 
-           self.cursor_line < self.scroll_offset + inner_height {
+        if self.focused
+            && self.cursor_line >= self.scroll_offset
+            && self.cursor_line < self.scroll_offset + inner_height
+        {
             let cursor_x = area.x + 1 + self.cursor_col as u16;
             let cursor_y = area.y + 1 + (self.cursor_line - self.scroll_offset) as u16;
-            
-            if cursor_x < area.x + area.width.saturating_sub(1) &&
-               cursor_y < area.y + area.height.saturating_sub(1) {
+
+            if cursor_x < area.x + area.width.saturating_sub(1)
+                && cursor_y < area.y + area.height.saturating_sub(1)
+            {
                 frame.set_cursor(cursor_x, cursor_y);
             }
         }
@@ -223,7 +231,7 @@ impl Component for CommitEditor {
                 // 取消编辑，由父组件处理
                 EventResult::NotHandled
             }
-            _ => EventResult::NotHandled
+            _ => EventResult::NotHandled,
         }
     }
 

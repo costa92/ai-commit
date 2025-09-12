@@ -204,13 +204,13 @@ mod tests {
     #[test]
     fn test_parse_worktree_list_verbose() {
         let output = "/path/to/main  abc123 [main]\n/path/to/feature  def456 [feature/test]\n/path/to/bare  ghi789 (bare)\n/path/to/detached  jkl012 (detached HEAD)";
-        
+
         let result = parse_worktree_list_verbose(output, true);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 4);
-        
+
         assert_eq!(worktrees[0].branch, "main");
         assert_eq!(worktrees[1].branch, "feature/test");
         assert_eq!(worktrees[2].branch, "bare");
@@ -222,13 +222,13 @@ mod tests {
     #[test]
     fn test_parse_worktree_list_porcelain() {
         let output = "worktree /path/to/main\nHEAD abc123\nbranch refs/heads/main\n\nworktree /path/to/feature\nHEAD def456\nbranch refs/heads/feature\n\nworktree /path/to/bare\nHEAD ghi789\nbare\n";
-        
+
         let result = parse_worktree_list(output);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 3);
-        
+
         assert_eq!(worktrees[0].branch, "refs/heads/main");
         assert_eq!(worktrees[1].branch, "refs/heads/feature");
         assert!(worktrees[2].is_bare);
@@ -252,13 +252,13 @@ mod tests {
     #[test]
     fn test_parse_worktree_list_porcelain_complex() {
         let output = "worktree /path/to/main\nHEAD abc123\nbranch refs/heads/main\n\nworktree /path/to/feature\nHEAD def456\nbranch refs/heads/feature/complex-name\n\nworktree /path/to/detached\nHEAD ghi789\ndetached\n";
-        
+
         let result = parse_worktree_list(output);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 3);
-        
+
         assert_eq!(worktrees[0].commit, "abc123");
         assert_eq!(worktrees[1].branch, "refs/heads/feature/complex-name");
         assert!(worktrees[2].is_detached);
@@ -266,11 +266,12 @@ mod tests {
 
     #[test]
     fn test_parse_worktree_list_with_whitespace() {
-        let output = "  /path/to/main  abc123  [main]  \n\n  /path/to/feature  def456  [feature/test]  \n";
-        
+        let output =
+            "  /path/to/main  abc123  [main]  \n\n  /path/to/feature  def456  [feature/test]  \n";
+
         let result = parse_worktree_list_verbose(output, false);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].branch, "main");
@@ -279,11 +280,12 @@ mod tests {
 
     #[test]
     fn test_parse_worktree_list_special_paths() {
-        let output = "/path with spaces/main  abc123 [main]\n/path/with-special@chars  def456 [feature]\n";
-        
+        let output =
+            "/path with spaces/main  abc123 [main]\n/path/with-special@chars  def456 [feature]\n";
+
         let result = parse_worktree_list_verbose(output, false);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, PathBuf::from("/path with spaces/main"));
@@ -332,7 +334,7 @@ mod tests {
         let output = "worktree /path/to/main\nHEAD abc123\n";
         let result = parse_worktree_list(output);
         assert!(result.is_ok());
-        
+
         let worktrees = result.unwrap();
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));

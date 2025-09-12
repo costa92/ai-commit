@@ -31,11 +31,18 @@ pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool>
     // 统一TUI界面命令
     if args.tui_unified {
         use crate::tui_unified::TuiUnifiedApp;
-        return TuiUnifiedApp::run().await.map(|_| true).map_err(|e| anyhow::anyhow!("{}", e));
+        return TuiUnifiedApp::run()
+            .await
+            .map(|_| true)
+            .map_err(|e| anyhow::anyhow!("{}", e));
     }
 
     // Tag 相关命令
-    if args.tag_list || args.tag_delete.is_some() || args.tag_info.is_some() || args.tag_compare.is_some() {
+    if args.tag_list
+        || args.tag_delete.is_some()
+        || args.tag_info.is_some()
+        || args.tag_compare.is_some()
+    {
         return handle_tag_commands(args, config).await.map(|_| true);
     }
 
@@ -98,7 +105,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         // 由于实际执行可能失败（不在git仓库或其他原因），我们主要测试路由逻辑
         match result {
             Ok(handled) => {
@@ -118,7 +125,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Tag delete command should be handled");
@@ -136,7 +143,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Flow init command should be handled");
@@ -154,7 +161,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Flow feature start command should be handled");
@@ -172,7 +179,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "History command should be handled");
@@ -190,7 +197,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Log author command should be handled");
@@ -208,7 +215,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Amend command should be handled");
@@ -226,7 +233,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Edit commit command should be handled");
@@ -243,10 +250,13 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
-                assert!(!handled, "No command should not be handled, should fall through to main logic");
+                assert!(
+                    !handled,
+                    "No command should not be handled, should fall through to main logic"
+                );
             }
             Err(e) => {
                 panic!("Route command with no flags should not error: {}", e);
@@ -281,7 +291,10 @@ mod tests {
         // Flow commands
         let mut args = Args::default();
         args.flow_hotfix_finish = Some("hotfix".to_string());
-        assert!(args.flow_hotfix_finish.is_some(), "Flow hotfix finish should be detected");
+        assert!(
+            args.flow_hotfix_finish.is_some(),
+            "Flow hotfix finish should be detected"
+        );
 
         // History commands
         let mut args = Args::default();
@@ -301,23 +314,35 @@ mod tests {
         // 有效的 tag 组合
         let mut args = Args::default();
         args.tag_compare = Some("v1.0.0,v1.0.1".to_string());
-        assert!(args.tag_compare.is_some(), "Tag compare should accept valid format");
+        assert!(
+            args.tag_compare.is_some(),
+            "Tag compare should accept valid format"
+        );
 
         // 有效的 flow 组合
         let mut args = Args::default();
         args.flow_release_start = Some("v1.1.0".to_string());
-        assert!(args.flow_release_start.is_some(), "Flow release start should accept version");
+        assert!(
+            args.flow_release_start.is_some(),
+            "Flow release start should accept version"
+        );
 
         // 有效的 history 组合
         let mut args = Args::default();
         args.log_since = Some("2024-01-01".to_string());
         args.log_until = Some("2024-12-31".to_string());
-        assert!(args.log_since.is_some() && args.log_until.is_some(), "Date range should be valid");
+        assert!(
+            args.log_since.is_some() && args.log_until.is_some(),
+            "Date range should be valid"
+        );
 
         // 有效的 edit 组合
         let mut args = Args::default();
         args.reword_commit = Some("abc1234,New message".to_string());
-        assert!(args.reword_commit.is_some(), "Reword commit should accept hash and message");
+        assert!(
+            args.reword_commit.is_some(),
+            "Reword commit should accept hash and message"
+        );
 
         // 有效的 git init 组合
         let mut args = Args::default();
@@ -332,7 +357,7 @@ mod tests {
         let config = create_test_config();
 
         let result = route_command(&args, &config).await;
-        
+
         match result {
             Ok(handled) => {
                 assert!(handled, "Git init command should be handled");
@@ -340,7 +365,10 @@ mod tests {
             Err(e) => {
                 // 在现有的 git 仓库中运行会失败，这是预期的
                 println!("Git init command was routed correctly but execution failed (expected in existing git repo): {}", e);
-                assert!(e.to_string().contains("already a Git repository"), "Should fail because directory is already a git repo");
+                assert!(
+                    e.to_string().contains("already a Git repository"),
+                    "Should fail because directory is already a git repo"
+                );
             }
         }
     }

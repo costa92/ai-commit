@@ -36,12 +36,16 @@ mod tests {
         // 测试不同模式下的监控间隔
         let debug_interval = get_watch_interval(true);
         let normal_interval = get_watch_interval(false);
-        
+
         assert_eq!(debug_interval, 2);
         assert_eq!(normal_interval, 5);
     }
 
     fn get_watch_interval(debug: bool) -> u64 {
-        if debug { 2 } else { 5 }
+        if debug {
+            2
+        } else {
+            5
+        }
     }
 }

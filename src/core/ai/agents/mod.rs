@@ -123,24 +123,24 @@ pub enum AgentCapability {
 pub trait Agent: Send + Sync {
     /// 获取 Agent 名称
     fn name(&self) -> &str;
-    
+
     /// 获取 Agent 描述
     fn description(&self) -> &str;
-    
+
     /// 获取 Agent 能力列表
     fn capabilities(&self) -> Vec<AgentCapability>;
-    
+
     /// 检查是否支持某个能力
     fn has_capability(&self, capability: &AgentCapability) -> bool {
         self.capabilities().contains(capability)
     }
-    
+
     /// 初始化 Agent
     async fn initialize(&mut self, context: &AgentContext) -> Result<()>;
-    
+
     /// 执行任务
     async fn execute(&self, task: AgentTask, context: &AgentContext) -> Result<AgentResult>;
-    
+
     /// 验证任务是否可执行
     fn validate_task(&self, task: &AgentTask) -> Result<()> {
         // 默认验证：检查必需参数
@@ -149,7 +149,7 @@ pub trait Agent: Send + Sync {
         }
         Ok(())
     }
-    
+
     /// 获取 Agent 状态
     fn status(&self) -> AgentStatus {
         AgentStatus::Ready
@@ -200,13 +200,13 @@ impl AgentTask {
             created_at: chrono::Utc::now(),
         }
     }
-    
+
     /// 设置参数
     pub fn with_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.params.insert(key.into(), value.into());
         self
     }
-    
+
     /// 设置优先级
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority.min(10);
@@ -247,7 +247,7 @@ impl AgentFactory {
             _ => anyhow::bail!("Unknown agent type: {}", agent_type),
         }
     }
-    
+
     /// 获取所有可用的 Agent 类型
     pub fn available_agents() -> Vec<&'static str> {
         vec!["commit", "tag", "review", "refactor"]
@@ -260,7 +260,7 @@ use uuid;
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_agent_config_default() {
         let config = AgentConfig::default();
@@ -268,26 +268,26 @@ mod tests {
         assert_eq!(config.model, "mistral");
         assert_eq!(config.temperature, 0.7);
     }
-    
+
     #[test]
     fn test_agent_task_creation() {
         let task = AgentTask::new(TaskType::GenerateCommit, "test input")
             .with_param("key", "value")
             .with_priority(8);
-        
+
         assert_eq!(task.task_type, TaskType::GenerateCommit);
         assert_eq!(task.input, "test input");
         assert_eq!(task.params.get("key"), Some(&"value".to_string()));
         assert_eq!(task.priority, 8);
     }
-    
+
     #[test]
     fn test_agent_factory() {
         assert!(AgentFactory::create("commit").is_ok());
         assert!(AgentFactory::create("tag").is_ok());
         assert!(AgentFactory::create("unknown").is_err());
     }
-    
+
     #[test]
     fn test_agent_capability() {
         let cap1 = AgentCapability::GenerateCommit;

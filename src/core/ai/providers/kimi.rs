@@ -65,6 +65,12 @@ pub struct KimiProvider {
     client: &'static Client,
 }
 
+impl Default for KimiProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KimiProvider {
     /// 创建新的 Kimi 提供商
     pub fn new() -> Self {
@@ -72,16 +78,18 @@ impl KimiProvider {
             client: &HTTP_CLIENT,
         }
     }
-    
+
     /// 发送请求到 Kimi
     async fn send_request(
         &self,
         prompt: &str,
         config: &ProviderConfig,
     ) -> Result<reqwest::Response> {
-        let api_key = config.api_key.as_ref()
+        let api_key = config
+            .api_key
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Kimi API key is required"))?;
-        
+
         let request = KimiRequest {
             model: &config.model,
             messages: vec![Message {
@@ -92,44 +100,43 @@ impl KimiProvider {
             temperature: 0.7,
             max_tokens: 500,
         };
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&config.api_url)
             .bearer_auth(api_key)
             .json(&request)
             .timeout(Duration::from_secs(config.timeout_secs))
             .send()
             .await?;
-        
+
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
             anyhow::bail!("Kimi request failed: {} - {}", status, text);
         }
-        
+
         Ok(response)
     }
-    
+
     /// 处理流式响应
     #[allow(dead_code)]
-    async fn handle_stream_response(
-        response: reqwest::Response,
-    ) -> Result<String> {
+    async fn handle_stream_response(response: reqwest::Response) -> Result<String> {
         let mut message = String::with_capacity(2048);
         let mut stdout_handle = stdout();
         let mut stream = response.bytes_stream();
-        
+
         while let Some(item) = stream.next().await {
             let chunk = item?;
             let chunk_str = std::str::from_utf8(&chunk)?;
-            
+
             for line in chunk_str.lines() {
                 if line.starts_with("data:") {
                     let json_str = line.strip_prefix("data:").unwrap().trim();
                     if json_str == "[DONE]" {
                         break;
                     }
-                    
+
                     if let Ok(response) = serde_json::from_str::<KimiResponse>(json_str) {
                         if let Some(choice) = response.choices.first() {
                             if let Some(delta) = &choice.delta {
@@ -144,7 +151,7 @@ impl KimiProvider {
                 }
             }
         }
-        
+
         stdout_handle.write_all(b"\n").await?;
         Ok(message)
     }
@@ -155,19 +162,20 @@ impl AIProvider for KimiProvider {
     async fn generate(&self, prompt: &str, config: &ProviderConfig) -> Result<String> {
         let mut config = config.clone();
         config.stream = false;
-        
+
         let response = self.send_request(prompt, &config).await?;
         let kimi_response: KimiResponse = response.json().await?;
-        
-        let content = kimi_response.choices
+
+        let content = kimi_response
+            .choices
             .first()
             .and_then(|c| c.message.as_ref())
             .map(|m| m.content.clone())
             .unwrap_or_default();
-        
+
         Ok(content)
     }
-    
+
     async fn stream_generate(
         &self,
         prompt: &str,
@@ -175,39 +183,37 @@ impl AIProvider for KimiProvider {
     ) -> Result<StreamResponse> {
         let mut config = config.clone();
         config.stream = true;
-        
+
         let response = self.send_request(prompt, &config).await?;
         let stream = response.bytes_stream();
-        
-        let mapped_stream = stream.map(move |item| {
-            match item {
-                Ok(chunk) => {
-                    let chunk_str = std::str::from_utf8(&chunk)
-                        .map_err(|e| anyhow::anyhow!("UTF-8 error: {}", e))?;
-                    
-                    let mut result = String::new();
-                    for line in chunk_str.lines() {
-                        if line.starts_with("data:") {
-                            let json_str = line.strip_prefix("data:").unwrap().trim();
-                            if json_str != "[DONE]" {
-                                if let Ok(response) = serde_json::from_str::<KimiResponse>(json_str) {
-                                    if let Some(choice) = response.choices.first() {
-                                        if let Some(delta) = &choice.delta {
-                                            if let Some(content) = &delta.content {
-                                                result.push_str(content);
-                                            }
+
+        let mapped_stream = stream.map(move |item| match item {
+            Ok(chunk) => {
+                let chunk_str = std::str::from_utf8(&chunk)
+                    .map_err(|e| anyhow::anyhow!("UTF-8 error: {}", e))?;
+
+                let mut result = String::new();
+                for line in chunk_str.lines() {
+                    if line.starts_with("data:") {
+                        let json_str = line.strip_prefix("data:").unwrap().trim();
+                        if json_str != "[DONE]" {
+                            if let Ok(response) = serde_json::from_str::<KimiResponse>(json_str) {
+                                if let Some(choice) = response.choices.first() {
+                                    if let Some(delta) = &choice.delta {
+                                        if let Some(content) = &delta.content {
+                                            result.push_str(content);
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    Ok(result)
                 }
-                Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
+                Ok(result)
             }
+            Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
         });
-        
+
         Ok(Box::pin(mapped_stream))
     }
 }
@@ -234,7 +240,7 @@ mod tests {
             temperature: 0.7,
             max_tokens: 500,
         };
-        
+
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("moonshot-v1-8k"));
         assert!(json.contains("user"));
@@ -251,12 +257,18 @@ mod tests {
                 }
             }]
         }"#;
-        
+
         let response: KimiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.choices.len(), 1);
         assert!(response.choices[0].delta.is_some());
         assert_eq!(
-            response.choices[0].delta.as_ref().unwrap().content.as_ref().unwrap(),
+            response.choices[0]
+                .delta
+                .as_ref()
+                .unwrap()
+                .content
+                .as_ref()
+                .unwrap(),
             "test response"
         );
     }
@@ -270,7 +282,7 @@ mod tests {
                 }
             }]
         }"#;
-        
+
         let response: KimiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.choices.len(), 1);
         assert!(response.choices[0].message.is_some());
@@ -286,7 +298,7 @@ mod tests {
             role: "user",
             content: "Hello Kimi",
         };
-        
+
         let json = serde_json::to_string(&message).unwrap();
         assert!(json.contains("user"));
         assert!(json.contains("Hello Kimi"));

@@ -1,15 +1,19 @@
 // Tags视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, style::{Color, Style}};
 use crate::tui_unified::{
-    state::{AppState, git_state::Tag},
     components::{
         base::{
             component::{Component, ViewComponent, ViewType},
-            events::EventResult
+            events::EventResult,
         },
-        widgets::list::ListWidget
-    }
+        widgets::list::ListWidget,
+    },
+    state::{git_state::Tag, AppState},
+};
+use crossterm::event::KeyEvent;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    Frame,
 };
 
 /// Tags视图 - 显示所有标签
@@ -17,13 +21,28 @@ pub struct TagsView {
     list_widget: ListWidget<Tag>,
 }
 
+impl Default for TagsView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TagsView {
     pub fn new() -> Self {
         let format_fn = Box::new(|tag: &Tag| -> String {
             if let Some(ref message) = tag.message {
-                format!("🏷️  {} - {} ({})", tag.name, message, &tag.commit_hash[..8.min(tag.commit_hash.len())])
+                format!(
+                    "🏷️  {} - {} ({})",
+                    tag.name,
+                    message,
+                    &tag.commit_hash[..8.min(tag.commit_hash.len())]
+                )
             } else {
-                format!("🏷️  {} ({})", tag.name, &tag.commit_hash[..8.min(tag.commit_hash.len())])
+                format!(
+                    "🏷️  {} ({})",
+                    tag.name,
+                    &tag.commit_hash[..8.min(tag.commit_hash.len())]
+                )
             }
         });
 
@@ -39,20 +58,18 @@ impl TagsView {
 
         let search_fn = Box::new(|tag: &Tag, query: &str| -> bool {
             let query = query.to_lowercase();
-            tag.name.to_lowercase().contains(&query) ||
-            tag.commit_hash.to_lowercase().contains(&query) ||
-            tag.message.as_ref().map_or(false, |m| m.to_lowercase().contains(&query))
+            tag.name.to_lowercase().contains(&query)
+                || tag.commit_hash.to_lowercase().contains(&query)
+                || tag
+                    .message
+                    .as_ref()
+                    .is_some_and(|m| m.to_lowercase().contains(&query))
         });
 
-        let list_widget = ListWidget::new(
-            "Tags".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget =
+            ListWidget::new("Tags".to_string(), format_fn, style_fn).with_search_fn(search_fn);
 
-        Self {
-            list_widget,
-        }
+        Self { list_widget }
     }
 
     pub fn selected_tag(&self) -> Option<&Tag> {
@@ -85,8 +102,13 @@ impl Component for TagsView {
         // 处理视图特定的按键
         match key.code {
             KeyCode::Enter => {
-                // TODO: 显示选中标签的详细信息或差异
-                EventResult::Handled
+                // 显示选中标签的git diff
+                if let Some(selected_tag) = self.selected_tag() {
+                    state.request_diff(selected_tag.commit_hash.clone());
+                    EventResult::Handled
+                } else {
+                    EventResult::NotHandled
+                }
             }
             KeyCode::Char('r') => {
                 // 刷新标签列表
@@ -149,7 +171,8 @@ impl ViewComponent for TagsView {
     fn set_selected_index(&mut self, index: Option<usize>) {
         if let Some(idx) = index {
             if idx < self.list_widget.len() {
-                self.list_widget.set_items(self.list_widget.items().to_vec());
+                self.list_widget
+                    .set_items(self.list_widget.items().to_vec());
             }
         }
     }

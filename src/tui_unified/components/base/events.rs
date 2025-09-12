@@ -1,6 +1,6 @@
 // 事件处理系统
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use crate::tui_unified::focus::FocusPanel;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventResult {
@@ -26,9 +26,9 @@ pub enum Navigation {
 pub enum StateChange {
     FocusChange(FocusPanel),
     ViewChange(crate::tui_unified::state::app_state::ViewType),
-    SelectionChange { 
+    SelectionChange {
         component: String,
-        index: Option<usize>
+        index: Option<usize>,
     },
     SearchModeToggle(bool),
     SearchQuery(String),
@@ -79,20 +79,20 @@ impl EventDispatcher {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Ctrl+Q 退出应用
                 EventResult::Consumed(StateChange::ViewChange(
-                    crate::tui_unified::state::app_state::ViewType::GitLog
+                    crate::tui_unified::state::app_state::ViewType::GitLog,
                 ))
-            },
+            }
             KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Ctrl+H 显示/隐藏帮助
                 self.help_mode = !self.help_mode;
                 EventResult::Consumed(StateChange::ShowHelp(self.help_mode))
-            },
+            }
             KeyCode::Char('/') => {
                 // 开始搜索模式
                 self.search_mode = true;
                 self.current_search_query.clear();
                 EventResult::Consumed(StateChange::SearchModeToggle(true))
-            },
+            }
             KeyCode::Esc => {
                 // 退出搜索模式或帮助模式
                 if self.search_mode {
@@ -105,15 +105,15 @@ impl EventDispatcher {
                 } else {
                     EventResult::NotHandled
                 }
-            },
+            }
             KeyCode::Tab => {
                 // 切换面板焦点
                 EventResult::Consumed(StateChange::FocusChange(FocusPanel::Content))
-            },
+            }
             KeyCode::F(5) => {
                 // F5 刷新数据
                 EventResult::Consumed(StateChange::RefreshData)
-            },
+            }
             _ => {
                 if self.search_mode {
                     self.handle_search_input(key)
@@ -130,21 +130,21 @@ impl EventDispatcher {
             KeyCode::Char(c) => {
                 self.current_search_query.push(c);
                 EventResult::Consumed(StateChange::SearchQuery(self.current_search_query.clone()))
-            },
+            }
             KeyCode::Backspace => {
                 self.current_search_query.pop();
                 EventResult::Consumed(StateChange::SearchQuery(self.current_search_query.clone()))
-            },
+            }
             KeyCode::Enter => {
                 // 执行搜索
                 let query = self.current_search_query.clone();
                 self.search_mode = false;
                 EventResult::Propagate(vec![
                     StateChange::SearchModeToggle(false),
-                    StateChange::SearchQuery(query)
+                    StateChange::SearchQuery(query),
                 ])
-            },
-            _ => EventResult::NotHandled
+            }
+            _ => EventResult::NotHandled,
         }
     }
 

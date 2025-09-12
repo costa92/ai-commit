@@ -12,7 +12,8 @@ pub async fn handle_log_stats_command(args: &Args, config: &Config) -> anyhow::R
         args.log_author.as_deref(),
         args.log_since.as_deref(),
         args.log_until.as_deref(),
-    ).await?;
+    )
+    .await?;
 
     Ok(())
 }
@@ -29,7 +30,11 @@ pub async fn handle_contributors_command(_args: &Args, config: &Config) -> anyho
 }
 
 /// 处理搜索命令
-pub async fn handle_search_command(search_term: &str, args: &Args, config: &Config) -> anyhow::Result<()> {
+pub async fn handle_search_command(
+    search_term: &str,
+    args: &Args,
+    config: &Config,
+) -> anyhow::Result<()> {
     if config.debug {
         println!("Searching commits for: {}", search_term);
     }
@@ -51,10 +56,13 @@ pub async fn handle_branches_command(args: &Args, config: &Config) -> anyhow::Re
 }
 
 /// 处理交互式历史浏览命令
-pub async fn handle_interactive_history_command(args: &Args, config: &Config) -> anyhow::Result<()> {
+pub async fn handle_interactive_history_command(
+    args: &Args,
+    config: &Config,
+) -> anyhow::Result<()> {
     println!("🎯 Interactive History Browser");
     println!("{}", "─".repeat(60));
-    
+
     if config.debug {
         println!("Starting interactive history mode...");
     }
@@ -70,7 +78,8 @@ pub async fn handle_interactive_history_command(args: &Args, config: &Config) ->
         args.log_graph,
         args.log_limit,
         args.log_file.as_deref(),
-    ).await?;
+    )
+    .await?;
 
     // 进入交互模式
     start_interactive_loop(args, config).await?;
@@ -118,7 +127,10 @@ mod tests {
         assert_eq!(parse_interactive_command("help"), InteractiveCommand::Help);
         assert_eq!(parse_interactive_command("q"), InteractiveCommand::Quit);
         assert_eq!(parse_interactive_command("quit"), InteractiveCommand::Quit);
-        assert_eq!(parse_interactive_command("s test"), InteractiveCommand::Search("test".to_string()));
+        assert_eq!(
+            parse_interactive_command("s test"),
+            InteractiveCommand::Search("test".to_string())
+        );
     }
 
     #[derive(Debug, PartialEq)]

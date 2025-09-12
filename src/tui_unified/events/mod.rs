@@ -1,7 +1,7 @@
 // Event system - placeholder implementations
 
-use std::collections::VecDeque;
 use crossterm::event::{KeyEvent, MouseEvent};
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -57,7 +57,7 @@ impl EventFilter {
     pub fn new(allowed_types: Vec<EventType>) -> Self {
         Self { allowed_types }
     }
-    
+
     pub fn should_process(&self, event: &Event) -> bool {
         self.allowed_types.contains(&event.event_type())
     }
@@ -68,6 +68,12 @@ pub struct EventHandler {
     filters: Vec<EventFilter>,
 }
 
+impl Default for EventHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventHandler {
     pub fn new() -> Self {
         Self {
@@ -75,15 +81,15 @@ impl EventHandler {
             filters: Vec::new(),
         }
     }
-    
+
     pub fn push_event(&mut self, event: Event) {
         self.events.push_back(event);
     }
-    
+
     pub fn pop_event(&mut self) -> Option<Event> {
         self.events.pop_front()
     }
-    
+
     pub fn add_filter(&mut self, filter: EventFilter) {
         self.filters.push(filter);
     }
@@ -93,13 +99,19 @@ pub struct EventRouter {
     handlers: Vec<EventHandler>,
 }
 
+impl Default for EventRouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventRouter {
     pub fn new() -> Self {
         Self {
             handlers: Vec::new(),
         }
     }
-    
+
     pub fn route_event(&mut self, event: Event) {
         for handler in &mut self.handlers {
             for filter in &handler.filters {

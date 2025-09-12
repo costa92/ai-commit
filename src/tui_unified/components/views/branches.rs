@@ -1,21 +1,31 @@
 // 分支视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, style::{Color, Style}};
 use crate::tui_unified::{
-    state::{AppState, git_state::Branch},
     components::{
         base::{
             component::{Component, ViewComponent, ViewType},
-            events::EventResult
+            events::EventResult,
         },
-        widgets::list::ListWidget
-    }
+        widgets::list::ListWidget,
+    },
+    state::{git_state::Branch, AppState},
+};
+use crossterm::event::KeyEvent;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    Frame,
 };
 
 /// 分支视图 - 显示所有分支
 pub struct BranchesView {
     list_widget: ListWidget<Branch>,
     show_remotes: bool,
+}
+
+impl Default for BranchesView {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BranchesView {
@@ -30,34 +40,36 @@ impl BranchesView {
             format!("{}{}{}", indicator, branch.name, upstream_info)
         });
 
-        let style_fn = Box::new(|branch: &Branch, is_selected: bool, is_focused: bool| -> Style {
-            let base_style = if branch.is_current {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
+        let style_fn = Box::new(
+            |branch: &Branch, is_selected: bool, is_focused: bool| -> Style {
+                let base_style = if branch.is_current {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
-            if is_selected && is_focused {
-                base_style.bg(Color::Yellow).fg(Color::Black)
-            } else if is_selected {
-                base_style.bg(Color::DarkGray)
-            } else {
-                base_style
-            }
-        });
+                if is_selected && is_focused {
+                    base_style.bg(Color::Yellow).fg(Color::Black)
+                } else if is_selected {
+                    base_style.bg(Color::DarkGray)
+                } else {
+                    base_style
+                }
+            },
+        );
 
         let search_fn = Box::new(|branch: &Branch, query: &str| -> bool {
             let query = query.to_lowercase();
-            branch.name.to_lowercase().contains(&query) ||
-            branch.full_name.to_lowercase().contains(&query) ||
-            branch.upstream.as_ref().map_or(false, |u| u.to_lowercase().contains(&query))
+            branch.name.to_lowercase().contains(&query)
+                || branch.full_name.to_lowercase().contains(&query)
+                || branch
+                    .upstream
+                    .as_ref()
+                    .is_some_and(|u| u.to_lowercase().contains(&query))
         });
 
-        let list_widget = ListWidget::new(
-            "Branches".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget =
+            ListWidget::new("Branches".to_string(), format_fn, style_fn).with_search_fn(search_fn);
 
         Self {
             list_widget,
@@ -79,13 +91,22 @@ impl BranchesView {
             // TODO: 包含远程分支
             state.repo_state.branches.clone()
         } else {
-            state.repo_state.branches
+            state
+                .repo_state
+                .branches
                 .iter()
                 .filter(|branch| !branch.name.starts_with("remotes/"))
                 .cloned()
                 .collect()
         };
         self.list_widget.set_items(branches);
+    }
+
+    /// 通知应用状态当前选中的分支
+    pub fn update_selected_branch_in_state(&self, state: &mut AppState) {
+        if let Some(selected_branch) = self.selected_branch() {
+            state.select_branch(selected_branch.name.clone());
+        }
     }
 
     fn update_title(&mut self) {
@@ -96,39 +117,43 @@ impl BranchesView {
         };
 
         // 重新创建 ListWidget 来更新标题
-        let format_fn: Box<dyn Fn(&Branch) -> String + Send> = Box::new(|branch: &Branch| -> String {
-            let indicator = if branch.is_current { "* " } else { "  " };
-            let upstream_info = if let Some(ref upstream) = branch.upstream {
-                format!(" -> {}", upstream)
-            } else {
-                String::new()
-            };
-            format!("{}{}{}", indicator, branch.name, upstream_info)
-        });
+        let format_fn: Box<dyn Fn(&Branch) -> String + Send> =
+            Box::new(|branch: &Branch| -> String {
+                let indicator = if branch.is_current { "* " } else { "  " };
+                let upstream_info = if let Some(ref upstream) = branch.upstream {
+                    format!(" -> {}", upstream)
+                } else {
+                    String::new()
+                };
+                format!("{}{}{}", indicator, branch.name, upstream_info)
+            });
 
-        let style_fn = Box::new(|branch: &Branch, is_selected: bool, is_focused: bool| -> Style {
-            let base_style = if branch.is_current {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::White)
-            };
+        let style_fn = Box::new(
+            |branch: &Branch, is_selected: bool, is_focused: bool| -> Style {
+                let base_style = if branch.is_current {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
-            if is_selected && is_focused {
-                base_style.bg(Color::Yellow).fg(Color::Black)
-            } else if is_selected {
-                base_style.bg(Color::DarkGray)
-            } else {
-                base_style
-            }
-        });
+                if is_selected && is_focused {
+                    base_style.bg(Color::Yellow).fg(Color::Black)
+                } else if is_selected {
+                    base_style.bg(Color::DarkGray)
+                } else {
+                    base_style
+                }
+            },
+        );
 
         let current_items = self.list_widget.items().to_vec();
         let selected = self.list_widget.selected_index();
 
         self.list_widget = ListWidget::new(title, format_fn, style_fn).with_items(current_items);
-        
+
         if let Some(_idx) = selected {
-            self.list_widget.set_items(self.list_widget.items().to_vec());
+            self.list_widget
+                .set_items(self.list_widget.items().to_vec());
         }
     }
 }
@@ -164,7 +189,7 @@ impl Component for BranchesView {
                     if selected_branch.is_current {
                         state.add_notification(
                             "Already on this branch".to_string(),
-                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning,
                         );
                     } else {
                         // 请求直接分支切换（不通过模态框）
@@ -180,11 +205,37 @@ impl Component for BranchesView {
             }
             // 移除了 'c' 键，因为现在它用于分支切换
             KeyCode::Char('d') => {
-                // TODO: 删除选中的分支
-                EventResult::Handled
+                // 显示选中分支的git diff
+                if let Some(selected_branch) = self.selected_branch() {
+                    if let Some(commit_hash) = &selected_branch.last_commit {
+                        state.request_diff(commit_hash.clone());
+                        EventResult::Handled
+                    } else {
+                        state.add_notification(
+                            "No commit hash available for this branch".to_string(),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning,
+                        );
+                        EventResult::Handled
+                    }
+                } else {
+                    EventResult::NotHandled
+                }
+            }
+            KeyCode::Up | KeyCode::Down | KeyCode::Char('k') | KeyCode::Char('j') => {
+                // 处理方向键选择，并更新分支状态
+                let old_selection = self.list_widget.selected_index();
+                let result = self.list_widget.handle_key_event(key, state);
+                let new_selection = self.list_widget.selected_index();
+
+                // 如果选择发生变化，更新应用状态中的选中分支
+                if old_selection != new_selection {
+                    self.update_selected_branch_in_state(state);
+                }
+
+                result
             }
             _ => {
-                // 委托给列表组件处理
+                // 委托给列表组件处理其他按键
                 self.list_widget.handle_key_event(key, state)
             }
         }
@@ -240,7 +291,8 @@ impl ViewComponent for BranchesView {
     fn set_selected_index(&mut self, index: Option<usize>) {
         if let Some(idx) = index {
             if idx < self.list_widget.len() {
-                self.list_widget.set_items(self.list_widget.items().to_vec());
+                self.list_widget
+                    .set_items(self.list_widget.items().to_vec());
             }
         }
     }

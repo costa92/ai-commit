@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 
 pub mod providers;
-pub use providers::{ProviderRegistry, ProviderInfo, ApiFormat};
+pub use providers::{ApiFormat, ProviderInfo, ProviderRegistry};
 
 // 全局环境加载状态
 static ENV_LOADED: Lazy<()> = Lazy::new(|| {
@@ -38,15 +38,13 @@ impl Config {
         #[cfg(not(test))]
         ensure_env_loaded();
 
-        let config = Config {
+        Config {
             provider: env::var("AI_COMMIT_PROVIDER").unwrap_or_else(|_| "ollama".to_string()),
             model: env::var("AI_COMMIT_MODEL").unwrap_or_else(|_| "mistral".to_string()),
             debug: env::var("AI_COMMIT_DEBUG")
                 .map(|v| v.to_lowercase() == "true" || v == "1")
                 .unwrap_or(false),
-        };
-
-        config
+        }
     }
 
     pub fn update_from_args(&mut self, args: &crate::cli::args::Args) {
@@ -66,13 +64,12 @@ impl Config {
 
     /// 获取当前提供商的 URL
     pub fn get_url(&self) -> String {
-        env::var("AI_COMMIT_PROVIDER_URL")
-            .unwrap_or_else(|_| {
-                // 使用提供商默认URL
-                ProviderRegistry::get_provider(&self.provider)
-                    .map(|info| info.default_url.clone())
-                    .unwrap_or_default()
-            })
+        env::var("AI_COMMIT_PROVIDER_URL").unwrap_or_else(|_| {
+            // 使用提供商默认URL
+            ProviderRegistry::get_provider(&self.provider)
+                .map(|info| info.default_url.clone())
+                .unwrap_or_default()
+        })
     }
 
     /// 验证当前提供商配置
@@ -141,7 +138,7 @@ mod tests {
     #[test]
     fn test_validation() {
         clear_env();
-        
+
         // ollama 不需要 API Key
         env::set_var("AI_COMMIT_PROVIDER", "ollama");
         let config = Config::new();

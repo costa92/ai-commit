@@ -1,12 +1,9 @@
-use ratatui::{prelude::*, widgets::*};
-use crossterm::event::{KeyEvent, KeyCode};
 use crate::tui_unified::{
+    components::base::{component::Component, events::EventResult},
     state::AppState,
-    components::base::{
-        component::Component,
-        events::EventResult
-    }
 };
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{prelude::*, widgets::*};
 
 /// 搜索框组件 - 提供搜索输入界面
 pub struct SearchBox {
@@ -113,14 +110,12 @@ impl Component for SearchBox {
             "🔍 Search (/ to start)"
         };
 
-        let paragraph = Paragraph::new(display_text)
-            .style(input_style)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(title)
-                    .border_style(border_style)
-            );
+        let paragraph = Paragraph::new(display_text).style(input_style).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        );
 
         frame.render_widget(paragraph, area);
 
@@ -172,7 +167,7 @@ impl Component for SearchBox {
                 // 取消搜索，由父组件处理
                 EventResult::NotHandled
             }
-            _ => EventResult::NotHandled
+            _ => EventResult::NotHandled,
         }
     }
 

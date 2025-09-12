@@ -1,5 +1,5 @@
 //! 增强的 Git 功能命令处理模块
-//! 
+//!
 //! 基于 GRV (Git Repository Viewer) 功能启发，提供高级的 Git 操作和查看功能。
 //! 按功能单一原则，每种命令类型对应一个独立的文件。
 
@@ -22,14 +22,11 @@ use crate::config::Config;
 
 /// 检查是否有增强功能命令
 pub fn has_enhanced_commands(args: &Args) -> bool {
-    args.tui_new
-        || args.query.is_some()
+    args.query.is_some()
         || args.query_history
         || args.query_stats
         || args.query_clear
         || args.query_browse
-        || args.query_tui
-        || args.query_tui_pro
         || args.diff_view.is_some()
         || args.watch
         || args.log_stats
@@ -41,41 +38,23 @@ pub fn has_enhanced_commands(args: &Args) -> bool {
 
 /// 处理增强的Git功能命令（基于GRV功能启发）
 pub async fn handle_enhanced_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
-    // 新的层级化 TUI（最高优先级）
-    if args.tui_new {
-        use crate::tui_hierarchical::run_hierarchical_tui;
-        return run_hierarchical_tui().await;
-    }
-    
-    // 增强版TUI界面（包含主界面功能）
-    if args.query_tui_pro {
-        use crate::tui_enhanced::show_history_tui;
-        return show_history_tui().await;
-    }
-    
-    // TUI界面
-    if args.query_tui {
-        use crate::tui::show_history_tui;
-        return show_history_tui().await;
-    }
-    
     // 查询历史相关功能（优先处理）
     if args.query_history {
         return handle_query_command("history", config).await;
     }
-    
+
     if args.query_stats {
         return handle_query_command("history-stats", config).await;
     }
-    
+
     if args.query_clear {
         return handle_query_command("history-clear", config).await;
     }
-    
+
     if args.query_browse {
         return handle_query_command("history-browse", config).await;
     }
-    
+
     // 查询功能
     if let Some(query) = &args.query {
         return handle_query_command(query, config).await;
@@ -145,12 +124,12 @@ mod tests {
     fn test_enhanced_command_priority() {
         // 测试命令优先级逻辑
         let mut args = Args::default();
-        
+
         // 查询命令应该有最高优先级
         args.query = Some("test".to_string());
         args.diff_view = Some("HEAD".to_string());
         args.watch = true;
-        
+
         // 在实际函数中，查询命令会先被处理
         assert!(args.query.is_some());
         assert!(args.diff_view.is_some());
@@ -160,7 +139,7 @@ mod tests {
     #[test]
     fn test_command_detection_comprehensive() {
         // 测试所有增强命令的检测
-        
+
         // 查询命令
         let mut args = Args::default();
         args.query = Some("test".to_string());

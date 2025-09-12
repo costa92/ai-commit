@@ -6,7 +6,7 @@ use crate::query_history::QueryHistory;
 pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Result<()> {
     // 初始化查询历史
     let mut history = QueryHistory::new(1000)?;
-    
+
     if config.debug {
         println!("Executing query: {}", query);
     }
@@ -36,25 +36,20 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
             let filters = GitQuery::parse_query(&selected_query)?;
             let results = GitQuery::execute_query(&filters).await?;
             let result_count = results.lines().count();
-            
+
             if results.trim().is_empty() {
                 println!("No results found for query: {}", selected_query);
-                history.add_entry(
-                    selected_query,
-                    Some("execute".to_string()),
-                    Some(0),
-                    true
-                )?;
+                history.add_entry(selected_query, Some("execute".to_string()), Some(0), true)?;
             } else {
                 println!("🔍 Query Results: {}", selected_query);
                 println!("{}", "─".repeat(60));
                 println!("{}", results);
-                
+
                 history.add_entry(
                     selected_query,
                     Some("execute".to_string()),
                     Some(result_count),
-                    true
+                    true,
                 )?;
             }
         }
@@ -83,15 +78,10 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
             let name = parts[1];
             let query_content = parts[2];
             GitQuery::save_query(name, query_content).await?;
-            
+
             // 记录到历史
-            history.add_entry(
-                query.to_string(),
-                Some("save".to_string()),
-                None,
-                true
-            )?;
-            
+            history.add_entry(query.to_string(), Some("save".to_string()), None, true)?;
+
             return Ok(());
         }
     }
@@ -102,12 +92,7 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
         Err(e) => {
             eprintln!("Failed to parse query: {}", e);
             // 记录失败的查询
-            history.add_entry(
-                query.to_string(),
-                Some("execute".to_string()),
-                None,
-                false
-            )?;
+            history.add_entry(query.to_string(), Some("execute".to_string()), None, false)?;
             return Err(e);
         }
     };
@@ -117,18 +102,13 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
         Err(e) => {
             eprintln!("Failed to execute query: {}", e);
             // 记录失败的查询
-            history.add_entry(
-                query.to_string(),
-                Some("execute".to_string()),
-                None,
-                false
-            )?;
+            history.add_entry(query.to_string(), Some("execute".to_string()), None, false)?;
             return Err(e);
         }
     };
 
     let result_count = results.lines().count();
-    
+
     if results.trim().is_empty() {
         println!("No results found for query: {}", query);
         // 记录无结果的查询
@@ -136,24 +116,28 @@ pub async fn handle_query_command(query: &str, config: &Config) -> anyhow::Resul
             query.to_string(),
             Some("execute".to_string()),
             Some(0),
-            true
+            true,
         )?;
     } else {
         println!("🔍 Query Results: {}", query);
         println!("{}", "─".repeat(60));
         println!("{}", results);
-        
+
         // 记录成功的查询
         history.add_entry(
             query.to_string(),
             Some("execute".to_string()),
             Some(result_count),
-            true
+            true,
         )?;
     }
 
     if config.debug {
-        println!("\nQuery executed with {} filters, returned {} results", filters.len(), result_count);
+        println!(
+            "\nQuery executed with {} filters, returned {} results",
+            filters.len(),
+            result_count
+        );
     }
 
     Ok(())
@@ -184,7 +168,7 @@ mod tests {
     fn test_save_query_parsing() {
         let query = "save:test_query:author:john,since:2024-01-01";
         assert!(query.starts_with("save:"));
-        
+
         let parts: Vec<&str> = query.splitn(3, ':').collect();
         assert_eq!(parts.len(), 3);
         assert_eq!(parts[0], "save");
@@ -212,7 +196,7 @@ mod tests {
         let save_queries = vec![
             "save:name:query",
             "save:test:author:john",
-            "save:complex:author:jane,since:2024-01-01,type:feat"
+            "save:complex:author:jane,since:2024-01-01,type:feat",
         ];
         for query in save_queries {
             assert!(!is_help_query(query));
@@ -238,8 +222,14 @@ mod tests {
         // 测试保存命令的验证
         let valid_save_commands = vec![
             ("save:name:query", ("name", "query")),
-            ("save:test:author:john,since:2024-01-01", ("test", "author:john,since:2024-01-01")),
-            ("save:complex_name:type:feat,author:jane", ("complex_name", "type:feat,author:jane")),
+            (
+                "save:test:author:john,since:2024-01-01",
+                ("test", "author:john,since:2024-01-01"),
+            ),
+            (
+                "save:complex_name:type:feat,author:jane",
+                ("complex_name", "type:feat,author:jane"),
+            ),
         ];
 
         for (input, expected) in valid_save_commands {
@@ -252,21 +242,29 @@ mod tests {
 
         // 测试无效的保存命令
         let invalid_save_commands = vec![
-            "save:", // 缺少名称和查询
-            "save:name", // 缺少查询
+            "save:",      // 缺少名称和查询
+            "save:name",  // 缺少查询
             "save:name:", // 空查询
-            "save", // 不是保存格式
+            "save",       // 不是保存格式
         ];
 
         for input in invalid_save_commands {
-            assert!(parse_save_command(input).is_none(), "Should reject invalid save command: {}", input);
+            assert!(
+                parse_save_command(input).is_none(),
+                "Should reject invalid save command: {}",
+                input
+            );
         }
     }
 
     fn parse_save_command(query: &str) -> Option<(&str, &str)> {
         if query.starts_with("save:") {
             let parts: Vec<&str> = query.splitn(3, ':').collect();
-            if parts.len() == 3 && parts[0] == "save" && !parts[1].is_empty() && !parts[2].is_empty() {
+            if parts.len() == 3
+                && parts[0] == "save"
+                && !parts[1].is_empty()
+                && !parts[2].is_empty()
+            {
                 Some((parts[1], parts[2]))
             } else {
                 None
@@ -289,17 +287,15 @@ mod tests {
         ];
 
         for query in valid_queries {
-            assert!(is_valid_query_content(query), "Should accept valid query: {}", query);
+            assert!(
+                is_valid_query_content(query),
+                "Should accept valid query: {}",
+                query
+            );
         }
 
         // 空查询或格式错误的查询可能仍然有效，取决于具体实现
-        let edge_case_queries = vec![
-            "",
-            ":",
-            "key:",
-            ":value",
-            "key:value:",
-        ];
+        let edge_case_queries = vec!["", ":", "key:", ":value", "key:value:"];
 
         // 这些边界情况的处理取决于具体的查询解析器实现
         for query in edge_case_queries {
@@ -313,7 +309,7 @@ mod tests {
         if query.is_empty() {
             return false;
         }
-        
+
         // 检查是否包含键值对格式 (key:value)
         query.split(',').all(|part| {
             let kv: Vec<&str> = part.split(':').collect();
@@ -324,7 +320,7 @@ mod tests {
     #[test]
     fn test_query_command_integration() {
         // 测试查询命令的集成逻辑
-        
+
         // 模拟配置
         let mut _config = Config::default();
         _config.provider = "test".to_string();
@@ -371,19 +367,23 @@ mod tests {
     fn test_query_error_handling() {
         // 测试错误处理场景
         let error_scenarios = vec![
-            "save:", // 不完整的保存命令
-            "save::", // 空的保存命令
+            "save:",                    // 不完整的保存命令
+            "save::",                   // 空的保存命令
             "save:name_without_query:", // 缺少查询内容
         ];
 
         for scenario in error_scenarios {
             if scenario.starts_with("save:") {
                 let parts: Vec<&str> = scenario.splitn(3, ':').collect();
-                let is_valid = parts.len() == 3 && 
-                              parts[0] == "save" && 
-                              !parts[1].is_empty() && 
-                              !parts[2].is_empty();
-                assert!(!is_valid, "Should detect invalid save command: {}", scenario);
+                let is_valid = parts.len() == 3
+                    && parts[0] == "save"
+                    && !parts[1].is_empty()
+                    && !parts[2].is_empty();
+                assert!(
+                    !is_valid,
+                    "Should detect invalid save command: {}",
+                    scenario
+                );
             }
         }
     }

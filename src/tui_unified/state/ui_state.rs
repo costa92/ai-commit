@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 #[derive(Debug, Clone)]
 pub struct LayoutState {
     pub sidebar_width: u16,
-    pub content_width: u16, 
+    pub content_width: u16,
     pub detail_width: u16,
     pub terminal_size: Rect,
     pub layout_mode: LayoutMode,
@@ -156,11 +156,7 @@ impl Default for FocusState {
 impl Default for FocusRing {
     fn default() -> Self {
         Self {
-            panels: vec![
-                FocusPanel::Sidebar,
-                FocusPanel::Content,
-                FocusPanel::Detail,
-            ],
+            panels: vec![FocusPanel::Sidebar, FocusPanel::Content, FocusPanel::Detail],
             current_index: 0,
             wrap_around: true,
         }
@@ -182,32 +178,31 @@ impl LayoutState {
 
     pub fn calculate_panel_sizes(&mut self) {
         let total_width = self.terminal_size.width.saturating_sub(2); // borders
-        
+
         match self.layout_mode {
             LayoutMode::Normal => {
                 self.sidebar_width = (total_width as f32 * self.panel_ratios.sidebar_ratio) as u16;
                 self.content_width = (total_width as f32 * self.panel_ratios.content_ratio) as u16;
-                self.detail_width = total_width.saturating_sub(self.sidebar_width + self.content_width);
+                self.detail_width =
+                    total_width.saturating_sub(self.sidebar_width + self.content_width);
             }
-            LayoutMode::FullScreen(ref panel) => {
-                match panel {
-                    FocusPanel::Sidebar => {
-                        self.sidebar_width = total_width;
-                        self.content_width = 0;
-                        self.detail_width = 0;
-                    }
-                    FocusPanel::Content => {
-                        self.sidebar_width = 0;
-                        self.content_width = total_width;
-                        self.detail_width = 0;
-                    }
-                    FocusPanel::Detail => {
-                        self.sidebar_width = 0;
-                        self.content_width = 0;
-                        self.detail_width = total_width;
-                    }
+            LayoutMode::FullScreen(ref panel) => match panel {
+                FocusPanel::Sidebar => {
+                    self.sidebar_width = total_width;
+                    self.content_width = 0;
+                    self.detail_width = 0;
                 }
-            }
+                FocusPanel::Content => {
+                    self.sidebar_width = 0;
+                    self.content_width = total_width;
+                    self.detail_width = 0;
+                }
+                FocusPanel::Detail => {
+                    self.sidebar_width = 0;
+                    self.content_width = 0;
+                    self.detail_width = total_width;
+                }
+            },
             _ => {
                 // 其他布局模式的计算
                 self.calculate_panel_sizes();
@@ -226,17 +221,20 @@ impl LayoutState {
     }
 
     pub fn adjust_panel_ratios(&mut self, sidebar_delta: f32, content_delta: f32) {
-        self.panel_ratios.sidebar_ratio = (self.panel_ratios.sidebar_ratio + sidebar_delta).clamp(0.1, 0.8);
-        self.panel_ratios.content_ratio = (self.panel_ratios.content_ratio + content_delta).clamp(0.1, 0.8);
-        self.panel_ratios.detail_ratio = 1.0 - self.panel_ratios.sidebar_ratio - self.panel_ratios.content_ratio;
+        self.panel_ratios.sidebar_ratio =
+            (self.panel_ratios.sidebar_ratio + sidebar_delta).clamp(0.1, 0.8);
+        self.panel_ratios.content_ratio =
+            (self.panel_ratios.content_ratio + content_delta).clamp(0.1, 0.8);
+        self.panel_ratios.detail_ratio =
+            1.0 - self.panel_ratios.sidebar_ratio - self.panel_ratios.content_ratio;
         self.panel_ratios.detail_ratio = self.panel_ratios.detail_ratio.max(0.1);
         self.calculate_panel_sizes();
     }
 
     pub fn can_fit_panels(&self) -> bool {
-        let min_total = self.min_panel_sizes.sidebar_min + 
-                       self.min_panel_sizes.content_min + 
-                       self.min_panel_sizes.detail_min;
+        let min_total = self.min_panel_sizes.sidebar_min
+            + self.min_panel_sizes.content_min
+            + self.min_panel_sizes.detail_min;
         self.terminal_size.width >= min_total + 2 // +2 for borders
     }
 }
@@ -246,21 +244,21 @@ impl FocusRing {
         if self.panels.is_empty() {
             return FocusPanel::Sidebar;
         }
-        
+
         if self.wrap_around {
             self.current_index = (self.current_index + 1) % self.panels.len();
         } else {
             self.current_index = (self.current_index + 1).min(self.panels.len() - 1);
         }
-        
-        self.panels[self.current_index].clone()
+
+        self.panels[self.current_index]
     }
 
     pub fn previous(&mut self) -> FocusPanel {
         if self.panels.is_empty() {
             return FocusPanel::Sidebar;
         }
-        
+
         if self.wrap_around {
             self.current_index = if self.current_index == 0 {
                 self.panels.len() - 1
@@ -270,8 +268,8 @@ impl FocusRing {
         } else {
             self.current_index = self.current_index.saturating_sub(1);
         }
-        
-        self.panels[self.current_index].clone()
+
+        self.panels[self.current_index]
     }
 
     pub fn set_current(&mut self, panel: FocusPanel) {
@@ -281,7 +279,8 @@ impl FocusRing {
     }
 
     pub fn current(&self) -> FocusPanel {
-        self.panels.get(self.current_index)
+        self.panels
+            .get(self.current_index)
             .cloned()
             .unwrap_or(FocusPanel::Sidebar)
     }
@@ -296,13 +295,11 @@ impl ModalState {
             size: ModalSize::default(),
             position: ModalPosition::Center,
             can_close: true,
-            buttons: vec![
-                ModalButton {
-                    label: "确定".to_string(),
-                    action: ModalAction::Ok,
-                    is_default: true,
-                }
-            ],
+            buttons: vec![ModalButton {
+                label: "确定".to_string(),
+                action: ModalAction::Ok,
+                is_default: true,
+            }],
         }
     }
 
@@ -324,7 +321,7 @@ impl ModalState {
                     label: "否".to_string(),
                     action: ModalAction::No,
                     is_default: false,
-                }
+                },
             ],
         }
     }
@@ -337,13 +334,11 @@ impl ModalState {
             size: ModalSize::default(),
             position: ModalPosition::Center,
             can_close: true,
-            buttons: vec![
-                ModalButton {
-                    label: "确定".to_string(),
-                    action: ModalAction::Ok,
-                    is_default: true,
-                }
-            ],
+            buttons: vec![ModalButton {
+                label: "确定".to_string(),
+                action: ModalAction::Ok,
+                is_default: true,
+            }],
         }
     }
 }

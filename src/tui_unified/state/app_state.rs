@@ -1,13 +1,9 @@
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use crate::tui_unified::{
-    config::AppConfig,
-    focus::FocusPanel,
-    Result
-};
 use super::git_state::GitRepoState;
-use super::ui_state::{LayoutState, FocusState};
+use super::ui_state::{FocusState, LayoutState};
+use crate::tui_unified::{config::AppConfig, focus::FocusPanel, Result};
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -16,19 +12,19 @@ pub struct AppState {
     pub focus: FocusState,
     pub current_view: ViewType,
     pub modal: Option<ModalState>,
-    
-    // Git数据状态  
+
+    // Git数据状态
     pub repo_state: GitRepoState,
     pub selected_items: SelectionState,
     pub search_state: SearchState,
-    
+
     // 配置状态
     pub config: AppConfig,
-    
+
     // 运行时状态
     pub loading_tasks: HashMap<String, LoadingTask>,
     pub notifications: Vec<Notification>,
-    
+
     // 新布局状态
     pub new_layout: NewLayoutState,
 }
@@ -37,20 +33,20 @@ pub struct AppState {
 pub enum ViewType {
     GitLog,
     Branches,
-    Tags, 
+    Tags,
     Remotes,
     Stash,
     QueryHistory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SidebarSection {
     Branches,
     Tags,
     Stash,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]  
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentMode {
     GitLog,
     StashDetail,
@@ -72,12 +68,12 @@ impl Default for NewLayoutState {
         sidebar_scroll.insert(SidebarSection::Branches, 0);
         sidebar_scroll.insert(SidebarSection::Tags, 0);
         sidebar_scroll.insert(SidebarSection::Stash, 0);
-        
+
         let mut sidebar_selection = std::collections::HashMap::new();
         sidebar_selection.insert(SidebarSection::Branches, 0);
         sidebar_selection.insert(SidebarSection::Tags, 0);
         sidebar_selection.insert(SidebarSection::Stash, 0);
-        
+
         Self {
             sidebar_section: SidebarSection::Branches,
             content_mode: ContentMode::GitLog,
@@ -87,9 +83,6 @@ impl Default for NewLayoutState {
         }
     }
 }
-
-
-
 
 #[derive(Debug, Clone, Default)]
 pub struct SelectionState {
@@ -202,7 +195,7 @@ pub enum NotificationLevel {
 impl AppState {
     pub async fn new(config: &AppConfig) -> Result<Self> {
         let repo_path = std::env::current_dir()?;
-        
+
         Ok(Self {
             layout: LayoutState::default(),
             focus: FocusState::default(),
@@ -217,29 +210,29 @@ impl AppState {
             new_layout: NewLayoutState::default(),
         })
     }
-    
+
     // 视图管理
     pub fn set_current_view(&mut self, view: ViewType) {
         self.current_view = view;
     }
-    
+
     pub fn get_current_view(&self) -> ViewType {
         self.current_view
     }
-    
+
     // 选择状态管理
     pub fn select_commit(&mut self, commit_hash: String) {
         self.selected_items.selected_commit = Some(commit_hash);
     }
-    
+
     pub fn select_branch(&mut self, branch_name: String) {
         self.selected_items.selected_branch = Some(branch_name);
     }
-    
+
     pub fn select_tag(&mut self, tag_name: String) {
         self.selected_items.selected_tag = Some(tag_name);
     }
-    
+
     pub fn get_current_selection(&self) -> Option<String> {
         match self.current_view {
             ViewType::GitLog => self.selected_items.selected_commit.clone(),
@@ -250,19 +243,19 @@ impl AppState {
             ViewType::QueryHistory => None,
         }
     }
-    
+
     pub fn clear_selection(&mut self) {
         self.selected_items = SelectionState::default();
     }
-    
+
     pub fn request_diff(&mut self, commit_hash: String) {
         self.selected_items.pending_diff_commit = Some(commit_hash);
     }
-    
+
     pub fn get_pending_diff_commit(&mut self) -> Option<String> {
         self.selected_items.pending_diff_commit.take()
     }
-    
+
     pub fn request_git_pull(&mut self) {
         let modal = ModalState {
             modal_type: ModalType::GitPull,
@@ -283,12 +276,15 @@ impl AppState {
         };
         self.show_modal(modal);
     }
-    
+
     pub fn request_branch_switch(&mut self, branch_name: String) {
         let modal = ModalState {
             modal_type: ModalType::BranchSwitch,
             title: "Switch Branch".to_string(),
-            content: format!("Switch to branch '{}'?\n\nThis will change your current working branch.", branch_name),
+            content: format!(
+                "Switch to branch '{}'?\n\nThis will change your current working branch.",
+                branch_name
+            ),
             buttons: vec![
                 ModalButton {
                     label: "Switch".to_string(),
@@ -303,29 +299,29 @@ impl AppState {
             can_cancel: true,
         };
         self.show_modal(modal);
-        
+
         // 存储要切换的分支名（我们需要在 SelectionState 中添加字段）
         self.selected_items.pending_branch_switch = Some(branch_name);
     }
-    
+
     pub fn get_pending_branch_switch(&mut self) -> Option<String> {
         self.selected_items.pending_branch_switch.take()
     }
-    
+
     pub fn request_direct_branch_switch(&mut self, branch_name: String) {
         self.selected_items.direct_branch_switch = Some(branch_name);
     }
-    
+
     pub fn get_direct_branch_switch(&mut self) -> Option<String> {
         self.selected_items.direct_branch_switch.take()
     }
-    
+
     // 搜索状态管理
     pub fn set_search_query(&mut self, query: String) {
         self.search_state.query = query;
         self.search_state.is_active = !self.search_state.query.is_empty();
     }
-    
+
     pub fn add_search_to_history(&mut self, query: String) {
         if !query.is_empty() && !self.search_state.history.contains(&query) {
             self.search_state.history.insert(0, query);
@@ -334,14 +330,14 @@ impl AppState {
             }
         }
     }
-    
+
     pub fn clear_search(&mut self) {
         self.search_state.query.clear();
         self.search_state.is_active = false;
         self.search_state.results_count = 0;
         self.search_state.current_match = 0;
     }
-    
+
     // 加载任务管理
     pub fn add_loading_task(&mut self, name: String, message: String) -> Uuid {
         let task = LoadingTask {
@@ -356,26 +352,26 @@ impl AppState {
         self.loading_tasks.insert(name, task);
         id
     }
-    
+
     pub fn update_loading_progress(&mut self, name: &str, progress: f64, message: String) {
         if let Some(task) = self.loading_tasks.get_mut(name) {
             task.progress = Some(progress.clamp(0.0, 1.0));
             task.message = message;
         }
     }
-    
+
     pub fn remove_loading_task(&mut self, name: &str) {
         self.loading_tasks.remove(name);
     }
-    
+
     pub fn is_loading(&self) -> bool {
         !self.loading_tasks.is_empty()
     }
-    
+
     pub fn get_loading_tasks(&self) -> Vec<&LoadingTask> {
         self.loading_tasks.values().collect()
     }
-    
+
     // 通知管理
     pub fn add_notification(&mut self, message: String, level: NotificationLevel) -> Uuid {
         let notification = Notification {
@@ -393,59 +389,57 @@ impl AppState {
         };
         let id = notification.id;
         self.notifications.push(notification);
-        
+
         // 限制通知数量
         if self.notifications.len() > 10 {
             self.notifications.remove(0);
         }
-        
+
         id
     }
-    
+
     pub fn dismiss_notification(&mut self, id: Uuid) {
         if let Some(notification) = self.notifications.iter_mut().find(|n| n.id == id) {
             notification.dismissed = true;
         }
     }
-    
+
     pub fn clean_dismissed_notifications(&mut self) {
         self.notifications.retain(|n| !n.dismissed);
     }
-    
+
     pub fn get_active_notifications(&self) -> Vec<&Notification> {
         self.notifications.iter().filter(|n| !n.dismissed).collect()
     }
-    
+
     // 模态框管理
     pub fn show_modal(&mut self, modal: ModalState) {
         self.modal = Some(modal);
     }
-    
+
     pub fn hide_modal(&mut self) {
         self.modal = None;
     }
-    
+
     pub fn is_modal_active(&self) -> bool {
         self.modal.is_some()
     }
-    
+
     pub fn show_diff_modal(&mut self, commit_hash: String, diff_content: String) {
         let modal = ModalState {
             modal_type: ModalType::DiffViewer,
             title: format!("Git Diff - {}", &commit_hash[..8.min(commit_hash.len())]),
             content: diff_content,
-            buttons: vec![
-                ModalButton {
-                    label: "Close".to_string(),
-                    action: ModalAction::Cancel,
-                }
-            ],
+            buttons: vec![ModalButton {
+                label: "Close".to_string(),
+                action: ModalAction::Cancel,
+            }],
             default_button: 0,
             can_cancel: true,
         };
         self.show_modal(modal);
     }
-    
+
     pub fn show_ai_commit_modal(&mut self, message: String, status: String) {
         let modal = ModalState {
             modal_type: ModalType::AICommit,
@@ -463,7 +457,7 @@ impl AppState {
                 ModalButton {
                     label: "Cancel (Esc)".to_string(),
                     action: ModalAction::Cancel,
-                }
+                },
             ],
             default_button: 0,
             can_cancel: true,
@@ -484,57 +478,58 @@ impl AppState {
                 ModalButton {
                     label: "Skip (n/Esc)".to_string(),
                     action: ModalAction::No,
-                }
+                },
             ],
             default_button: 0,
             can_cancel: true,
         };
         self.show_modal(modal);
     }
-    
+
     // 焦点管理
     pub fn set_focus(&mut self, panel: FocusPanel) {
         if self.focus.current_panel != panel {
-            self.focus.panel_history.push(self.focus.current_panel.clone());
+            self.focus.panel_history.push(self.focus.current_panel);
             self.focus.current_panel = panel;
-            
+
             // 限制历史长度
             if self.focus.panel_history.len() > 10 {
                 self.focus.panel_history.remove(0);
             }
         }
-        
+
         // 同时更新焦点环
-        self.focus.focus_ring.set_current(self.focus.current_panel.clone());
+        self.focus.focus_ring.set_current(self.focus.current_panel);
     }
-    
+
     pub fn focus_previous(&mut self) {
         if let Some(previous_panel) = self.focus.panel_history.pop() {
             self.focus.current_panel = previous_panel;
-            self.focus.focus_ring.set_current(self.focus.current_panel.clone());
+            self.focus.focus_ring.set_current(self.focus.current_panel);
         }
     }
-    
+
     pub fn focus_next(&mut self) {
         let next_panel = self.focus.focus_ring.next();
         self.set_focus(next_panel);
     }
-    
+
     pub fn get_current_focus(&self) -> &FocusPanel {
         &self.focus.current_panel
     }
-    
+
     // 布局管理
     pub fn update_layout(&mut self, sidebar_width: u16, content_width: u16, detail_width: u16) {
         self.layout.sidebar_width = sidebar_width;
         self.layout.content_width = content_width;
         self.layout.detail_width = detail_width;
     }
-    
+
     pub fn adjust_layout_ratios(&mut self, sidebar_delta: f32, content_delta: f32) {
-        self.layout.adjust_panel_ratios(sidebar_delta, content_delta);
+        self.layout
+            .adjust_panel_ratios(sidebar_delta, content_delta);
     }
-    
+
     pub fn set_layout_mode(&mut self, mode: super::ui_state::LayoutMode) {
         self.layout.set_layout_mode(mode);
     }

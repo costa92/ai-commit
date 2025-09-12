@@ -5,8 +5,14 @@ use tokio::sync::mpsc;
 
 pub struct AsyncTaskManager {
     tasks: HashMap<String, tokio::task::JoinHandle<()>>,
-    _task_sender: mpsc::UnboundedSender<String>,    // 保留用于未来功能
-    _task_receiver: Option<mpsc::UnboundedReceiver<String>>,  // 保留用于未来功能
+    _task_sender: mpsc::UnboundedSender<String>, // 保留用于未来功能
+    _task_receiver: Option<mpsc::UnboundedReceiver<String>>, // 保留用于未来功能
+}
+
+impl Default for AsyncTaskManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AsyncTaskManager {
@@ -18,7 +24,7 @@ impl AsyncTaskManager {
             _task_receiver: Some(receiver),
         }
     }
-    
+
     pub fn spawn_task<F>(&mut self, name: String, future: F)
     where
         F: std::future::Future<Output = ()> + Send + 'static,
@@ -26,7 +32,7 @@ impl AsyncTaskManager {
         let handle = tokio::spawn(future);
         self.tasks.insert(name, handle);
     }
-    
+
     pub async fn wait_for_task(&mut self, name: &str) -> Result<(), tokio::task::JoinError> {
         if let Some(handle) = self.tasks.remove(name) {
             handle.await
@@ -34,7 +40,7 @@ impl AsyncTaskManager {
             Ok(())
         }
     }
-    
+
     pub fn cancel_task(&mut self, name: &str) {
         if let Some(handle) = self.tasks.remove(name) {
             handle.abort();
@@ -54,11 +60,11 @@ impl TaskExecutor {
             running_tasks: 0,
         }
     }
-    
+
     pub fn can_execute(&self) -> bool {
         self.running_tasks < self.max_concurrent_tasks
     }
-    
+
     pub async fn execute<F, R>(&mut self, task: F) -> R
     where
         F: std::future::Future<Output = R> + Send,
@@ -75,22 +81,25 @@ pub struct EventBus {
     subscribers: HashMap<String, Vec<mpsc::UnboundedSender<String>>>,
 }
 
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventBus {
     pub fn new() -> Self {
         Self {
             subscribers: HashMap::new(),
         }
     }
-    
+
     pub fn subscribe(&mut self, event_type: String) -> mpsc::UnboundedReceiver<String> {
         let (sender, receiver) = mpsc::unbounded_channel();
-        self.subscribers
-            .entry(event_type)
-            .or_insert_with(Vec::new)
-            .push(sender);
+        self.subscribers.entry(event_type).or_default().push(sender);
         receiver
     }
-    
+
     pub fn publish(&self, event_type: &str, message: String) {
         if let Some(subscribers) = self.subscribers.get(event_type) {
             for sender in subscribers {

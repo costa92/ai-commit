@@ -6,7 +6,7 @@ pub struct Theme {
     pub colors: ColorScheme,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]  
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColorScheme {
     pub background: String,
     pub foreground: String,

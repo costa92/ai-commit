@@ -73,14 +73,14 @@ pub async fn git_push() -> anyhow::Result<()> {
 pub async fn git_force_push() -> anyhow::Result<()> {
     // 首先尝试正常推送
     let push_result = git_push().await;
-    
+
     if push_result.is_ok() {
         return push_result;
     }
 
     // 推送失败，尝试拉取并合并远程更新
     println!("检测到推送冲突，正在自动解决...");
-    
+
     // 获取当前分支
     let branch_output = Command::new("git")
         .args(["branch", "--show-current"])
@@ -92,8 +92,10 @@ pub async fn git_force_push() -> anyhow::Result<()> {
         anyhow::bail!("Failed to get current branch");
     }
 
-    let current_branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
-    
+    let current_branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
     // 拉取远程更新
     let pull_status = Command::new("git")
         .args(["pull", "--no-ff", "origin", &current_branch])
@@ -106,7 +108,7 @@ pub async fn git_force_push() -> anyhow::Result<()> {
     }
 
     println!("已成功合并远程更新，正在重新推送...");
-    
+
     // 重新推送
     git_push().await
 }
@@ -135,12 +137,12 @@ pub async fn get_all_changes_diff() -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!("Failed to run git diff --cached: {}", e))?;
 
     let staged_diff = String::from_utf8_lossy(&staged_output.stdout);
-    
+
     if !staged_diff.trim().is_empty() {
         // 有暂存的变更，返回暂存变更
         return Ok(staged_diff.to_string());
     }
-    
+
     // 没有暂存变更，获取工作区变更
     let unstaged_output = Command::new("git")
         .args(["diff"])
@@ -149,12 +151,12 @@ pub async fn get_all_changes_diff() -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!("Failed to run git diff: {}", e))?;
 
     let unstaged_diff = String::from_utf8_lossy(&unstaged_output.stdout);
-    
+
     if !unstaged_diff.trim().is_empty() {
         // 有工作区变更，返回工作区变更
         return Ok(unstaged_diff.to_string());
     }
-    
+
     // 都没有变更，返回空字符串
     Ok(String::new())
 }
@@ -382,14 +384,17 @@ mod tests {
         let test_error_patterns = vec![
             "Failed to run git push",
             "Git push failed",
-            "Failed to get current branch", 
+            "Failed to get current branch",
             "Failed to run git pull",
-            "Git pull failed. 请手动解决冲突后重试。"
+            "Git pull failed. 请手动解决冲突后重试。",
         ];
 
         for pattern in test_error_patterns {
-            assert!(pattern.contains("git") || pattern.contains("Git"), 
-                "Error pattern should contain git reference: {}", pattern);
+            assert!(
+                pattern.contains("git") || pattern.contains("Git"),
+                "Error pattern should contain git reference: {}",
+                pattern
+            );
         }
     }
 }

@@ -76,7 +76,7 @@ mod tests {
     fn test_generate_worktree_path_default() {
         let result = generate_worktree_path("feature/test", None);
         assert!(result.is_ok());
-        
+
         let path = result.unwrap();
         assert!(path.to_string_lossy().contains("worktree-feature-test"));
     }
@@ -85,9 +85,11 @@ mod tests {
     fn test_branch_name_sanitization() {
         let result = generate_worktree_path("feature/ui/new-design", None);
         assert!(result.is_ok());
-        
+
         let path = result.unwrap();
-        assert!(path.to_string_lossy().contains("worktree-feature-ui-new-design"));
+        assert!(path
+            .to_string_lossy()
+            .contains("worktree-feature-ui-new-design"));
     }
 
     #[test]
@@ -95,12 +97,15 @@ mod tests {
         // 测试空分支名
         let result = generate_worktree_path("", None);
         assert!(result.is_ok());
-        
+
         // 测试特殊字符
         let result = generate_worktree_path("feature/test@123", None);
         assert!(result.is_ok());
-        assert!(result.unwrap().to_string_lossy().contains("worktree-feature-test@123"));
-        
+        assert!(result
+            .unwrap()
+            .to_string_lossy()
+            .contains("worktree-feature-test@123"));
+
         // 测试长分支名
         let long_branch = "feature/very-long-branch-name-that-might-cause-issues";
         let result = generate_worktree_path(long_branch, None);
@@ -129,7 +134,7 @@ mod tests {
             ("release/v1.2.3", "worktree-release-v1.2.3"),
             ("hotfix/critical-fix", "worktree-hotfix-critical-fix"),
         ];
-        
+
         for (branch, expected_contain) in test_cases {
             let result = generate_worktree_path(branch, None);
             assert!(result.is_ok());
@@ -142,7 +147,7 @@ mod tests {
         let branch = "feature/test";
         let result1 = generate_worktree_path(branch, None);
         let result2 = generate_worktree_path(branch, None);
-        
+
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert_eq!(result1.unwrap(), result2.unwrap());
@@ -153,12 +158,12 @@ mod tests {
         // 测试不同类型的自定义路径
         let test_paths = vec![
             "/tmp/worktree-test",
-            "~/worktree-test", 
+            "~/worktree-test",
             "./local-worktree",
             "../parent-worktree",
             "relative/path/worktree",
         ];
-        
+
         for path in test_paths {
             let result = generate_worktree_path("test", Some(path));
             assert!(result.is_ok());

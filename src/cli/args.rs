@@ -5,7 +5,7 @@ use clap::Parser;
     name = "ai-commit",
     version,
     about = "智能 Git 工具 - 使用 AI 生成提交消息，支持 Git Flow、历史查看和提交编辑",
-    long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。支持自动解决推送冲突。",
+    long_about = "ai-commit 是一个功能丰富的 Git 工具，集成 AI 生成提交消息、Git Flow 工作流、历史日志查看、提交编辑等功能。支持多种 AI 提供商和完整的 Git 工作流管理。支持自动解决推送冲突。"
 )]
 pub struct Args {
     /// AI provider to use (ollama, deepseek, siliconflow, or kimi)
@@ -196,18 +196,6 @@ pub struct Args {
     #[arg(long = "query-browse", default_value_t = false)]
     pub query_browse: bool,
 
-    /// 启动TUI界面查看查询历史
-    #[arg(long = "query-tui", default_value_t = false)]
-    pub query_tui: bool,
-
-    /// 启动增强版TUI界面（GRV风格）
-    #[arg(long = "query-tui-pro", default_value_t = false)]
-    pub query_tui_pro: bool,
-
-    /// 启动层级化TUI界面（新设计）
-    #[arg(long = "tui", default_value_t = false)]
-    pub tui_new: bool,
-
     /// 启动统一TUI界面（整合版本）
     #[arg(long = "tui-unified", default_value_t = false)]
     pub tui_unified: bool,
@@ -255,7 +243,6 @@ pub struct Args {
     #[arg(long = "yes", short = 'y', default_value_t = false)]
     pub skip_confirm: bool,
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -602,10 +589,13 @@ mod tests {
         let args = Args::try_parse_from([
             "ai-commit",
             "--git-init",
-            "--provider", "ollama",
-            "--model", "mistral",
-        ]).unwrap();
-        
+            "--provider",
+            "ollama",
+            "--model",
+            "mistral",
+        ])
+        .unwrap();
+
         assert!(args.git_init);
         assert_eq!(args.provider, "ollama");
         assert_eq!(args.model, "mistral");
@@ -876,9 +866,11 @@ mod tests {
             "ai-commit",
             "--force-push",
             "--push",
-            "--provider", "ollama",
-        ]).unwrap();
-        
+            "--provider",
+            "ollama",
+        ])
+        .unwrap();
+
         assert!(args.force_push);
         assert!(args.push);
         assert_eq!(args.provider, "ollama");
@@ -887,13 +879,10 @@ mod tests {
     #[test]
     fn test_args_force_push_with_tag() {
         // 测试 force-push 与 tag 创建参数组合
-        let args = Args::try_parse_from([
-            "ai-commit",
-            "--force-push",
-            "--push",
-            "--new-tag", "v1.0.0",
-        ]).unwrap();
-        
+        let args =
+            Args::try_parse_from(["ai-commit", "--force-push", "--push", "--new-tag", "v1.0.0"])
+                .unwrap();
+
         assert!(args.force_push);
         assert!(args.push);
         assert_eq!(args.new_tag, Some("v1.0.0".to_string()));
@@ -916,13 +905,9 @@ mod tests {
     #[test]
     fn test_args_skip_confirm_with_other_flags() {
         // 测试 skip_confirm 与其他参数组合
-        let args = Args::try_parse_from([
-            "ai-commit",
-            "--yes",
-            "--push",
-            "--provider", "ollama",
-        ]).unwrap();
-        
+        let args =
+            Args::try_parse_from(["ai-commit", "--yes", "--push", "--provider", "ollama"]).unwrap();
+
         assert!(args.skip_confirm);
         assert!(args.push);
         assert_eq!(args.provider, "ollama");
@@ -931,13 +916,8 @@ mod tests {
     #[test]
     fn test_args_skip_confirm_with_force_push() {
         // 测试 skip_confirm 与 force_push 参数组合
-        let args = Args::try_parse_from([
-            "ai-commit",
-            "-y",
-            "--force-push",
-            "--push",
-        ]).unwrap();
-        
+        let args = Args::try_parse_from(["ai-commit", "-y", "--force-push", "--push"]).unwrap();
+
         assert!(args.skip_confirm);
         assert!(args.force_push);
         assert!(args.push);
@@ -951,10 +931,13 @@ mod tests {
             "--force-push",
             "--yes",
             "--push",
-            "--new-tag", "v1.2.0",
-            "--provider", "deepseek",
-        ]).unwrap();
-        
+            "--new-tag",
+            "v1.2.0",
+            "--provider",
+            "deepseek",
+        ])
+        .unwrap();
+
         assert!(args.force_push);
         assert!(args.skip_confirm);
         assert!(args.push);

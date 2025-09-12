@@ -35,7 +35,7 @@ pub type StreamResponse = Pin<Box<dyn Stream<Item = Result<String>> + Send>>;
 pub trait AIProvider: Send + Sync {
     /// 生成响应（非流式）
     async fn generate(&self, prompt: &str, config: &ProviderConfig) -> Result<String>;
-    
+
     /// 生成响应（流式）
     async fn stream_generate(
         &self,
@@ -50,8 +50,10 @@ pub struct ProviderFactory;
 impl ProviderFactory {
     /// 根据名称创建提供商
     pub fn create(name: &str) -> Result<Box<dyn AIProvider>> {
-        use crate::core::ai::providers::{DeepseekProvider, KimiProvider, OllamaProvider, SiliconFlowProvider};
-        
+        use crate::core::ai::providers::{
+            DeepseekProvider, KimiProvider, OllamaProvider, SiliconFlowProvider,
+        };
+
         match name.to_lowercase().as_str() {
             "ollama" => Ok(Box::new(OllamaProvider::new())),
             "deepseek" => Ok(Box::new(DeepseekProvider::new())),
@@ -60,7 +62,7 @@ impl ProviderFactory {
             _ => anyhow::bail!("Unknown AI provider: {}", name),
         }
     }
-    
+
     /// 获取所有支持的提供商列表
     pub fn list_providers() -> Vec<&'static str> {
         vec!["ollama", "deepseek", "siliconflow", "kimi"]

@@ -38,7 +38,8 @@ async fn show_commit_history(args: &Args, config: &Config) -> anyhow::Result<()>
         false,
         args.log_limit,
         None,
-    ).await?;
+    )
+    .await?;
 
     // 如果没有其他过滤条件，显示额外的统计信息
     if !has_specific_filters(args) {
@@ -65,7 +66,8 @@ async fn show_additional_stats(args: &Args, config: &Config) -> anyhow::Result<(
         args.log_author.as_deref(),
         args.log_since.as_deref(),
         args.log_until.as_deref(),
-    ).await?;
+    )
+    .await?;
 
     Ok(())
 }
@@ -100,9 +102,9 @@ pub async fn interactive_history_browser(config: &Config) -> anyhow::Result<()> 
     println!("  history --log-until DATE    - Show commits until date");
     println!("  history --log-file PATH     - Show file history");
     println!("  history --log-limit N       - Limit number of commits");
-    println!("");
+    println!();
     println!("Date formats: '2023-01-01', 'yesterday', '1 week ago', etc.");
-    
+
     if config.debug {
         println!("\nDebug mode: Additional statistics will be shown");
     }
@@ -120,9 +122,9 @@ mod tests {
         let config = Config::new();
         let mut args = create_empty_history_args();
         args.history = true;
-        
+
         let result = handle_history_commands(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("History commands handled successfully");
@@ -139,9 +141,9 @@ mod tests {
         let mut args = create_empty_history_args();
         args.history = true;
         args.log_limit = Some(5);
-        
+
         let result = show_commit_history(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Commit history with filters displayed successfully");
@@ -156,7 +158,7 @@ mod tests {
     async fn test_interactive_history_browser() {
         let config = Config::new();
         let result = interactive_history_browser(&config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Interactive history browser displayed successfully");
@@ -170,26 +172,26 @@ mod tests {
     #[test]
     fn test_has_history_filters() {
         let mut args = create_empty_history_args();
-        
+
         // 测试空参数
         assert!(!has_history_filters(&args));
-        
+
         // 测试各种过滤器
         args.log_author = Some("test_author".to_string());
         assert!(has_history_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_since = Some("yesterday".to_string());
         assert!(has_history_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_graph = true;
         assert!(has_history_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_limit = Some(10);
         assert!(has_history_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_file = Some("test.txt".to_string());
         assert!(has_history_filters(&args));
@@ -198,23 +200,23 @@ mod tests {
     #[test]
     fn test_has_specific_filters() {
         let mut args = create_empty_history_args();
-        
+
         // 测试空参数
         assert!(!has_specific_filters(&args));
-        
+
         // 测试特定过滤器
         args.log_author = Some("test_author".to_string());
         assert!(has_specific_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_file = Some("test.txt".to_string());
         assert!(has_specific_filters(&args));
-        
+
         // log_graph 和 log_limit 不被认为是特定过滤器
         args = create_empty_history_args();
         args.log_graph = true;
         assert!(!has_specific_filters(&args));
-        
+
         args = create_empty_history_args();
         args.log_limit = Some(10);
         assert!(!has_specific_filters(&args));
@@ -223,5 +225,4 @@ mod tests {
     fn create_empty_history_args() -> Args {
         Args::default()
     }
-
 }

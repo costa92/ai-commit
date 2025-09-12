@@ -32,7 +32,7 @@ impl DiffViewer {
     /// 显示提交的详细差异
     pub async fn show_commit_diff(commit: &str, context_lines: Option<u32>) -> anyhow::Result<()> {
         let mut args = vec!["show".to_string(), commit.to_string()];
-        
+
         if let Some(context) = context_lines {
             args.push(format!("-U{}", context));
         }
@@ -44,10 +44,7 @@ impl DiffViewer {
             .map_err(|e| anyhow::anyhow!("Failed to show commit diff: {}", e))?;
 
         if !output.status.success() {
-            anyhow::bail!(
-                "Git show failed with exit code: {:?}",
-                output.status.code()
-            );
+            anyhow::bail!("Git show failed with exit code: {:?}", output.status.code());
         }
 
         let diff_output = String::from_utf8_lossy(&output.stdout);
@@ -67,14 +64,11 @@ impl DiffViewer {
             .map_err(|e| anyhow::anyhow!("Failed to compare commits: {}", e))?;
 
         if !output.status.success() {
-            anyhow::bail!(
-                "Git diff failed with exit code: {:?}",
-                output.status.code()
-            );
+            anyhow::bail!("Git diff failed with exit code: {:?}", output.status.code());
         }
 
         let diff_output = String::from_utf8_lossy(&output.stdout);
-        
+
         println!("🔍 Comparing {} -> {}", commit1, commit2);
         println!("{}", "─".repeat(60));
         Self::display_colored_diff(&diff_output);
@@ -85,7 +79,7 @@ impl DiffViewer {
     /// 显示工作区差异
     pub async fn show_working_diff(cached: bool) -> anyhow::Result<()> {
         let mut args = vec!["diff".to_string()];
-        
+
         if cached {
             args.push("--cached".to_string());
         }
@@ -97,14 +91,11 @@ impl DiffViewer {
             .map_err(|e| anyhow::anyhow!("Failed to show working diff: {}", e))?;
 
         if !output.status.success() {
-            anyhow::bail!(
-                "Git diff failed with exit code: {:?}",
-                output.status.code()
-            );
+            anyhow::bail!("Git diff failed with exit code: {:?}", output.status.code());
         }
 
         let diff_output = String::from_utf8_lossy(&output.stdout);
-        
+
         if diff_output.trim().is_empty() {
             if cached {
                 println!("No staged changes.");
@@ -114,7 +105,11 @@ impl DiffViewer {
             return Ok(());
         }
 
-        let title = if cached { "Staged Changes" } else { "Unstaged Changes" };
+        let title = if cached {
+            "Staged Changes"
+        } else {
+            "Unstaged Changes"
+        };
         println!("📝 {}", title);
         println!("{}", "─".repeat(60));
         Self::display_colored_diff(&diff_output);
@@ -123,7 +118,10 @@ impl DiffViewer {
     }
 
     /// 获取差异统计信息
-    pub async fn get_diff_stats(commit1: Option<&str>, commit2: Option<&str>) -> anyhow::Result<DiffStats> {
+    pub async fn get_diff_stats(
+        commit1: Option<&str>,
+        commit2: Option<&str>,
+    ) -> anyhow::Result<DiffStats> {
         let mut args = vec!["diff".to_string(), "--numstat".to_string()];
 
         match (commit1, commit2) {
@@ -224,7 +222,7 @@ impl DiffViewer {
             "{} files changed, {} insertions(+), {} deletions(-)",
             stats.files_changed, stats.insertions, stats.deletions
         );
-        
+
         if !stats.file_stats.is_empty() {
             println!("\nFile details:");
             for file_stat in &stats.file_stats {
@@ -246,10 +244,7 @@ impl DiffViewer {
 
     /// 显示文件级差异浏览
     pub async fn browse_file_diff(commit: &str, file_path: &str) -> anyhow::Result<()> {
-        let args = vec![
-            "show".to_string(),
-            format!("{}:{}", commit, file_path),
-        ];
+        let args = vec!["show".to_string(), format!("{}:{}", commit, file_path)];
 
         let output = Command::new("git")
             .args(&args)
@@ -268,9 +263,9 @@ impl DiffViewer {
 
         println!("📄 File: {} @ {}", file_path, commit);
         println!("{}", "─".repeat(60));
-        
+
         let content = String::from_utf8_lossy(&output.stdout);
-        
+
         // 简单的语法高亮（基于文件扩展名）
         if file_path.ends_with(".rs") {
             Self::highlight_rust_syntax(&content);
@@ -328,7 +323,7 @@ mod tests {
         assert_eq!(stats.files_changed, 3);
         assert_eq!(stats.insertions, 30);
         assert_eq!(stats.deletions, 20);
-        
+
         assert_eq!(stats.file_stats.len(), 3);
         assert_eq!(stats.file_stats[0].path, "src/main.rs");
         assert_eq!(stats.file_stats[0].insertions, 10);
@@ -342,7 +337,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_diff_stats() {
         let result = DiffViewer::get_diff_stats(None, None).await;
-        
+
         match result {
             Ok(stats) => {
                 println!("Diff stats: {} files changed", stats.files_changed);
@@ -356,7 +351,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_working_diff() {
         let result = DiffViewer::show_working_diff(false).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Working diff displayed successfully");
@@ -442,7 +437,7 @@ index 1234567..abcdefg 100644
 -    println!("Old line removed");
  }
 "#;
-        
+
         // This should not panic and should process the diff
         DiffViewer::display_colored_diff(sample_diff);
     }
@@ -454,7 +449,7 @@ index 1234567..abcdefg 100644
         let deleted_line = "-    println!(\"Old line\");";
         let context_line = "     println!(\"Context line\");";
         let header_line = "diff --git a/src/main.rs b/src/main.rs";
-        
+
         // These should not panic
         DiffViewer::display_colored_diff(added_line);
         DiffViewer::display_colored_diff(deleted_line);
@@ -467,7 +462,7 @@ index 1234567..abcdefg 100644
         // Test empty diff
         let empty_diff = "";
         DiffViewer::display_colored_diff(empty_diff);
-        
+
         // Test whitespace-only diff
         let whitespace_diff = "   \n  \t  \n   ";
         DiffViewer::display_colored_diff(whitespace_diff);
@@ -476,8 +471,9 @@ index 1234567..abcdefg 100644
     #[tokio::test]
     async fn test_compare_commits_error_handling() {
         // Test comparing non-existent commits
-        let result = DiffViewer::compare_commits("non-existent-commit-1", "non-existent-commit-2").await;
-        
+        let result =
+            DiffViewer::compare_commits("non-existent-commit-1", "non-existent-commit-2").await;
+
         match result {
             Ok(_) => println!("Commit comparison succeeded unexpectedly"),
             Err(e) => println!("Commit comparison failed as expected: {}", e),
@@ -500,17 +496,19 @@ index 1234567..abcdefg 100644
     async fn test_get_diff_stats_edge_cases() {
         // Test getting diff stats with different parameters
         let test_cases = vec![
-            (None, None), // Working directory
-            (Some("HEAD"), None), // Single commit
+            (None, None),                   // Working directory
+            (Some("HEAD"), None),           // Single commit
             (Some("HEAD"), Some("HEAD~1")), // Commit range
         ];
-        
+
         for (commit1, commit2) in test_cases {
             let result = DiffViewer::get_diff_stats(commit1, commit2).await;
             match result {
                 Ok(stats) => {
-                    println!("Diff stats for {:?}..{:?}: {} files, +{} -{}", 
-                             commit1, commit2, stats.files_changed, stats.insertions, stats.deletions);
+                    println!(
+                        "Diff stats for {:?}..{:?}: {} files, +{} -{}",
+                        commit1, commit2, stats.files_changed, stats.insertions, stats.deletions
+                    );
                 }
                 Err(e) => {
                     println!("Diff stats for {:?}..{:?} failed: {}", commit1, commit2, e);
@@ -585,7 +583,7 @@ index 1234567..abcdefg 100644
     async fn test_show_working_diff_staged_unstaged() {
         // Test both staged and unstaged diffs
         let test_cases = vec![false, true]; // unstaged, staged
-        
+
         for staged in test_cases {
             let result = DiffViewer::show_working_diff(staged).await;
             match result {
@@ -595,17 +593,17 @@ index 1234567..abcdefg 100644
         }
     }
 
-    #[test] 
+    #[test]
     fn test_diff_line_patterns() {
         // Test different types of diff lines
         let diff_lines = vec![
             "diff --git a/file.rs b/file.rs",
             "index 1234567..abcdefg 100644",
-            "--- a/file.rs", 
+            "--- a/file.rs",
             "+++ b/file.rs",
             "@@ -10,4 +10,6 @@ fn main() {",
             "+    // Added line",
-            "-    // Removed line", 
+            "-    // Removed line",
             "     // Context line",
             "\\ No newline at end of file",
         ];
@@ -671,24 +669,20 @@ index abc123..def456 100644
 
         for task in tasks {
             match task.await {
-                Ok(result) => {
-                    match result {
-                        Ok(_) => println!("Concurrent diff operation succeeded"),
-                        Err(e) => println!("Concurrent diff operation failed: {}", e),
-                    }
-                }
+                Ok(result) => match result {
+                    Ok(_) => println!("Concurrent diff operation succeeded"),
+                    Err(e) => println!("Concurrent diff operation failed: {}", e),
+                },
                 Err(e) => println!("Task join error: {}", e),
             }
         }
 
         // Handle stats task separately due to different return type
         match stats_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_stats) => println!("Concurrent diff stats operation succeeded"),
-                    Err(e) => println!("Concurrent diff stats operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_stats) => println!("Concurrent diff stats operation succeeded"),
+                Err(e) => println!("Concurrent diff stats operation failed: {}", e),
+            },
             Err(e) => println!("Stats task join error: {}", e),
         }
     }

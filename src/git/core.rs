@@ -365,14 +365,17 @@ mod tests {
     #[tokio::test]
     async fn test_get_current_branch() {
         let result = GitCore::get_current_branch().await;
-        
+
         match result {
             Ok(branch) => {
                 assert!(!branch.is_empty(), "Branch name should not be empty");
                 println!("Current branch: {}", branch);
             }
             Err(e) => {
-                println!("Failed to get current branch (expected in non-git environment): {}", e);
+                println!(
+                    "Failed to get current branch (expected in non-git environment): {}",
+                    e
+                );
             }
         }
     }
@@ -380,7 +383,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_working_tree_clean() {
         let result = GitCore::is_working_tree_clean().await;
-        
+
         match result {
             Ok(is_clean) => {
                 println!("Working tree clean: {}", is_clean);
@@ -394,11 +397,14 @@ mod tests {
     #[tokio::test]
     async fn test_get_latest_commit_hash() {
         let result = GitCore::get_latest_commit_hash().await;
-        
+
         match result {
             Ok(hash) => {
                 assert!(!hash.is_empty(), "Commit hash should not be empty");
-                assert!(hash.len() >= 7, "Commit hash should be at least 7 characters");
+                assert!(
+                    hash.len() >= 7,
+                    "Commit hash should be at least 7 characters"
+                );
                 println!("Latest commit: {}", hash);
             }
             Err(e) => {
@@ -410,7 +416,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_remotes() {
         let result = GitCore::get_remotes().await;
-        
+
         match result {
             Ok(remotes) => {
                 println!("Remotes: {:?}", remotes);
@@ -424,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn test_branch_exists() {
         let result = GitCore::branch_exists("main").await;
-        
+
         match result {
             Ok(exists) => {
                 println!("Branch 'main' exists: {}", exists);
@@ -449,7 +455,7 @@ mod tests {
     #[tokio::test]
     async fn test_commit_exists() {
         let result = GitCore::commit_exists("HEAD").await;
-        
+
         match result {
             Ok(exists) => {
                 println!("Commit 'HEAD' exists: {}", exists);
@@ -475,13 +481,13 @@ mod tests {
     async fn test_create_branch() {
         // 注意：这个测试可能会修改仓库状态，所以使用一个测试专用的分支名
         let test_branch = format!("test-branch-{}", chrono::Utc::now().timestamp());
-        
+
         let result = GitCore::create_branch(&test_branch, Some("HEAD")).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Successfully created test branch: {}", test_branch);
-                
+
                 // 尝试删除测试分支（清理）
                 let _ = Command::new("git")
                     .args(["branch", "-D", &test_branch])
@@ -489,7 +495,10 @@ mod tests {
                     .await;
             }
             Err(e) => {
-                println!("Failed to create test branch (expected in some environments): {}", e);
+                println!(
+                    "Failed to create test branch (expected in some environments): {}",
+                    e
+                );
             }
         }
     }
@@ -498,7 +507,7 @@ mod tests {
     async fn test_delete_branch() {
         // 首先创建一个测试分支
         let test_branch = format!("test-delete-branch-{}", chrono::Utc::now().timestamp());
-        
+
         let create_result = Command::new("git")
             .args(["branch", &test_branch])
             .status()
@@ -508,7 +517,7 @@ mod tests {
             if status.success() {
                 // 尝试删除刚创建的分支
                 let result = GitCore::delete_branch(&test_branch, false).await;
-                
+
                 match result {
                     Ok(_) => {
                         println!("Successfully deleted test branch: {}", test_branch);
@@ -530,13 +539,13 @@ mod tests {
     async fn test_switch_branch() {
         // 获取当前分支
         let original_branch = GitCore::get_current_branch().await;
-        
+
         if let Ok(current) = original_branch {
             println!("Current branch before switch: {}", current);
-            
+
             // 尝试切换到同一分支（应该成功但没有实际效果）
             let result = GitCore::switch_branch(&current).await;
-            
+
             match result {
                 Ok(_) => {
                     println!("Successfully switched to same branch: {}", current);
@@ -553,7 +562,7 @@ mod tests {
         // 这个测试比较复杂，因为需要实际的分支来合并
         // 我们只测试合并一个不存在的分支会失败
         let result = GitCore::merge_branch("non-existent-branch-for-test", None).await;
-        
+
         match result {
             Ok(_) => {
                 // 如果成功了，说明可能有这个分支存在，这不是我们期望的
@@ -561,10 +570,12 @@ mod tests {
             }
             Err(e) => {
                 println!("Expected failure when merging non-existent branch: {}", e);
-                assert!(e.to_string().contains("non-existent") || 
-                       e.to_string().contains("error") ||
-                       e.to_string().contains("failed"), 
-                       "Error message should indicate failure");
+                assert!(
+                    e.to_string().contains("non-existent")
+                        || e.to_string().contains("error")
+                        || e.to_string().contains("failed"),
+                    "Error message should indicate failure"
+                );
             }
         }
     }
@@ -573,17 +584,22 @@ mod tests {
     async fn test_push_branch() {
         // 测试推送到不存在的远程
         let result = GitCore::push_branch("main", "non-existent-remote", false).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Unexpectedly succeeded in pushing to non-existent remote");
             }
             Err(e) => {
-                println!("Expected failure when pushing to non-existent remote: {}", e);
-                assert!(e.to_string().contains("non-existent") || 
-                       e.to_string().contains("error") ||
-                       e.to_string().contains("failed"), 
-                       "Error message should indicate failure");
+                println!(
+                    "Expected failure when pushing to non-existent remote: {}",
+                    e
+                );
+                assert!(
+                    e.to_string().contains("non-existent")
+                        || e.to_string().contains("error")
+                        || e.to_string().contains("failed"),
+                    "Error message should indicate failure"
+                );
             }
         }
     }
@@ -593,7 +609,7 @@ mod tests {
         // 测试分支名称验证逻辑
         let valid_names = vec![
             "main",
-            "develop", 
+            "develop",
             "feature/user-auth",
             "hotfix/security-fix",
             "release/v1.0.0",
@@ -602,10 +618,26 @@ mod tests {
         ];
 
         for name in valid_names {
-            assert!(!name.is_empty(), "Branch name '{}' should not be empty", name);
-            assert!(!name.contains(" "), "Branch name '{}' should not contain spaces", name);
-            assert!(!name.starts_with("-"), "Branch name '{}' should not start with dash", name);
-            assert!(!name.ends_with("."), "Branch name '{}' should not end with dot", name);
+            assert!(
+                !name.is_empty(),
+                "Branch name '{}' should not be empty",
+                name
+            );
+            assert!(
+                !name.contains(" "),
+                "Branch name '{}' should not contain spaces",
+                name
+            );
+            assert!(
+                !name.starts_with("-"),
+                "Branch name '{}' should not start with dash",
+                name
+            );
+            assert!(
+                !name.ends_with("."),
+                "Branch name '{}' should not end with dot",
+                name
+            );
         }
     }
 
@@ -614,7 +646,7 @@ mod tests {
         // 测试提交哈希验证逻辑
         let valid_hashes = vec![
             "abc1234",
-            "1234567890abcdef", 
+            "1234567890abcdef",
             "HEAD",
             "HEAD~1",
             "HEAD^",
@@ -625,29 +657,38 @@ mod tests {
         for hash in valid_hashes {
             assert!(!hash.is_empty(), "Hash '{}' should not be empty", hash);
             // 检查是否包含有效字符
-            let has_valid_chars = hash.chars().all(|c| 
-                c.is_alphanumeric() || 
-                "~^/".contains(c)
+            let has_valid_chars = hash
+                .chars()
+                .all(|c| c.is_alphanumeric() || "~^/".contains(c));
+            assert!(
+                has_valid_chars,
+                "Hash '{}' should contain only valid characters",
+                hash
             );
-            assert!(has_valid_chars, "Hash '{}' should contain only valid characters", hash);
         }
     }
 
     #[test]
     fn test_remote_name_validation() {
         // 测试远程名称验证逻辑
-        let valid_remotes = vec![
-            "origin",
-            "upstream",
-            "fork",
-            "my-remote",
-            "remote_name",
-        ];
+        let valid_remotes = vec!["origin", "upstream", "fork", "my-remote", "remote_name"];
 
         for remote in valid_remotes {
-            assert!(!remote.is_empty(), "Remote name '{}' should not be empty", remote);
-            assert!(!remote.contains(" "), "Remote name '{}' should not contain spaces", remote);
-            assert!(!remote.starts_with("-"), "Remote name '{}' should not start with dash", remote);
+            assert!(
+                !remote.is_empty(),
+                "Remote name '{}' should not be empty",
+                remote
+            );
+            assert!(
+                !remote.contains(" "),
+                "Remote name '{}' should not contain spaces",
+                remote
+            );
+            assert!(
+                !remote.starts_with("-"),
+                "Remote name '{}' should not start with dash",
+                remote
+            );
         }
     }
 
@@ -661,25 +702,34 @@ mod tests {
         // 创建临时目录
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let original_dir = env::current_dir().expect("Failed to get current directory");
-        
+
         // 切换到临时目录
         env::set_current_dir(temp_dir.path()).expect("Failed to change to temp directory");
 
         // 确认这不是一个 git 仓库
-        assert!(!GitCore::is_git_repo().await, "Temp directory should not be a git repo");
+        assert!(
+            !GitCore::is_git_repo().await,
+            "Temp directory should not be a git repo"
+        );
 
         // 测试初始化
         let result = GitCore::init_repository().await;
         match result {
             Ok(_) => {
                 println!("Git repository initialized successfully");
-                
+
                 // 验证仓库已被初始化
-                assert!(GitCore::is_git_repo().await, "Directory should be a git repo after init");
-                
+                assert!(
+                    GitCore::is_git_repo().await,
+                    "Directory should be a git repo after init"
+                );
+
                 // 验证 README.md 是否被创建
-                assert!(Path::new("README.md").exists(), "README.md should be created");
-                
+                assert!(
+                    Path::new("README.md").exists(),
+                    "README.md should be created"
+                );
+
                 // 验证是否有初始提交
                 let commit_result = GitCore::get_latest_commit_hash().await;
                 match commit_result {
@@ -690,7 +740,10 @@ mod tests {
                     Err(_) => println!("No initial commit found (this is OK)"),
                 }
             }
-            Err(e) => println!("Git init failed (this might be expected in some environments): {}", e),
+            Err(e) => println!(
+                "Git init failed (this might be expected in some environments): {}",
+                e
+            ),
         }
 
         // 恢复原目录
@@ -707,8 +760,10 @@ mod tests {
                     panic!("Should not succeed when directory is already a git repo");
                 }
                 Err(e) => {
-                    assert!(e.to_string().contains("already a Git repository"), 
-                           "Error should indicate directory is already a git repo");
+                    assert!(
+                        e.to_string().contains("already a Git repository"),
+                        "Error should indicate directory is already a git repo"
+                    );
                     println!("Expected error when trying to init existing repo: {}", e);
                 }
             }

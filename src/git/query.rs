@@ -4,7 +4,7 @@ use tokio::process::Command;
 /// Git查询解析器，支持类似GRV的查询语法
 pub struct GitQuery;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryFilter {
     pub author: Option<String>,
     pub message: Option<String>,
@@ -13,20 +13,6 @@ pub struct QueryFilter {
     pub file: Option<String>,
     pub branch: Option<String>,
     pub tag: Option<String>,
-}
-
-impl Default for QueryFilter {
-    fn default() -> Self {
-        Self {
-            author: None,
-            message: None,
-            since: None,
-            until: None,
-            file: None,
-            branch: None,
-            tag: None,
-        }
-    }
 }
 
 impl GitQuery {
@@ -184,7 +170,8 @@ impl GitQuery {
   file:src/main.rs AND author:alice
   message:fix OR message:bug
   branch:main AND since:yesterday
-"#.to_string()
+"#
+        .to_string()
     }
 
     /// 保存常用查询
@@ -198,7 +185,8 @@ impl GitQuery {
         let queries_file = config_dir.join("saved_queries.txt");
         let entry = format!("{}: {}\n", name, query);
 
-        tokio::fs::write(&queries_file, entry).await
+        tokio::fs::write(&queries_file, entry)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to save query: {}", e))?;
 
         println!("✓ Saved query '{}' to {}", name, queries_file.display());
@@ -217,7 +205,8 @@ impl GitQuery {
             return Ok(HashMap::new());
         }
 
-        let content = tokio::fs::read_to_string(&queries_file).await
+        let content = tokio::fs::read_to_string(&queries_file)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to load saved queries: {}", e))?;
 
         let mut queries = HashMap::new();
@@ -241,7 +230,7 @@ impl GitQuery {
 
         println!("💾 保存的查询：");
         println!("{}", "─".repeat(60));
-        
+
         for (name, query) in queries {
             println!("{:<20} {}", name, query);
         }
@@ -258,7 +247,7 @@ mod tests {
     fn test_parse_simple_query() {
         let query = "author:john";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         assert_eq!(filters.len(), 1);
         assert_eq!(filters[0].author, Some("john".to_string()));
         assert_eq!(filters[0].message, None);
@@ -268,7 +257,7 @@ mod tests {
     fn test_parse_and_query() {
         let query = "author:john AND message:feat";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         assert_eq!(filters.len(), 1);
         assert_eq!(filters[0].author, Some("john".to_string()));
         assert_eq!(filters[0].message, Some("feat".to_string()));
@@ -278,7 +267,7 @@ mod tests {
     fn test_parse_or_query() {
         let query = "author:john OR author:alice";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         assert_eq!(filters.len(), 2);
         assert_eq!(filters[0].author, Some("john".to_string()));
         assert_eq!(filters[1].author, Some("alice".to_string()));
@@ -288,7 +277,7 @@ mod tests {
     fn test_parse_complex_query() {
         let query = "author:john AND message:feat OR since:2024-01-01";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         assert_eq!(filters.len(), 2);
         assert_eq!(filters[0].author, Some("john".to_string()));
         assert_eq!(filters[0].message, Some("feat".to_string()));
@@ -299,7 +288,7 @@ mod tests {
     fn test_parse_empty_query() {
         let query = "";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         assert_eq!(filters.len(), 1);
         assert!(GitQuery::is_filter_empty(&filters[0]));
     }
@@ -308,7 +297,7 @@ mod tests {
     fn test_parse_invalid_key() {
         let query = "invalid:value";
         let filters = GitQuery::parse_query(query).unwrap();
-        
+
         // 无效键被忽略，返回空过滤器
         assert_eq!(filters.len(), 1);
         assert!(GitQuery::is_filter_empty(&filters[0]));
@@ -318,18 +307,21 @@ mod tests {
     async fn test_execute_empty_filter() {
         let filter = QueryFilter::default();
         let result = GitQuery::execute_single_filter(&filter).await;
-        
+
         // 空过滤器应该返回所有提交（或失败，这取决于是否在git仓库中）
         match result {
             Ok(_) => println!("Empty filter query succeeded"),
-            Err(e) => println!("Empty filter query failed (expected in non-git environment): {}", e),
+            Err(e) => println!(
+                "Empty filter query failed (expected in non-git environment): {}",
+                e
+            ),
         }
     }
 
     #[test]
     fn test_query_help() {
         let help = GitQuery::get_query_help();
-        
+
         assert!(help.contains("author:NAME"));
         assert!(help.contains("message:TEXT"));
         assert!(help.contains("AND"));
@@ -340,7 +332,7 @@ mod tests {
     fn test_is_filter_empty() {
         let empty_filter = QueryFilter::default();
         assert!(GitQuery::is_filter_empty(&empty_filter));
-        
+
         let mut non_empty_filter = QueryFilter::default();
         non_empty_filter.author = Some("john".to_string());
         assert!(!GitQuery::is_filter_empty(&non_empty_filter));
@@ -390,7 +382,7 @@ mod tests {
         let query = "author:john message:feat since:2024-01-01 until:2024-12-31 file:src/main.rs branch:main tag:v1.0.0";
         let filters = GitQuery::parse_query(query).unwrap();
         assert_eq!(filters.len(), 1);
-        
+
         let filter = &filters[0];
         assert_eq!(filter.author, Some("john".to_string()));
         assert_eq!(filter.message, Some("feat".to_string()));
@@ -432,8 +424,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_saved_queries_functionality() {
-        use std::fs;
         use dirs::home_dir;
+        use std::fs;
 
         // 创建测试查询
         let query_name = "test_query";
@@ -444,10 +436,13 @@ mod tests {
         match result {
             Ok(_) => {
                 println!("Query saved successfully");
-                
+
                 // 清理测试文件
                 if let Some(home) = home_dir() {
-                    let query_file = home.join(".ai-commit").join("queries").join(format!("{}.txt", query_name));
+                    let query_file = home
+                        .join(".ai-commit")
+                        .join("queries")
+                        .join(format!("{}.txt", query_name));
                     if query_file.exists() {
                         let _ = fs::remove_file(query_file);
                     }
@@ -469,9 +464,11 @@ mod tests {
     #[test]
     fn test_query_help_completeness() {
         let help = GitQuery::get_query_help();
-        
+
         // 检查所有字段都在帮助中
-        let required_fields = ["author:", "message:", "since:", "until:", "file:", "branch:", "tag:"];
+        let required_fields = [
+            "author:", "message:", "since:", "until:", "file:", "branch:", "tag:",
+        ];
         for field in &required_fields {
             assert!(help.contains(field), "Help should contain field: {}", field);
         }
@@ -479,7 +476,7 @@ mod tests {
         // 检查操作符
         assert!(help.contains("AND"));
         assert!(help.contains("OR"));
-        
+
         // 检查示例
         assert!(help.contains("author:john"));
     }
@@ -488,7 +485,7 @@ mod tests {
     fn test_empty_query_handling() {
         // 测试各种空查询形式
         let empty_queries = vec!["", "   ", "\t", "\n", "  \n  \t  "];
-        
+
         for query in empty_queries {
             let filters = GitQuery::parse_query(query).unwrap();
             assert_eq!(filters.len(), 1);
@@ -503,7 +500,7 @@ mod tests {
             author: Some("non-existent-author-12345".to_string()),
             ..Default::default()
         }];
-        
+
         let result = GitQuery::execute_query(&filters).await;
         match result {
             Ok(output) => {
@@ -519,7 +516,7 @@ mod tests {
     fn test_filter_validation() {
         // 测试过滤器字段验证
         let mut filter = QueryFilter::default();
-        
+
         // 设置各种字段
         filter.author = Some("".to_string()); // 空字符串
         assert!(GitQuery::is_filter_empty(&filter)); // 空字符串应该被视为空
@@ -539,7 +536,11 @@ mod tests {
         let queries = vec![
             ("author:john", "author:john AND message:feat", true),
             ("  author:john  ", "author:john", true),
-            ("author:john\n\nmessage:feat", "author:john message:feat", true),
+            (
+                "author:john\n\nmessage:feat",
+                "author:john message:feat",
+                true,
+            ),
         ];
 
         for (query, _expected, should_parse) in queries {

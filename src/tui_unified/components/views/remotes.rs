@@ -1,19 +1,25 @@
 // Git 远程仓库视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect};
 use crate::tui_unified::{
-    state::AppState,
     components::base::{
         component::{Component, ViewComponent, ViewType},
-        events::EventResult
+        events::EventResult,
     },
     components::widgets::list::ListWidget,
     git::models::Remote,
+    state::AppState,
 };
+use crossterm::event::KeyEvent;
+use ratatui::{layout::Rect, Frame};
 
 /// Git 远程仓库视图组件 - 显示远程仓库列表
 pub struct RemotesView {
     list_widget: ListWidget<Remote>,
+}
+
+impl Default for RemotesView {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RemotesView {
@@ -24,45 +30,44 @@ impl RemotesView {
         });
 
         // 样式函数：选中时高亮显示
-        let style_fn = Box::new(|_remote: &Remote, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
-            use ratatui::style::{Color, Style};
-            if is_selected && is_focused {
-                Style::default().fg(Color::Yellow).bg(Color::DarkGray)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
+        let style_fn = Box::new(
+            |_remote: &Remote, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
+                use ratatui::style::{Color, Style};
+                if is_selected && is_focused {
+                    Style::default().fg(Color::Yellow).bg(Color::DarkGray)
+                } else if is_selected {
+                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            },
+        );
 
         // 搜索函数：支持按远程仓库名称和URL搜索
         let search_fn = Box::new(|remote: &Remote, query: &str| -> bool {
             let query = query.to_lowercase();
-            remote.name.to_lowercase().contains(&query) || 
-            remote.url.to_lowercase().contains(&query)
+            remote.name.to_lowercase().contains(&query)
+                || remote.url.to_lowercase().contains(&query)
         });
 
-        let list_widget = ListWidget::new(
-            "Git Remotes".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget = ListWidget::new("Git Remotes".to_string(), format_fn, style_fn)
+            .with_search_fn(search_fn);
 
-        Self {
-            list_widget,
-        }
+        Self { list_widget }
     }
 
     pub async fn load_remotes(&mut self, app_state: &AppState) {
         // 从状态中获取remotes数据并转换为Remote模型
-        let remotes: Vec<Remote> = app_state.repo_state.remotes
+        let remotes: Vec<Remote> = app_state
+            .repo_state
+            .remotes
             .iter()
             .map(|r| Remote {
                 name: r.name.clone(),
                 url: r.url.clone(),
             })
             .collect();
-        
+
         self.list_widget.set_items(remotes);
     }
 

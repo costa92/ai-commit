@@ -21,6 +21,12 @@ pub struct CommitAgent {
     config: AgentConfig,
 }
 
+impl Default for CommitAgent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommitAgent {
     /// 创建新的 CommitAgent
     pub fn new() -> Self {
@@ -32,11 +38,11 @@ impl CommitAgent {
             config: AgentConfig::default(),
         }
     }
-    
+
     /// 分析 diff 内容
     fn analyze_diff(&self, diff: &str) -> DiffAnalysis {
         let mut analysis = DiffAnalysis::default();
-        
+
         // 统计文件变更
         for line in diff.lines() {
             if line.starts_with("+++") || line.starts_with("---") {
@@ -47,18 +53,18 @@ impl CommitAgent {
                 analysis.lines_deleted += 1;
             }
         }
-        
+
         // 推断变更类型
         analysis.change_type = self.infer_change_type(diff);
         analysis.scope = self.extract_scope(diff);
-        
+
         analysis
     }
-    
+
     /// 推断变更类型
     fn infer_change_type(&self, diff: &str) -> String {
         let lower_diff = diff.to_lowercase();
-        
+
         if lower_diff.contains("test") || lower_diff.contains("spec") {
             "test".to_string()
         } else if lower_diff.contains("readme") || lower_diff.contains(".md") {
@@ -75,7 +81,7 @@ impl CommitAgent {
             "chore".to_string()
         }
     }
-    
+
     /// 提取作用域
     fn extract_scope(&self, diff: &str) -> Option<String> {
         // 从文件路径提取作用域
@@ -90,78 +96,80 @@ impl CommitAgent {
         }
         None
     }
-    
+
     /// 生成提交消息
-    async fn generate_commit_message(
-        &self,
-        diff: &str,
-        context: &AgentContext,
-    ) -> Result<String> {
-        let provider = self.provider.as_ref()
+    async fn generate_commit_message(&self, diff: &str, context: &AgentContext) -> Result<String> {
+        let provider = self
+            .provider
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("AI provider not initialized"))?;
-        
+
         // 分析 diff
         let analysis = self.analyze_diff(diff);
-        
+
         // 构建增强的提示词
         let enhanced_prompt = self.build_enhanced_prompt(diff, &analysis)?;
-        
+
         // 调用 AI 生成
         let provider_config = ProviderConfig {
             model: context.config.model.clone(),
             api_key: context.env_vars.get("API_KEY").cloned(),
-            api_url: context.env_vars.get("API_URL")
+            api_url: context
+                .env_vars
+                .get("API_URL")
                 .unwrap_or(&"http://localhost:11434".to_string())
                 .clone(),
             timeout_secs: context.config.timeout_secs,
             max_retries: context.config.max_retries,
             stream: context.config.stream,
         };
-        
-        let response = provider.generate(&enhanced_prompt, &provider_config).await?;
-        
+
+        let response = provider
+            .generate(&enhanced_prompt, &provider_config)
+            .await?;
+
         // 先清理响应，再验证格式
         let cleaned_response = self.clean_commit_message(&response);
         self.validate_commit_message(&cleaned_response)?;
         Ok(cleaned_response)
     }
-    
+
     /// 构建增强的提示词
     fn build_enhanced_prompt(&self, diff: &str, analysis: &DiffAnalysis) -> Result<String> {
         let mut prompt = String::new();
-        
+
         prompt.push_str("你必须严格按照 Conventional Commits 规范输出 Git 提交消息。\n\n");
-        
+
         prompt.push_str("输出格式：<type>(<scope>): <subject>\n\n");
-        
+
         prompt.push_str("严格要求：\n");
         prompt.push_str("1. type 必须是：feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert\n");
         prompt.push_str("2. scope 可选，用括号包围，表示影响范围\n");
         prompt.push_str("3. subject 必须是中文，简洁描述变更内容，不超过50字\n");
         prompt.push_str("4. 禁止任何解释、分析或额外文字\n");
         prompt.push_str("5. 只输出一行标准格式的提交消息\n\n");
-        
+
         prompt.push_str("禁止输出的错误格式示例：\n");
         prompt.push_str("- \"添加依赖：test，作用域：Cargo\" ❌\n");
         prompt.push_str("- \"根据分析，这是一个测试变更\" ❌\n");
         prompt.push_str("- \"变更类型：feat\" ❌\n\n");
-        
+
         prompt.push_str("正确格式示例：\n");
         prompt.push_str("- \"feat(api): 添加用户认证功能\" ✅\n");
         prompt.push_str("- \"fix(ui): 修复按钮显示问题\" ✅\n");
         prompt.push_str("- \"test(core): 添加单元测试\" ✅\n\n");
-        
+
         // 提供分析信息作为参考
-        prompt.push_str(&format!("变更分析（仅供参考）：\n"));
+        prompt.push_str(&"变更分析（仅供参考）：\n".to_string());
         prompt.push_str(&format!("- 推荐类型：{}\n", analysis.change_type));
         if let Some(scope) = &analysis.scope {
             prompt.push_str(&format!("- 推荐作用域：{}\n", scope));
         }
         prompt.push_str(&format!("- 文件变更：{} 个\n", analysis.files_changed));
-        
+
         prompt.push_str("\n现在直接输出符合格式的提交消息：\n\n");
         prompt.push_str("Diff 内容：\n");
-        
+
         // 如果 diff 太长，截取关键部分
         if diff.len() > 5000 {
             prompt.push_str(&diff.chars().take(5000).collect::<String>());
@@ -169,76 +177,84 @@ impl CommitAgent {
         } else {
             prompt.push_str(diff);
         }
-        
+
         Ok(prompt)
     }
-    
+
     /// 验证提交消息格式
     fn validate_commit_message(&self, message: &str) -> Result<()> {
         let first_line = message.lines().next().unwrap_or("");
-        
+
         if !COMMIT_FORMAT_REGEX.is_match(first_line) {
             anyhow::bail!(
                 "提交消息格式不正确。期望格式：<type>(<scope>): <subject>\n实际：{}",
                 first_line
             );
         }
-        
+
         // 检查长度
         if first_line.chars().count() > 100 {
-            anyhow::bail!("提交消息过长（{}字符），应不超过100字符", first_line.chars().count());
+            anyhow::bail!(
+                "提交消息过长（{}字符），应不超过100字符",
+                first_line.chars().count()
+            );
         }
-        
+
         Ok(())
     }
-    
+
     /// 清理提交消息
     fn clean_commit_message(&self, message: &str) -> String {
         // 寻找符合 Conventional Commits 格式的行
         for line in message.lines() {
             let trimmed_line = line.trim();
-            
+
             // 跳过空行和明显的解释性文本
-            if trimmed_line.is_empty() ||
-               trimmed_line.starts_with("Here") ||
-               trimmed_line.starts_with("Based") ||
-               trimmed_line.starts_with("The") ||
-               trimmed_line.starts_with("This") ||
-               trimmed_line.starts_with("Analysis") ||
-               trimmed_line.starts_with("Generated") ||
-               trimmed_line.starts_with("Commit message") ||
-               trimmed_line.starts_with("提交消息") ||
-               trimmed_line.contains("格式校验") ||
-               trimmed_line.contains("无效") ||
-               (trimmed_line.contains("message") && !trimmed_line.contains(":")) ||
-               (trimmed_line.contains("commit") && !trimmed_line.contains(":")) ||
-               trimmed_line.len() < 10 { // 过滤掉过短的行
+            if trimmed_line.is_empty()
+                || trimmed_line.starts_with("Here")
+                || trimmed_line.starts_with("Based")
+                || trimmed_line.starts_with("The")
+                || trimmed_line.starts_with("This")
+                || trimmed_line.starts_with("Analysis")
+                || trimmed_line.starts_with("Generated")
+                || trimmed_line.starts_with("Commit message")
+                || trimmed_line.starts_with("提交消息")
+                || trimmed_line.contains("格式校验")
+                || trimmed_line.contains("无效")
+                || (trimmed_line.contains("message") && !trimmed_line.contains(":"))
+                || (trimmed_line.contains("commit") && !trimmed_line.contains(":"))
+                || trimmed_line.len() < 10
+            {
+                // 过滤掉过短的行
                 continue;
             }
-            
+
             // 检查是否是有效的 commit 消息格式
             if COMMIT_FORMAT_REGEX.is_match(trimmed_line) {
                 // 去除首尾的引号（单引号或双引号）
-                let cleaned = if (trimmed_line.starts_with('"') && trimmed_line.ends_with('"')) ||
-                                 (trimmed_line.starts_with('\'') && trimmed_line.ends_with('\'')) {
-                    trimmed_line[1..trimmed_line.len()-1].to_string()
+                let cleaned = if (trimmed_line.starts_with('"') && trimmed_line.ends_with('"'))
+                    || (trimmed_line.starts_with('\'') && trimmed_line.ends_with('\''))
+                {
+                    trimmed_line[1..trimmed_line.len() - 1].to_string()
                 } else {
                     trimmed_line.to_string()
                 };
                 return cleaned;
             }
         }
-        
+
         // 如果找不到符合格式的行，返回第一个非空行（兜底）
-        let fallback = message.lines()
+        let fallback = message
+            .lines()
             .find(|line| !line.trim().is_empty())
             .unwrap_or("")
             .trim();
-            
+
         // 去除首尾的引号
-        if (fallback.starts_with('"') && fallback.ends_with('"')) ||
-           (fallback.starts_with('\'') && fallback.ends_with('\'')) {
-            fallback[1..fallback.len()-1].to_string()
+        if (fallback.starts_with('"') && fallback.ends_with('"'))
+            || (fallback.starts_with('\'') && fallback.ends_with('\''))
+        {
+            fallback[1..fallback.len() - 1].to_string()
         } else {
             fallback.to_string()
         }
@@ -250,41 +266,41 @@ impl Agent for CommitAgent {
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn description(&self) -> &str {
         &self.description
     }
-    
+
     fn capabilities(&self) -> Vec<AgentCapability> {
         vec![
             AgentCapability::GenerateCommit,
             AgentCapability::AnalyzeCode,
         ]
     }
-    
+
     async fn initialize(&mut self, context: &AgentContext) -> Result<()> {
         // 初始化 AI 提供商
         use crate::core::ai::provider::ProviderFactory;
-        
+
         let provider = ProviderFactory::create(&context.config.provider)?;
         self.provider = Some(Arc::from(provider));
         self.config = context.config.clone();
         self.status = AgentStatus::Ready;
-        
+
         Ok(())
     }
-    
+
     async fn execute(&self, task: AgentTask, context: &AgentContext) -> Result<AgentResult> {
         // 验证任务
         self.validate_task(&task)?;
-        
+
         let start_time = Instant::now();
-        
+
         let result = match task.task_type {
             TaskType::GenerateCommit => {
                 // 生成提交消息
                 let message = self.generate_commit_message(&task.input, context).await?;
-                
+
                 AgentResult {
                     success: true,
                     content: message,
@@ -297,10 +313,10 @@ impl Agent for CommitAgent {
                 anyhow::bail!("Unsupported task type: {:?}", task.task_type);
             }
         };
-        
+
         Ok(result)
     }
-    
+
     fn status(&self) -> AgentStatus {
         self.status.clone()
     }
@@ -319,14 +335,14 @@ struct DiffAnalysis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_commit_agent_creation() {
         let agent = CommitAgent::new();
         assert_eq!(agent.name(), "CommitAgent");
         assert!(agent.description().contains("Conventional Commits"));
     }
-    
+
     #[test]
     fn test_commit_agent_capabilities() {
         let agent = CommitAgent::new();
@@ -334,34 +350,38 @@ mod tests {
         assert!(caps.contains(&AgentCapability::GenerateCommit));
         assert!(caps.contains(&AgentCapability::AnalyzeCode));
     }
-    
+
     #[test]
     fn test_validate_commit_message() {
         let agent = CommitAgent::new();
-        
+
         // 有效格式
-        assert!(agent.validate_commit_message("feat(api): 添加用户认证").is_ok());
+        assert!(agent
+            .validate_commit_message("feat(api): 添加用户认证")
+            .is_ok());
         assert!(agent.validate_commit_message("fix: 修复登录问题").is_ok());
-        assert!(agent.validate_commit_message("docs(readme): 更新文档").is_ok());
-        
+        assert!(agent
+            .validate_commit_message("docs(readme): 更新文档")
+            .is_ok());
+
         // 无效格式
         assert!(agent.validate_commit_message("invalid message").is_err());
         assert!(agent.validate_commit_message("feat 缺少冒号").is_err());
         assert!(agent.validate_commit_message("").is_err());
     }
-    
+
     #[test]
     fn test_clean_commit_message() {
         let agent = CommitAgent::new();
-        
+
         let message = "  feat(api): 添加功能  \n额外的行\n更多内容";
         assert_eq!(agent.clean_commit_message(message), "feat(api): 添加功能");
     }
-    
+
     #[test]
     fn test_infer_change_type() {
         let agent = CommitAgent::new();
-        
+
         assert_eq!(agent.infer_change_type("test_file.rs"), "test");
         assert_eq!(agent.infer_change_type("README.md"), "docs");
         assert_eq!(agent.infer_change_type("fix bug in login"), "fix");
@@ -370,14 +390,14 @@ mod tests {
         assert_eq!(agent.infer_change_type("format code"), "style");
         assert_eq!(agent.infer_change_type("random changes"), "chore");
     }
-    
+
     #[tokio::test]
     async fn test_commit_agent_task_validation() {
         let agent = CommitAgent::new();
-        
+
         let valid_task = AgentTask::new(TaskType::GenerateCommit, "diff content");
         assert!(agent.validate_task(&valid_task).is_ok());
-        
+
         let invalid_task = AgentTask::new(TaskType::GenerateCommit, "");
         assert!(agent.validate_task(&invalid_task).is_err());
     }

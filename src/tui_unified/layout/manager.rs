@@ -1,9 +1,6 @@
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use crate::tui_unified::{
-    config::AppConfig,
-    app::LayoutResult
-};
 use super::LayoutMode;
+use crate::tui_unified::{app::LayoutResult, config::AppConfig};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 // 布局常量
 pub const MIN_TERMINAL_WIDTH: u16 = 80;
@@ -38,7 +35,7 @@ impl LayoutManager {
             adaptive_resize: true,
         }
     }
-    
+
     pub fn calculate_layout(&self, area: Rect) -> LayoutResult {
         // 检查终端最小尺寸
         if area.width < MIN_TERMINAL_WIDTH || area.height < MIN_TERMINAL_HEIGHT {
@@ -52,7 +49,7 @@ impl LayoutManager {
             LayoutMode::FullScreen => self.calculate_fullscreen_layout(area),
         }
     }
-    
+
     fn calculate_normal_layout(&self, area: Rect) -> LayoutResult {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -61,20 +58,20 @@ impl LayoutManager {
                 Constraint::Length(STATUS_BAR_HEIGHT),
             ])
             .split(area);
-        
+
         // 响应式三栏布局
-        let (sidebar_constraint, content_constraint, detail_constraint) = 
+        let (sidebar_constraint, content_constraint, detail_constraint) =
             self.calculate_responsive_constraints(area.width);
-        
+
         let content_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                sidebar_constraint,   // 侧边栏
-                content_constraint,   // 主内容
-                detail_constraint,    // 详情面板
+                sidebar_constraint, // 侧边栏
+                content_constraint, // 主内容
+                detail_constraint,  // 详情面板
             ])
             .split(main_chunks[0]);
-        
+
         LayoutResult {
             sidebar: content_chunks[0],
             content: content_chunks[1],
@@ -82,7 +79,7 @@ impl LayoutManager {
             status_bar: main_chunks[1],
         }
     }
-    
+
     fn calculate_fullscreen_layout(&self, area: Rect) -> LayoutResult {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -91,11 +88,11 @@ impl LayoutManager {
                 Constraint::Length(STATUS_BAR_HEIGHT),
             ])
             .split(area);
-        
+
         LayoutResult {
             sidebar: Rect::default(), // 隐藏
-            content: chunks[0], // 全屏
-            detail: Rect::default(), // 隐藏
+            content: chunks[0],       // 全屏
+            detail: Rect::default(),  // 隐藏
             status_bar: chunks[1],
         }
     }
@@ -108,24 +105,24 @@ impl LayoutManager {
                 Constraint::Length(STATUS_BAR_HEIGHT),
             ])
             .split(area);
-        
+
         // 水平分屏：侧边栏 | 上下分屏(主内容/详情)
         let horizontal_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(self.min_sidebar_width),  // 侧边栏
-                Constraint::Min(40),                         // 分屏区域
+                Constraint::Length(self.min_sidebar_width), // 侧边栏
+                Constraint::Min(40),                        // 分屏区域
             ])
             .split(main_chunks[0]);
-        
+
         let split_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(60),  // 主内容 (上)
-                Constraint::Percentage(40),  // 详情 (下)
+                Constraint::Percentage(60), // 主内容 (上)
+                Constraint::Percentage(40), // 详情 (下)
             ])
             .split(horizontal_chunks[1]);
-        
+
         LayoutResult {
             sidebar: horizontal_chunks[0],
             content: split_chunks[0],
@@ -142,24 +139,24 @@ impl LayoutManager {
                 Constraint::Length(STATUS_BAR_HEIGHT),
             ])
             .split(area);
-        
+
         // 垂直分屏：左右分屏 + 底部详情面板
         let vertical_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(70),  // 主分屏区域
-                Constraint::Percentage(30),  // 详情面板
+                Constraint::Percentage(70), // 主分屏区域
+                Constraint::Percentage(30), // 详情面板
             ])
             .split(main_chunks[0]);
-        
+
         let split_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25),  // 侧边栏
-                Constraint::Percentage(75),  // 主内容
+                Constraint::Percentage(25), // 侧边栏
+                Constraint::Percentage(75), // 主内容
             ])
             .split(vertical_chunks[0]);
-        
+
         LayoutResult {
             sidebar: split_chunks[0],
             content: split_chunks[1],
@@ -177,7 +174,7 @@ impl LayoutManager {
                 Constraint::Length(STATUS_BAR_HEIGHT),
             ])
             .split(area);
-        
+
         LayoutResult {
             sidebar: Rect::default(), // 隐藏
             content: chunks[0],       // 全屏主内容
@@ -187,7 +184,10 @@ impl LayoutManager {
     }
 
     // 响应式约束计算
-    fn calculate_responsive_constraints(&self, terminal_width: u16) -> (Constraint, Constraint, Constraint) {
+    fn calculate_responsive_constraints(
+        &self,
+        terminal_width: u16,
+    ) -> (Constraint, Constraint, Constraint) {
         if !self.adaptive_resize {
             // 固定比例模式
             return (
@@ -196,7 +196,7 @@ impl LayoutManager {
                 Constraint::Percentage(30),
             );
         }
-        
+
         // 根据终端宽度自适应调整
         match terminal_width {
             w if w < 100 => {
@@ -206,7 +206,7 @@ impl LayoutManager {
                     Constraint::Min(self.min_content_width),
                     Constraint::Length(self.min_detail_width),
                 )
-            },
+            }
             w if w < 120 => {
                 // 中等屏幕：平衡分配
                 (
@@ -214,7 +214,7 @@ impl LayoutManager {
                     Constraint::Percentage(52),
                     Constraint::Percentage(30),
                 )
-            },
+            }
             _ => {
                 // 大屏幕：给主内容更多空间
                 (
@@ -253,7 +253,8 @@ impl LayoutManager {
 
     // 面板尺寸调整
     pub fn adjust_sidebar_width(&mut self, delta: i16) {
-        let new_width = (self.sidebar_width as i16 + delta).max(self.min_sidebar_width as i16) as u16;
+        let new_width =
+            (self.sidebar_width as i16 + delta).max(self.min_sidebar_width as i16) as u16;
         self.sidebar_width = new_width.min(40); // 最大40个字符宽度
     }
 

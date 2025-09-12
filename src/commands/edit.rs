@@ -1,7 +1,7 @@
+use crate::ai;
 use crate::cli::args::Args;
 use crate::config::Config;
 use crate::git::edit::{GitEdit, RebaseStatus};
-use crate::ai;
 
 /// 处理所有 commit 编辑相关命令
 pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
@@ -54,7 +54,7 @@ pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Resul
 
     // 如果没有具体的编辑操作，显示可编辑的提交列表
     GitEdit::show_editable_commits(Some(10)).await?;
-    
+
     Ok(())
 }
 
@@ -82,7 +82,7 @@ async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()
         println!("  1. Use AI to generate a new commit message based on current changes");
         println!("  2. Keep the original commit message");
         println!("  3. Abort amendment");
-        
+
         // 为简化起见，这里直接保持原有消息
         GitEdit::amend_last_commit(None).await?;
         return Ok(());
@@ -90,13 +90,13 @@ async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()
 
     // 如果有暂存更改，可选择使用 AI 生成新的提交消息
     let staged_diff = String::from_utf8_lossy(&diff_output.stdout);
-    
+
     if !staged_diff.trim().is_empty() {
         println!("Generating AI commit message for staged changes...");
-        
+
         let prompt = crate::ai::prompt::get_prompt(&staged_diff);
         let ai_message = ai::generate_commit_message(&staged_diff, config, &prompt).await?;
-        
+
         if !ai_message.is_empty() {
             println!("AI generated message: {}", ai_message);
             GitEdit::amend_last_commit(Some(&ai_message)).await?;
@@ -139,11 +139,14 @@ async fn handle_reword_commit(commit_hash: &str, config: &Config) -> anyhow::Res
         return Ok(());
     }
 
-    println!("Generating AI commit message for the changes in {}...", commit_hash);
-    
+    println!(
+        "Generating AI commit message for the changes in {}...",
+        commit_hash
+    );
+
     let prompt = crate::ai::prompt::get_prompt(&commit_diff);
     let ai_message = ai::generate_commit_message(&commit_diff, config, &prompt).await?;
-    
+
     if !ai_message.is_empty() {
         println!("AI generated message: {}", ai_message);
         GitEdit::reword_commit(commit_hash, &ai_message).await?;
@@ -158,25 +161,25 @@ async fn handle_reword_commit(commit_hash: &str, config: &Config) -> anyhow::Res
 pub async fn show_edit_help() -> anyhow::Result<()> {
     println!("✏️  Git Commit Editing Commands:");
     println!("{}", "─".repeat(50));
-    println!("");
+    println!();
     println!("📝 Basic Operations:");
     println!("  --amend                     Modify the last commit (with AI)");
     println!("  --undo-commit               Undo last commit (keep changes staged)");
-    println!("");
+    println!();
     println!("🔍 Advanced Operations:");
     println!("  --edit-commit HASH          Edit specific commit interactively");
     println!("  --reword-commit HASH        Rewrite commit message with AI");
     println!("  --rebase-edit BASE          Interactive rebase from base commit");
-    println!("");
+    println!();
     println!("📋 Information:");
     println!("  (no args)                   Show recent editable commits");
-    println!("");
+    println!();
     println!("💡 Tips:");
     println!("  - All operations preserve your work");
     println!("  - AI will generate contextual commit messages");
     println!("  - Use commit hashes or references like HEAD~1");
     println!("  - Interactive rebase opens your default editor");
-    println!("");
+    println!();
     println!("⚠️  Safety Notes:");
     println!("  - These operations rewrite Git history");
     println!("  - Avoid editing pushed commits (use --force-push if necessary)");
@@ -194,9 +197,9 @@ mod tests {
     async fn test_handle_edit_commands_no_args() {
         let config = Config::new();
         let args = create_empty_edit_args();
-        
+
         let result = handle_edit_commands(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Edit commands handled successfully (shows editable commits)");
@@ -210,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_edit_help() {
         let result = show_edit_help().await;
-        
+
         match result {
             Ok(_) => {
                 println!("Edit help displayed successfully");
@@ -226,9 +229,9 @@ mod tests {
         let config = Config::new();
         let mut args = create_empty_edit_args();
         args.amend = true;
-        
+
         let result = handle_amend_commit(&args, &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Amend commit handled successfully");
@@ -243,7 +246,7 @@ mod tests {
     async fn test_handle_reword_commit() {
         let config = Config::new();
         let result = handle_reword_commit("HEAD", &config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Reword commit handled successfully");

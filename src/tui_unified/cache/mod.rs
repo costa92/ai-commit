@@ -1,16 +1,22 @@
 // Cache implementations - Task 2.3: Caching Optimization
 
-use std::collections::HashMap;
 use lru::LruCache;
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 pub struct CacheManager {
     git_cache: Arc<RwLock<GitCache>>,
     ui_cache: Arc<RwLock<UiCache>>,
     file_cache: Arc<RwLock<FileCache>>,
+}
+
+impl Default for CacheManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CacheManager {
@@ -21,7 +27,7 @@ impl CacheManager {
             file_cache: Arc::new(RwLock::new(FileCache::new())),
         }
     }
-    
+
     pub async fn clear_all(&self) {
         self.git_cache.write().await.clear();
         self.ui_cache.write().await.clear();
@@ -43,13 +49,13 @@ impl CacheManager {
     // Background refresh task
     pub async fn start_background_refresh(&self, refresh_interval: Duration) {
         let git_cache = self.git_cache.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(refresh_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut cache = git_cache.write().await;
                 cache.expire_old_entries();
             }
@@ -95,6 +101,12 @@ pub struct GitCache {
     date_filter_cache: LruCache<String, CachedEntry<Vec<crate::tui_unified::git::Commit>>>,
 }
 
+impl Default for GitCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GitCache {
     pub fn new() -> Self {
         Self {
@@ -109,7 +121,7 @@ impl GitCache {
             date_filter_cache: LruCache::new(NonZeroUsize::new(50).unwrap()),
         }
     }
-    
+
     pub fn get_commits(&mut self, key: &str) -> Option<&Vec<crate::tui_unified::git::Commit>> {
         self.commits.get(key).and_then(|entry| {
             if entry.is_expired() {
@@ -119,7 +131,7 @@ impl GitCache {
             }
         })
     }
-    
+
     pub fn cache_commits(&mut self, key: String, commits: Vec<crate::tui_unified::git::Commit>) {
         let entry = CachedEntry::new(commits, Duration::from_secs(300)); // 5 minutes TTL
         self.commits.put(key, entry);
@@ -156,7 +168,10 @@ impl GitCache {
     }
 
     // Search caching methods
-    pub fn get_search_result(&mut self, query: &str) -> Option<&Vec<crate::tui_unified::git::Commit>> {
+    pub fn get_search_result(
+        &mut self,
+        query: &str,
+    ) -> Option<&Vec<crate::tui_unified::git::Commit>> {
         self.search_cache.get(query).and_then(|entry| {
             if entry.is_expired() {
                 None
@@ -166,12 +181,19 @@ impl GitCache {
         })
     }
 
-    pub fn cache_search_result(&mut self, query: String, commits: Vec<crate::tui_unified::git::Commit>) {
+    pub fn cache_search_result(
+        &mut self,
+        query: String,
+        commits: Vec<crate::tui_unified::git::Commit>,
+    ) {
         let entry = CachedEntry::new(commits, Duration::from_secs(180)); // 3 minutes TTL
         self.search_cache.put(query, entry);
     }
 
-    pub fn get_author_filter_result(&mut self, author: &str) -> Option<&Vec<crate::tui_unified::git::Commit>> {
+    pub fn get_author_filter_result(
+        &mut self,
+        author: &str,
+    ) -> Option<&Vec<crate::tui_unified::git::Commit>> {
         self.author_filter_cache.get(author).and_then(|entry| {
             if entry.is_expired() {
                 None
@@ -181,11 +203,15 @@ impl GitCache {
         })
     }
 
-    pub fn cache_author_filter_result(&mut self, author: String, commits: Vec<crate::tui_unified::git::Commit>) {
+    pub fn cache_author_filter_result(
+        &mut self,
+        author: String,
+        commits: Vec<crate::tui_unified::git::Commit>,
+    ) {
         let entry = CachedEntry::new(commits, Duration::from_secs(300)); // 5 minutes TTL
         self.author_filter_cache.put(author, entry);
     }
-    
+
     pub fn expire_old_entries(&mut self) {
         // Remove expired entries from commits cache
         self.commits.iter().for_each(|(_, entry)| {
@@ -226,7 +252,7 @@ impl GitCache {
             }
         }
     }
-    
+
     pub fn clear(&mut self) {
         self.commits.clear();
         self.branches = None;
@@ -245,6 +271,12 @@ pub struct UiCache {
     layout_cache: HashMap<String, CachedEntry<String>>,
 }
 
+impl Default for UiCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UiCache {
     pub fn new() -> Self {
         Self {
@@ -252,7 +284,7 @@ impl UiCache {
             layout_cache: HashMap::new(),
         }
     }
-    
+
     pub fn get_rendered_frame(&self, key: &str) -> Option<&String> {
         self.rendered_frames.get(key).and_then(|entry| {
             if entry.is_expired() {
@@ -282,7 +314,7 @@ impl UiCache {
         let entry = CachedEntry::new(layout, Duration::from_secs(120)); // 2 minutes TTL
         self.layout_cache.insert(key, entry);
     }
-    
+
     pub fn clear(&mut self) {
         self.rendered_frames.clear();
         self.layout_cache.clear();
@@ -292,6 +324,12 @@ impl UiCache {
 pub struct FileCache {
     file_contents: LruCache<String, CachedEntry<String>>,
     diff_cache: LruCache<String, CachedEntry<String>>,
+}
+
+impl Default for FileCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FileCache {
@@ -331,7 +369,7 @@ impl FileCache {
         let entry = CachedEntry::new(diff, Duration::from_secs(180)); // 3 minutes TTL
         self.diff_cache.put(key, entry);
     }
-    
+
     pub fn clear(&mut self) {
         self.file_contents.clear();
         self.diff_cache.clear();

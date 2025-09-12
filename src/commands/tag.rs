@@ -26,7 +26,12 @@ pub async fn handle_tag_commands(args: &Args, config: &Config) -> anyhow::Result
 /// 列出所有标签（增强版）
 async fn list_tags(config: &Config) -> anyhow::Result<()> {
     let output = Command::new("git")
-        .args(["tag", "-l", "--sort=-version:refname", "--format=%(refname:short) %(objectname:short) %(subject) %(authordate:short)"])
+        .args([
+            "tag",
+            "-l",
+            "--sort=-version:refname",
+            "--format=%(refname:short) %(objectname:short) %(subject) %(authordate:short)",
+        ])
         .output()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to list tags: {}", e))?;
@@ -39,14 +44,17 @@ async fn list_tags(config: &Config) -> anyhow::Result<()> {
     }
 
     let tag_list = String::from_utf8_lossy(&output.stdout);
-    
+
     if tag_list.trim().is_empty() {
         println!("No tags found in this repository.");
         return Ok(());
     }
 
     println!("📋 Tags (sorted by version):");
-    println!("{:<20} {:<12} {:<50} {:<12}", "Tag", "Commit", "Message", "Date");
+    println!(
+        "{:<20} {:<12} {:<50} {:<12}",
+        "Tag", "Commit", "Message", "Date"
+    );
     println!("{}", "─".repeat(100));
 
     for line in tag_list.lines() {
@@ -117,7 +125,10 @@ async fn delete_tag(tag: &str, config: &Config) -> anyhow::Result<()> {
     if remote_delete_status.success() {
         println!("✓ Deleted remote tag: {}", tag);
     } else if config.debug {
-        println!("⚠ Warning: Failed to delete remote tag '{}' (it might not exist on remote)", tag);
+        println!(
+            "⚠ Warning: Failed to delete remote tag '{}' (it might not exist on remote)",
+            tag
+        );
     }
 
     Ok(())
@@ -171,7 +182,11 @@ async fn show_tag_info(tag: &str, config: &Config) -> anyhow::Result<()> {
             println!("\n📝 Tag Message:");
             println!("{}", "─".repeat(50));
             // 跳过第一个单词（标签名）显示消息
-            let message = tag_message.trim().split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
+            let message = tag_message
+                .split_whitespace()
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join(" ");
             if !message.is_empty() {
                 println!("{}", message);
             }
@@ -260,14 +275,17 @@ mod tests {
     async fn test_list_tags_command_structure() {
         let config = Config::new();
         let result = list_tags(&config).await;
-        
+
         match result {
             Ok(_) => {
                 println!("List tags succeeded");
             }
             Err(e) => {
                 let error_msg = e.to_string();
-                println!("List tags failed (expected in non-git environment): {}", error_msg);
+                println!(
+                    "List tags failed (expected in non-git environment): {}",
+                    error_msg
+                );
             }
         }
     }
@@ -276,10 +294,10 @@ mod tests {
     async fn test_show_tag_info_command_structure() {
         let config = Config::new();
         let result = show_tag_info("nonexistent-tag", &config).await;
-        
+
         // 应该失败，因为标签不存在
         assert!(result.is_err());
-        
+
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("does not exist"));
     }
@@ -288,10 +306,10 @@ mod tests {
     async fn test_delete_tag_command_structure() {
         let config = Config::new();
         let result = delete_tag("nonexistent-tag", &config).await;
-        
+
         // 应该失败，因为标签不存在
         assert!(result.is_err());
-        
+
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("does not exist"));
     }
@@ -299,14 +317,14 @@ mod tests {
     #[tokio::test]
     async fn test_compare_tags_format_validation() {
         let config = Config::new();
-        
+
         // 测试无效格式
         let result = compare_tags("invalid-format", &config).await;
         assert!(result.is_err());
-        
+
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Invalid comparison format"));
-        
+
         // 测试正确格式但不存在的标签
         let result = compare_tags("tag1..tag2", &config).await;
         // 应该在检查标签存在性时失败
@@ -333,7 +351,11 @@ mod tests {
                 None
             };
 
-            assert_eq!(result, expected, "Input '{}' should parse to {:?}", input, expected);
+            assert_eq!(
+                result, expected,
+                "Input '{}' should parse to {:?}",
+                input, expected
+            );
         }
     }
 }

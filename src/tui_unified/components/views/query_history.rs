@@ -1,20 +1,26 @@
 // 查询历史视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect};
+use crate::query_history::QueryHistory;
 use crate::tui_unified::{
-    state::AppState,
     components::base::{
         component::{Component, ViewComponent, ViewType},
-        events::EventResult
+        events::EventResult,
     },
     components::widgets::list::ListWidget,
     git::models::QueryHistoryEntry,
+    state::AppState,
 };
-use crate::query_history::QueryHistory;
+use crossterm::event::KeyEvent;
+use ratatui::{layout::Rect, Frame};
 
 /// 查询历史视图组件 - 显示查询历史列表
 pub struct QueryHistoryView {
     list_widget: ListWidget<QueryHistoryEntry>,
+}
+
+impl Default for QueryHistoryView {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QueryHistoryView {
@@ -28,39 +34,49 @@ impl QueryHistoryView {
                 String::new()
             };
             let time_str = entry.timestamp.format("%m-%d %H:%M").to_string();
-            format!("📜 {} {} - {}{}", status_icon, entry.query, time_str, result_info)
+            format!(
+                "📜 {} {} - {}{}",
+                status_icon, entry.query, time_str, result_info
+            )
         });
 
         // 样式函数：选中时高亮显示，成功和失败用不同颜色
-        let style_fn = Box::new(|entry: &QueryHistoryEntry, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
-            use ratatui::style::{Color, Style};
-            let base_color = if entry.success { Color::Green } else { Color::Red };
-            
-            if is_selected && is_focused {
-                Style::default().fg(Color::Yellow).bg(Color::DarkGray)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(base_color)
-            }
-        });
+        let style_fn = Box::new(
+            |entry: &QueryHistoryEntry,
+             is_selected: bool,
+             is_focused: bool|
+             -> ratatui::style::Style {
+                use ratatui::style::{Color, Style};
+                let base_color = if entry.success {
+                    Color::Green
+                } else {
+                    Color::Red
+                };
+
+                if is_selected && is_focused {
+                    Style::default().fg(Color::Yellow).bg(Color::DarkGray)
+                } else if is_selected {
+                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(base_color)
+                }
+            },
+        );
 
         // 搜索函数：支持按查询内容和类型搜索
         let search_fn = Box::new(|entry: &QueryHistoryEntry, query: &str| -> bool {
             let query = query.to_lowercase();
-            entry.query.to_lowercase().contains(&query) ||
-            entry.query_type.as_ref().map_or(false, |t| t.to_lowercase().contains(&query))
+            entry.query.to_lowercase().contains(&query)
+                || entry
+                    .query_type
+                    .as_ref()
+                    .is_some_and(|t| t.to_lowercase().contains(&query))
         });
 
-        let list_widget = ListWidget::new(
-            "Query History".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget = ListWidget::new("Query History".to_string(), format_fn, style_fn)
+            .with_search_fn(search_fn);
 
-        Self {
-            list_widget,
-        }
+        Self { list_widget }
     }
 
     pub async fn load_history(&mut self) {

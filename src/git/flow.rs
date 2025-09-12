@@ -17,7 +17,7 @@ impl GitFlow {
         if !GitCore::branch_exists("develop").await? {
             println!("Creating develop branch...");
             GitCore::create_and_checkout_branch("develop").await?;
-            
+
             // 推送 develop 分支到远程
             if !GitCore::get_remotes().await?.is_empty() {
                 GitCore::push_branch("develop", "origin", true).await?;
@@ -32,14 +32,14 @@ impl GitFlow {
         println!("✓ Git Flow initialized");
         println!("  - Main branch: {}", main_branch);
         println!("  - Develop branch: develop");
-        
+
         Ok(())
     }
 
     /// 开始新的 feature 分支
     pub async fn start_feature(name: &str) -> anyhow::Result<()> {
         let feature_branch = format!("feature/{}", name);
-        
+
         // 检查 feature 分支是否已存在
         if GitCore::branch_exists(&feature_branch).await? {
             anyhow::bail!("Feature branch '{}' already exists", feature_branch);
@@ -51,21 +51,21 @@ impl GitFlow {
         }
 
         GitCore::checkout_branch("develop").await?;
-        
+
         // 从 develop 创建 feature 分支
         GitCore::create_and_checkout_branch(&feature_branch).await?;
-        
+
         println!("✓ Started feature branch: {}", feature_branch);
         println!("  - Based on: develop");
         println!("  - Current branch: {}", feature_branch);
-        
+
         Ok(())
     }
 
     /// 完成 feature 分支
     pub async fn finish_feature(name: &str) -> anyhow::Result<()> {
         let feature_branch = format!("feature/{}", name);
-        
+
         // 检查 feature 分支是否存在
         if !GitCore::branch_exists(&feature_branch).await? {
             anyhow::bail!("Feature branch '{}' does not exist", feature_branch);
@@ -78,25 +78,25 @@ impl GitFlow {
 
         // 切换到 develop 分支
         GitCore::checkout_branch("develop").await?;
-        
+
         // 合并 feature 分支到 develop
         let merge_message = format!("Merge feature branch '{}'", name);
         GitCore::merge_branch(&feature_branch, Some(&merge_message)).await?;
-        
+
         // 删除 feature 分支
         GitCore::delete_branch(&feature_branch, false).await?;
-        
+
         println!("✓ Finished feature: {}", name);
         println!("  - Merged into: develop");
         println!("  - Deleted branch: {}", feature_branch);
-        
+
         Ok(())
     }
 
     /// 开始新的 hotfix 分支
     pub async fn start_hotfix(name: &str) -> anyhow::Result<()> {
         let hotfix_branch = format!("hotfix/{}", name);
-        
+
         // 检查 hotfix 分支是否已存在
         if GitCore::branch_exists(&hotfix_branch).await? {
             anyhow::bail!("Hotfix branch '{}' already exists", hotfix_branch);
@@ -106,18 +106,18 @@ impl GitFlow {
         let main_branch = Self::get_main_branch().await?;
         GitCore::checkout_branch(&main_branch).await?;
         GitCore::create_and_checkout_branch(&hotfix_branch).await?;
-        
+
         println!("✓ Started hotfix branch: {}", hotfix_branch);
         println!("  - Based on: {}", main_branch);
         println!("  - Current branch: {}", hotfix_branch);
-        
+
         Ok(())
     }
 
     /// 完成 hotfix 分支
     pub async fn finish_hotfix(name: &str) -> anyhow::Result<()> {
         let hotfix_branch = format!("hotfix/{}", name);
-        
+
         // 检查 hotfix 分支是否存在
         if !GitCore::branch_exists(&hotfix_branch).await? {
             anyhow::bail!("Hotfix branch '{}' does not exist", hotfix_branch);
@@ -134,30 +134,30 @@ impl GitFlow {
         // 合并到 main 分支
         GitCore::checkout_branch(&main_branch).await?;
         GitCore::merge_branch(&hotfix_branch, Some(&merge_message)).await?;
-        
+
         // 如果 develop 分支存在，也合并到 develop
         if GitCore::branch_exists("develop").await? {
             GitCore::checkout_branch("develop").await?;
             GitCore::merge_branch(&hotfix_branch, Some(&merge_message)).await?;
         }
-        
+
         // 删除 hotfix 分支
         GitCore::delete_branch(&hotfix_branch, false).await?;
-        
+
         println!("✓ Finished hotfix: {}", name);
         println!("  - Merged into: {}", main_branch);
         if GitCore::branch_exists("develop").await? {
             println!("  - Merged into: develop");
         }
         println!("  - Deleted branch: {}", hotfix_branch);
-        
+
         Ok(())
     }
 
     /// 开始新的 release 分支
     pub async fn start_release(version: &str) -> anyhow::Result<()> {
         let release_branch = format!("release/{}", version);
-        
+
         // 检查 release 分支是否已存在
         if GitCore::branch_exists(&release_branch).await? {
             anyhow::bail!("Release branch '{}' already exists", release_branch);
@@ -170,19 +170,19 @@ impl GitFlow {
 
         GitCore::checkout_branch("develop").await?;
         GitCore::create_and_checkout_branch(&release_branch).await?;
-        
+
         println!("✓ Started release branch: {}", release_branch);
         println!("  - Based on: develop");
         println!("  - Current branch: {}", release_branch);
         println!("  - Ready for release preparation and testing");
-        
+
         Ok(())
     }
 
     /// 完成 release 分支
     pub async fn finish_release(version: &str) -> anyhow::Result<()> {
         let release_branch = format!("release/{}", version);
-        
+
         // 检查 release 分支是否存在
         if !GitCore::branch_exists(&release_branch).await? {
             anyhow::bail!("Release branch '{}' does not exist", release_branch);
@@ -199,33 +199,39 @@ impl GitFlow {
         // 合并到 main 分支
         GitCore::checkout_branch(&main_branch).await?;
         GitCore::merge_branch(&release_branch, Some(&merge_message)).await?;
-        
+
         // 创建 release tag
         let tag_name = if version.starts_with('v') {
             version.to_string()
         } else {
             format!("v{}", version)
         };
-        
+
         let tag_status = Command::new("git")
-            .args(["tag", "-a", &tag_name, "-m", &format!("Release {}", version)])
+            .args([
+                "tag",
+                "-a",
+                &tag_name,
+                "-m",
+                &format!("Release {}", version),
+            ])
             .status()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create tag: {}", e))?;
-            
+
         if !tag_status.success() {
             anyhow::bail!("Failed to create release tag");
         }
-        
+
         // 合并到 develop 分支
         if GitCore::branch_exists("develop").await? {
             GitCore::checkout_branch("develop").await?;
             GitCore::merge_branch(&release_branch, Some(&merge_message)).await?;
         }
-        
+
         // 删除 release 分支
         GitCore::delete_branch(&release_branch, false).await?;
-        
+
         println!("✓ Finished release: {}", version);
         println!("  - Merged into: {}", main_branch);
         println!("  - Created tag: {}", tag_name);
@@ -233,7 +239,7 @@ impl GitFlow {
             println!("  - Merged into: develop");
         }
         println!("  - Deleted branch: {}", release_branch);
-        
+
         Ok(())
     }
 
@@ -251,7 +257,7 @@ impl GitFlow {
     /// 检查当前分支类型
     pub async fn get_branch_type() -> anyhow::Result<BranchType> {
         let current_branch = GitCore::get_current_branch().await?;
-        
+
         if current_branch == "main" || current_branch == "master" {
             Ok(BranchType::Main)
         } else if current_branch == "develop" {
@@ -344,14 +350,17 @@ mod tests {
     #[tokio::test]
     async fn test_get_main_branch() {
         let result = GitFlow::get_main_branch().await;
-        
+
         match result {
             Ok(branch) => {
                 assert!(branch == "main" || branch == "master");
                 println!("Main branch: {}", branch);
             }
             Err(e) => {
-                println!("Failed to get main branch (expected in non-git environment): {}", e);
+                println!(
+                    "Failed to get main branch (expected in non-git environment): {}",
+                    e
+                );
             }
         }
     }
@@ -359,7 +368,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_branch_type() {
         let result = GitFlow::get_branch_type().await;
-        
+
         match result {
             Ok(branch_type) => {
                 println!("Current branch type: {:?}", branch_type);
@@ -373,7 +382,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_flow_branches() {
         let result = GitFlow::list_flow_branches().await;
-        
+
         match result {
             Ok(_) => {
                 println!("Successfully listed flow branches");
@@ -427,20 +436,23 @@ mod tests {
         let result = GitFlow::init().await;
         match result {
             Ok(_) => println!("Git Flow init succeeded"),
-            Err(e) => println!("Git Flow init failed (expected if already initialized): {}", e),
+            Err(e) => println!(
+                "Git Flow init failed (expected if already initialized): {}",
+                e
+            ),
         }
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_feature_workflow() {
         let feature_name = "test-feature";
-        
+
         // Test starting a feature
         let result = GitFlow::start_feature(feature_name).await;
         match result {
             Ok(_) => {
                 println!("Feature '{}' started successfully", feature_name);
-                
+
                 // Test finishing the feature
                 let finish_result = GitFlow::finish_feature(feature_name).await;
                 match finish_result {
@@ -455,13 +467,13 @@ mod tests {
     #[tokio::test]
     async fn test_hotfix_workflow() {
         let hotfix_name = "test-hotfix";
-        
+
         // Test starting a hotfix
         let result = GitFlow::start_hotfix(hotfix_name).await;
         match result {
             Ok(_) => {
                 println!("Hotfix '{}' started successfully", hotfix_name);
-                
+
                 // Test finishing the hotfix
                 let finish_result = GitFlow::finish_hotfix(hotfix_name).await;
                 match finish_result {
@@ -476,13 +488,13 @@ mod tests {
     #[tokio::test]
     async fn test_release_workflow() {
         let release_version = "1.0.0-test";
-        
+
         // Test starting a release
         let result = GitFlow::start_release(release_version).await;
         match result {
             Ok(_) => {
                 println!("Release '{}' started successfully", release_version);
-                
+
                 // Test finishing the release
                 let finish_result = GitFlow::finish_release(release_version).await;
                 match finish_result {
@@ -517,7 +529,7 @@ mod tests {
         // Test valid branch names
         let valid_names = vec![
             "simple-feature",
-            "user-authentication", 
+            "user-authentication",
             "bug-fix-123",
             "feature_with_underscores",
             "hotfix-critical-bug",
@@ -525,9 +537,21 @@ mod tests {
         ];
 
         for name in valid_names {
-            assert!(!name.is_empty(), "Branch name should not be empty: '{}'", name);
-            assert!(!name.contains(' '), "Branch name should not contain spaces: '{}'", name);
-            assert!(name.len() <= 100, "Branch name should be reasonable length: '{}'", name);
+            assert!(
+                !name.is_empty(),
+                "Branch name should not be empty: '{}'",
+                name
+            );
+            assert!(
+                !name.contains(' '),
+                "Branch name should not contain spaces: '{}'",
+                name
+            );
+            assert!(
+                name.len() <= 100,
+                "Branch name should be reasonable length: '{}'",
+                name
+            );
         }
 
         // Test edge case names
@@ -544,7 +568,11 @@ mod tests {
             if name.is_empty() {
                 assert!(name.is_empty(), "Empty name should be detected");
             } else if name.contains(' ') {
-                assert!(name.contains(' '), "Name with spaces should be detected: '{}'", name);
+                assert!(
+                    name.contains(' '),
+                    "Name with spaces should be detected: '{}'",
+                    name
+                );
             }
         }
     }
@@ -554,7 +582,7 @@ mod tests {
         // Test all BranchType variants
         let branch_types = vec![
             BranchType::Main,
-            BranchType::Develop, 
+            BranchType::Develop,
             BranchType::Feature,
             BranchType::Hotfix,
             BranchType::Release,
@@ -579,32 +607,26 @@ mod tests {
 
         // Handle each task separately due to different return types
         match type_task1.await {
-            Ok(result) => {
-                match result {
-                    Ok(_branch_type) => println!("Concurrent flow operation 1 succeeded"),
-                    Err(e) => println!("Concurrent flow operation 1 failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_branch_type) => println!("Concurrent flow operation 1 succeeded"),
+                Err(e) => println!("Concurrent flow operation 1 failed: {}", e),
+            },
             Err(e) => println!("Task 1 join error: {}", e),
         }
 
         match branches_task.await {
-            Ok(result) => {
-                match result {
-                    Ok(_) => println!("Concurrent flow branches operation succeeded"),
-                    Err(e) => println!("Concurrent flow branches operation failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_) => println!("Concurrent flow branches operation succeeded"),
+                Err(e) => println!("Concurrent flow branches operation failed: {}", e),
+            },
             Err(e) => println!("Branches task join error: {}", e),
         }
 
         match type_task2.await {
-            Ok(result) => {
-                match result {
-                    Ok(_branch_type) => println!("Concurrent flow operation 2 succeeded"),
-                    Err(e) => println!("Concurrent flow operation 2 failed: {}", e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(_branch_type) => println!("Concurrent flow operation 2 succeeded"),
+                Err(e) => println!("Concurrent flow operation 2 failed: {}", e),
+            },
             Err(e) => println!("Task 2 join error: {}", e),
         }
     }
@@ -622,12 +644,26 @@ mod tests {
         ];
 
         for version in version_patterns {
-            assert!(!version.is_empty(), "Version should not be empty: '{}'", version);
-            assert!(version.len() <= 50, "Version should be reasonable length: '{}'", version);
-            
+            assert!(
+                !version.is_empty(),
+                "Version should not be empty: '{}'",
+                version
+            );
+            assert!(
+                version.len() <= 50,
+                "Version should be reasonable length: '{}'",
+                version
+            );
+
             // Check if it contains typical version characters
-            let has_version_chars = version.chars().any(|c| c.is_numeric() || c == '.' || c == '-');
-            assert!(has_version_chars, "Version should contain typical version characters: '{}'", version);
+            let has_version_chars = version
+                .chars()
+                .any(|c| c.is_numeric() || c == '.' || c == '-');
+            assert!(
+                has_version_chars,
+                "Version should contain typical version characters: '{}'",
+                version
+            );
         }
     }
 
@@ -640,8 +676,14 @@ mod tests {
             println!("Testing invalid feature name: '{}'", name);
             let result = GitFlow::start_feature(name).await;
             match result {
-                Ok(_) => println!("Feature start succeeded unexpectedly with invalid name: '{}'", name),
-                Err(e) => println!("Feature start failed as expected with invalid name '{}': {}", name, e),
+                Ok(_) => println!(
+                    "Feature start succeeded unexpectedly with invalid name: '{}'",
+                    name
+                ),
+                Err(e) => println!(
+                    "Feature start failed as expected with invalid name '{}': {}",
+                    name, e
+                ),
             }
         }
     }
@@ -656,27 +698,61 @@ mod tests {
         }
 
         let prefix_tests = vec![
-            PrefixTest { branch_name: "feature/user-auth", expected_prefix: Some("feature/"), expected_name: Some("user-auth") },
-            PrefixTest { branch_name: "hotfix/critical-bug", expected_prefix: Some("hotfix/"), expected_name: Some("critical-bug") },
-            PrefixTest { branch_name: "release/v1.2.0", expected_prefix: Some("release/"), expected_name: Some("v1.2.0") },
-            PrefixTest { branch_name: "main", expected_prefix: None, expected_name: Some("main") },
-            PrefixTest { branch_name: "develop", expected_prefix: None, expected_name: Some("develop") },
-            PrefixTest { branch_name: "custom-branch", expected_prefix: None, expected_name: Some("custom-branch") },
+            PrefixTest {
+                branch_name: "feature/user-auth",
+                expected_prefix: Some("feature/"),
+                expected_name: Some("user-auth"),
+            },
+            PrefixTest {
+                branch_name: "hotfix/critical-bug",
+                expected_prefix: Some("hotfix/"),
+                expected_name: Some("critical-bug"),
+            },
+            PrefixTest {
+                branch_name: "release/v1.2.0",
+                expected_prefix: Some("release/"),
+                expected_name: Some("v1.2.0"),
+            },
+            PrefixTest {
+                branch_name: "main",
+                expected_prefix: None,
+                expected_name: Some("main"),
+            },
+            PrefixTest {
+                branch_name: "develop",
+                expected_prefix: None,
+                expected_name: Some("develop"),
+            },
+            PrefixTest {
+                branch_name: "custom-branch",
+                expected_prefix: None,
+                expected_name: Some("custom-branch"),
+            },
         ];
 
         for test in prefix_tests {
             if let Some(expected_prefix) = test.expected_prefix {
-                assert!(test.branch_name.starts_with(expected_prefix), 
-                        "Branch '{}' should start with '{}'", test.branch_name, expected_prefix);
-                
+                assert!(
+                    test.branch_name.starts_with(expected_prefix),
+                    "Branch '{}' should start with '{}'",
+                    test.branch_name,
+                    expected_prefix
+                );
+
                 if let Some(expected_name) = test.expected_name {
                     let actual_name = test.branch_name.strip_prefix(expected_prefix).unwrap();
-                    assert_eq!(actual_name, expected_name, 
-                              "Branch name after prefix should be '{}'", expected_name);
+                    assert_eq!(
+                        actual_name, expected_name,
+                        "Branch name after prefix should be '{}'",
+                        expected_name
+                    );
                 }
             } else if let Some(expected_name) = test.expected_name {
-                assert_eq!(test.branch_name, expected_name, 
-                          "Branch without prefix should be '{}'", expected_name);
+                assert_eq!(
+                    test.branch_name, expected_name,
+                    "Branch without prefix should be '{}'",
+                    expected_name
+                );
             }
         }
     }
@@ -685,11 +761,11 @@ mod tests {
     async fn test_flow_state_consistency() {
         // Test that flow operations maintain consistent state
         let initial_branch_type = GitFlow::get_branch_type().await;
-        
+
         match initial_branch_type {
             Ok(branch_type) => {
                 println!("Initial branch type: {:?}", branch_type);
-                
+
                 // Test that branch type detection is consistent
                 let second_check = GitFlow::get_branch_type().await;
                 match second_check {
@@ -726,14 +802,32 @@ mod tests {
 
         for test in name_tests {
             if test.should_be_valid {
-                assert!(!test.name.is_empty(), "Valid name should not be empty: {} - {}", test.name, test.reason);
-                assert!(!test.name.contains(' '), "Valid name should not contain spaces: {} - {}", test.name, test.reason);
-                assert!(test.name.len() <= 100, "Valid name should not be too long: {} - {}", test.name, test.reason);
+                assert!(
+                    !test.name.is_empty(),
+                    "Valid name should not be empty: {} - {}",
+                    test.name,
+                    test.reason
+                );
+                assert!(
+                    !test.name.contains(' '),
+                    "Valid name should not contain spaces: {} - {}",
+                    test.name,
+                    test.reason
+                );
+                assert!(
+                    test.name.len() <= 100,
+                    "Valid name should not be too long: {} - {}",
+                    test.name,
+                    test.reason
+                );
             } else {
-                let has_issues = test.name.is_empty() || 
-                                test.name.contains(' ') || 
-                                test.name.len() > 100;
-                assert!(has_issues, "Invalid name should have issues: {} - {}", test.name, test.reason);
+                let has_issues =
+                    test.name.is_empty() || test.name.contains(' ') || test.name.len() > 100;
+                assert!(
+                    has_issues,
+                    "Invalid name should have issues: {} - {}",
+                    test.name, test.reason
+                );
             }
         }
     }
@@ -745,11 +839,11 @@ mod tests {
         use std::path::Path;
 
         let original_dir = env::current_dir().unwrap();
-        
+
         // Try to test in /tmp (not a git repo)
         if Path::new("/tmp").exists() {
             let _ = env::set_current_dir("/tmp");
-            
+
             let result = GitFlow::get_branch_type().await;
             match result {
                 Ok(_) => println!("Branch type succeeded unexpectedly in non-git dir"),
@@ -761,7 +855,7 @@ mod tests {
                 Ok(_) => println!("List branches succeeded unexpectedly in non-git dir"),
                 Err(e) => println!("List branches failed as expected in non-git dir: {}", e),
             }
-            
+
             // Restore original directory
             let _ = env::set_current_dir(original_dir);
         }

@@ -61,7 +61,7 @@ impl GitHistory {
         }
 
         let history = String::from_utf8_lossy(&output.stdout);
-        
+
         if history.trim().is_empty() {
             println!("No commits found matching the criteria.");
             return Ok(());
@@ -103,7 +103,11 @@ impl GitHistory {
         since: Option<&str>,
         until: Option<&str>,
     ) -> anyhow::Result<()> {
-        let mut args = vec!["log".to_string(), "--pretty=format:".to_string(), "--name-only".to_string()];
+        let mut args = vec![
+            "log".to_string(),
+            "--pretty=format:".to_string(),
+            "--name-only".to_string(),
+        ];
 
         if let Some(author) = author {
             args.extend(vec!["--author".to_string(), author.to_string()]);
@@ -130,7 +134,7 @@ impl GitHistory {
         // 统计文件修改次数
         let files = String::from_utf8_lossy(&output.stdout);
         let mut file_counts = std::collections::HashMap::new();
-        
+
         for line in files.lines() {
             let file = line.trim();
             if !file.is_empty() {
@@ -144,7 +148,7 @@ impl GitHistory {
 
         println!("📊 File Change Statistics:");
         println!("{}", "─".repeat(60));
-        
+
         for (file, count) in sorted_files.iter().take(20) {
             println!("{:3} changes  {}", count, file);
         }
@@ -181,7 +185,7 @@ impl GitHistory {
         }
 
         let graph = String::from_utf8_lossy(&output.stdout);
-        
+
         if graph.trim().is_empty() {
             println!("No commits found.");
             return Ok(());
@@ -207,7 +211,7 @@ impl GitHistory {
         }
 
         let contributors = String::from_utf8_lossy(&output.stdout);
-        
+
         if contributors.trim().is_empty() {
             println!("No contributors found.");
             return Ok(());
@@ -215,7 +219,7 @@ impl GitHistory {
 
         println!("👥 Contributors (by commit count):");
         println!("{}", "─".repeat(40));
-        
+
         for line in contributors.lines() {
             let parts: Vec<&str> = line.trim().splitn(2, '\t').collect();
             if parts.len() == 2 {
@@ -252,7 +256,7 @@ impl GitHistory {
         }
 
         let results = String::from_utf8_lossy(&output.stdout);
-        
+
         if results.trim().is_empty() {
             println!("No commits found containing '{}'.", search_term);
             return Ok(());
@@ -287,11 +291,14 @@ impl GitHistory {
             .map_err(|e| anyhow::anyhow!("Failed to get file history: {}", e))?;
 
         if !output.status.success() {
-            anyhow::bail!("Git log command failed. File '{}' may not exist or have no history.", file_path);
+            anyhow::bail!(
+                "Git log command failed. File '{}' may not exist or have no history.",
+                file_path
+            );
         }
 
         let history = String::from_utf8_lossy(&output.stdout);
-        
+
         if history.trim().is_empty() {
             println!("No history found for file '{}'.", file_path);
             return Ok(());
@@ -312,7 +319,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_history_basic() {
         let result = GitHistory::show_history(None, None, None, false, None, None).await;
-        
+
         match result {
             Ok(_) => {
                 println!("History displayed successfully");
@@ -326,7 +333,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_history_with_graph() {
         let result = GitHistory::show_history(None, None, None, true, Some(10), None).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Graph history displayed successfully");
@@ -340,7 +347,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_commit_details() {
         let result = GitHistory::show_commit_details("HEAD").await;
-        
+
         match result {
             Ok(_) => {
                 println!("Commit details displayed successfully");
@@ -354,7 +361,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_contributors() {
         let result = GitHistory::show_contributors().await;
-        
+
         match result {
             Ok(_) => {
                 println!("Contributors displayed successfully");
@@ -368,7 +375,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_commits() {
         let result = GitHistory::search_commits("test", Some(5)).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Commit search completed successfully");
@@ -382,7 +389,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_branch_graph() {
         let result = GitHistory::show_branch_graph(Some(10)).await;
-        
+
         match result {
             Ok(_) => {
                 println!("Branch graph displayed successfully");
@@ -407,18 +414,26 @@ mod tests {
         for format in time_formats {
             // 验证格式字符串不为空且包含有效字符
             assert!(!format.is_empty(), "Time format should not be empty");
-            assert!(format.chars().any(|c| c.is_alphanumeric() || c == '-' || c == '.' || c == ' '), 
-                   "Time format should contain valid characters: {}", format);
+            assert!(
+                format
+                    .chars()
+                    .any(|c| c.is_alphanumeric() || c == '-' || c == '.' || c == ' '),
+                "Time format should contain valid characters: {}",
+                format
+            );
         }
     }
 
     #[test]
     fn test_author_filter_validation() {
         let authors = vec!["john.doe", "jane@example.com", "Bob Smith"];
-        
+
         for author in authors {
             assert!(!author.is_empty(), "Author should not be empty");
-            assert!(author.len() <= 100, "Author name should be reasonable length");
+            assert!(
+                author.len() <= 100,
+                "Author name should be reasonable length"
+            );
         }
     }
 
@@ -432,14 +447,28 @@ mod tests {
             (None, None, Some("2024-12-31"), false, None, None), // Until only
             (None, None, None, true, Some(3), None), // Graph only
             (None, None, None, false, None, Some("src/main.rs")), // File only
-            (Some("author"), Some("yesterday"), Some("today"), true, Some(20), Some("README.md")), // All filters
+            (
+                Some("author"),
+                Some("yesterday"),
+                Some("today"),
+                true,
+                Some(20),
+                Some("README.md"),
+            ), // All filters
         ];
 
         for (author, since, until, graph, limit, file) in test_cases {
             let result = GitHistory::show_history(author, since, until, graph, limit, file).await;
             match result {
-                Ok(_) => println!("History with filters {:?} succeeded", (author, since, until, graph, limit, file)),
-                Err(e) => println!("History with filters {:?} failed: {}", (author, since, until, graph, limit, file), e),
+                Ok(_) => println!(
+                    "History with filters {:?} succeeded",
+                    (author, since, until, graph, limit, file)
+                ),
+                Err(e) => println!(
+                    "History with filters {:?} failed: {}",
+                    (author, since, until, graph, limit, file),
+                    e
+                ),
             }
         }
     }
@@ -468,18 +497,25 @@ mod tests {
     async fn test_show_commit_stats_combinations() {
         // Test commit stats with different filter combinations
         let test_cases = vec![
-            (None, None, None), // No filters
-            (Some("test-author"), None, None), // Author only
-            (None, Some("1 week ago"), None), // Since only
-            (None, None, Some("yesterday")), // Until only
+            (None, None, None),                                       // No filters
+            (Some("test-author"), None, None),                        // Author only
+            (None, Some("1 week ago"), None),                         // Since only
+            (None, None, Some("yesterday")),                          // Until only
             (Some("author"), Some("2024-01-01"), Some("2024-12-31")), // All filters
         ];
 
         for (author, since, until) in test_cases {
             let result = GitHistory::show_commit_stats(author, since, until).await;
             match result {
-                Ok(_) => println!("Commit stats with filters {:?} succeeded", (author, since, until)),
-                Err(e) => println!("Commit stats with filters {:?} failed: {}", (author, since, until), e),
+                Ok(_) => println!(
+                    "Commit stats with filters {:?} succeeded",
+                    (author, since, until)
+                ),
+                Err(e) => println!(
+                    "Commit stats with filters {:?} failed: {}",
+                    (author, since, until),
+                    e
+                ),
             }
         }
     }
@@ -530,11 +566,19 @@ mod tests {
         let invalid_authors = vec!["", "   ", "\t\n"];
 
         for author in valid_authors {
-            assert!(!author.trim().is_empty(), "Valid author should not be empty after trim: '{}'", author);
+            assert!(
+                !author.trim().is_empty(),
+                "Valid author should not be empty after trim: '{}'",
+                author
+            );
         }
 
         for author in invalid_authors {
-            assert!(author.trim().is_empty(), "Invalid author should be empty after trim: '{}'", author);
+            assert!(
+                author.trim().is_empty(),
+                "Invalid author should be empty after trim: '{}'",
+                author
+            );
         }
     }
 
@@ -542,18 +586,22 @@ mod tests {
     fn test_date_format_patterns() {
         // Test common date format patterns
         let date_patterns = vec![
-            ("2023-01-01", true), // ISO date
-            ("01/01/2023", true), // US format
-            ("yesterday", true), // Relative
-            ("1 week ago", true), // Relative
+            ("2023-01-01", true),   // ISO date
+            ("01/01/2023", true),   // US format
+            ("yesterday", true),    // Relative
+            ("1 week ago", true),   // Relative
             ("2 months ago", true), // Relative
             ("invalid-date", true), // Will be handled by git
-            ("", false), // Empty
+            ("", false),            // Empty
         ];
 
         for (date, should_be_valid) in date_patterns {
             if should_be_valid {
-                assert!(!date.is_empty() || date.is_empty(), "Date pattern test: {}", date);
+                assert!(
+                    !date.is_empty() || date.is_empty(),
+                    "Date pattern test: {}",
+                    date
+                );
             }
         }
     }
@@ -572,12 +620,10 @@ mod tests {
 
         for task in tasks {
             match task.await {
-                Ok(result) => {
-                    match result {
-                        Ok(_) => println!("Concurrent history operation succeeded"),
-                        Err(e) => println!("Concurrent history operation failed: {}", e),
-                    }
-                }
+                Ok(result) => match result {
+                    Ok(_) => println!("Concurrent history operation succeeded"),
+                    Err(e) => println!("Concurrent history operation failed: {}", e),
+                },
                 Err(e) => println!("Task join error: {}", e),
             }
         }
@@ -611,11 +657,11 @@ mod tests {
         use std::path::Path;
 
         let original_dir = env::current_dir().unwrap();
-        
+
         // Try to test in /tmp (not a git repo)
         if Path::new("/tmp").exists() {
             let _ = env::set_current_dir("/tmp");
-            
+
             let result = GitHistory::show_contributors().await;
             match result {
                 Ok(_) => println!("Contributors succeeded unexpectedly in non-git dir"),
@@ -627,7 +673,7 @@ mod tests {
                 Ok(_) => println!("Search succeeded unexpectedly in non-git dir"),
                 Err(e) => println!("Search failed as expected in non-git dir: {}", e),
             }
-            
+
             // Restore original directory
             let _ = env::set_current_dir(original_dir);
         }
@@ -640,9 +686,9 @@ mod tests {
             "user@domain.com",
             "user-name",
             "user.name",
-            "用户名", // Chinese characters
-            "user name", // Space
-            "user/name", // Slash
+            "用户名",     // Chinese characters
+            "user name",  // Space
+            "user/name",  // Slash
             "user\\name", // Backslash
         ];
 
@@ -650,7 +696,11 @@ mod tests {
             // Ensure no panic during processing
             let _trimmed = author.trim();
             let _length = author.len();
-            assert!(author.is_ascii() || !author.is_ascii(), "Should handle both ASCII and non-ASCII: '{}'", author);
+            assert!(
+                author.is_ascii() || !author.is_ascii(),
+                "Should handle both ASCII and non-ASCII: '{}'",
+                author
+            );
         }
     }
 
@@ -686,15 +736,21 @@ mod tests {
             let start = Instant::now();
             let result = GitHistory::show_history(None, None, None, false, limit, None).await;
             let duration = start.elapsed();
-            
+
             match result {
                 Ok(_) => println!("History with limit {:?} completed in {:?}", limit, duration),
-                Err(e) => println!("History with limit {:?} failed in {:?}: {}", limit, duration, e),
+                Err(e) => println!(
+                    "History with limit {:?} failed in {:?}: {}",
+                    limit, duration, e
+                ),
             }
 
             // Ensure operations complete within reasonable time (not a strict assertion for CI)
             if duration.as_secs() > 30 {
-                println!("Warning: History operation took longer than expected: {:?}", duration);
+                println!(
+                    "Warning: History operation took longer than expected: {:?}",
+                    duration
+                );
             }
         }
     }
@@ -737,14 +793,14 @@ mod tests {
 
         for test in filter_tests {
             println!("Testing filter combination: {}", test.description);
-            
+
             // Validate author
             if let Some(author) = test.author {
                 let is_valid = !author.trim().is_empty();
                 println!("  Author '{}' valid: {}", author, is_valid);
             }
 
-            // Validate file path  
+            // Validate file path
             if let Some(file) = test.file {
                 let is_valid = !file.trim().is_empty();
                 println!("  File '{}' valid: {}", file, is_valid);

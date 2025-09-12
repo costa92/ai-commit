@@ -1,15 +1,21 @@
 // Git 日志视图组件
-use crossterm::event::KeyEvent;
-use ratatui::{Frame, layout::Rect, style::{Color, Style, Modifier}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, ListState}};
 use crate::tui_unified::{
-    state::{AppState, git_state::Commit},
     components::{
         base::{
             component::{Component, ViewComponent, ViewType},
-            events::EventResult
+            events::EventResult,
         },
-        widgets::list::ListWidget
-    }
+        widgets::list::ListWidget,
+    },
+    state::{git_state::Commit, AppState},
+};
+use crossterm::event::KeyEvent;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, ListState},
+    Frame,
 };
 
 /// Git 日志视图 - 显示提交历史
@@ -20,6 +26,14 @@ pub struct GitLogView {
     list_state: ListState,
     focused: bool,
     selected_index: Option<usize>,
+    // 新增：当前过滤的分支
+    current_branch_filter: Option<String>,
+}
+
+impl Default for GitLogView {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GitLogView {
@@ -27,50 +41,46 @@ impl GitLogView {
         let format_fn = Box::new(|commit: &Commit| -> String {
             // 获取短哈希
             let short_hash = &commit.hash[..8.min(commit.hash.len())];
-            
+
             // 格式化时间戳
             let timestamp = commit.date.format("%m-%d %H:%M").to_string();
-            
+
             // 获取提交消息的第一行
             let message = commit.message.lines().next().unwrap_or(&commit.message);
-            
+
             // 组合格式：短哈希 [时间戳] 消息 - 作者
             format!(
                 "{} [{}] {} - {}",
-                short_hash,
-                timestamp,
-                message,
-                commit.author
+                short_hash, timestamp, message, commit.author
             )
         });
 
-        let style_fn = Box::new(|_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
-            if is_selected && is_focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
+        let style_fn = Box::new(
+            |_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
+                if is_selected && is_focused {
+                    Style::default().fg(Color::Black).bg(Color::Yellow)
+                } else if is_selected {
+                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            },
+        );
 
         let search_fn = Box::new(|commit: &Commit, query: &str| -> bool {
             let query = query.to_lowercase();
-            commit.message.to_lowercase().contains(&query) ||
-            commit.author.to_lowercase().contains(&query) ||
-            commit.author_email.to_lowercase().contains(&query) ||
-            commit.hash.to_lowercase().contains(&query)
+            commit.message.to_lowercase().contains(&query)
+                || commit.author.to_lowercase().contains(&query)
+                || commit.author_email.to_lowercase().contains(&query)
+                || commit.hash.to_lowercase().contains(&query)
         });
 
-        let list_widget = ListWidget::new(
-            "Git Log".to_string(),
-            format_fn,
-            style_fn,
-        ).with_search_fn(search_fn);
+        let list_widget =
+            ListWidget::new("Git Log".to_string(), format_fn, style_fn).with_search_fn(search_fn);
 
         let mut list_state = ListState::default();
         list_state.select(Some(0));
-        
+
         Self {
             list_widget,
             show_details: false,
@@ -78,6 +88,7 @@ impl GitLogView {
             list_state,
             focused: false,
             selected_index: None,
+            current_branch_filter: None,
         }
     }
 
@@ -89,12 +100,63 @@ impl GitLogView {
         self.list_widget.set_selected_index(index);
     }
 
+    /// 设置分支过滤
+    pub fn set_branch_filter(&mut self, branch_name: Option<String>) {
+        self.current_branch_filter = branch_name;
+        self.update_title();
+    }
+
+    /// 更新标题以反映当前分支过滤状态
+    fn update_title(&mut self) {
+        let title = if let Some(ref branch_name) = self.current_branch_filter {
+            format!("Git Log - {}", branch_name)
+        } else {
+            "Git Log".to_string()
+        };
+
+        // 重新创建 ListWidget 来更新标题
+        let format_fn = Box::new(|commit: &Commit| -> String {
+            let short_hash = &commit.hash[..8.min(commit.hash.len())];
+            let timestamp = commit.date.format("%m-%d %H:%M").to_string();
+            let message = commit.message.lines().next().unwrap_or(&commit.message);
+            format!(
+                "{} [{}] {} - {}",
+                short_hash, timestamp, message, commit.author
+            )
+        });
+
+        let style_fn = Box::new(
+            |_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
+                if is_selected && is_focused {
+                    Style::default().fg(Color::Black).bg(Color::Yellow)
+                } else if is_selected {
+                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::White)
+                }
+            },
+        );
+
+        let search_fn = Box::new(|commit: &Commit, query: &str| -> bool {
+            let query = query.to_lowercase();
+            commit.message.to_lowercase().contains(&query)
+                || commit.author.to_lowercase().contains(&query)
+                || commit.author_email.to_lowercase().contains(&query)
+                || commit.hash.to_lowercase().contains(&query)
+        });
+
+        let current_items = self.commits.clone();
+        self.list_widget = ListWidget::new(title, format_fn, style_fn)
+            .with_search_fn(search_fn)
+            .with_items(current_items);
+    }
+
     /// 更新commit列表数据
     pub fn update_commits(&mut self, commits: Vec<Commit>) {
         let has_commits = !commits.is_empty();
         self.commits = commits;
         self.list_widget.set_items(self.commits.clone());
-        
+
         // 确保第一个项目被选中
         if has_commits {
             self.list_widget.set_focus(true);
@@ -124,82 +186,53 @@ impl GitLogView {
         }
     }
 
-    fn update_title(&mut self) {
-        let title = if self.show_details {
-            "Git Log (Details)".to_string()
-        } else {
-            "Git Log".to_string()
-        };
-
-        // 需要重新创建 ListWidget 来更新标题
-        let format_fn: Box<dyn Fn(&Commit) -> String + Send> = if self.show_details {
-            Box::new(|commit: &Commit| -> String {
-                format!(
-                    "{}\n{} - {}\n{}\nFiles: {} | Date: {}",
-                    &commit.hash[..8.min(commit.hash.len())],
-                    commit.author,
-                    commit.author_email,
-                    commit.message,
-                    commit.files_changed,
-                    commit.date.format("%Y-%m-%d %H:%M")
-                )
-            })
-        } else {
-            Box::new(|commit: &Commit| -> String {
-                format!(
-                    "{} {} - {}",
-                    &commit.hash[..8.min(commit.hash.len())],
-                    commit.author,
-                    commit.message.lines().next().unwrap_or(&commit.message)
-                )
-            })
-        };
-
-        let style_fn = Box::new(|_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
-            if is_selected && is_focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
-
-        let current_items = self.list_widget.items().to_vec();
-        let selected = self.list_widget.selected_index();
-
-        self.list_widget = ListWidget::new(title, format_fn, style_fn).with_items(current_items);
-        
-        if let Some(_idx) = selected {
-            self.list_widget.set_items(self.list_widget.items().to_vec());
-        }
-    }
-    
     /// 创建彩色的提交项显示（静态版本）
-    fn create_colored_commit_item_static(commit: &Commit, is_selected: bool) -> ListItem {
+    fn create_colored_commit_item_static(commit: &Commit, is_selected: bool) -> ListItem<'_> {
         // 获取短哈希
         let short_hash = &commit.hash[..8.min(commit.hash.len())];
-        
+
         // 格式化时间戳
         let timestamp = commit.date.format("%m-%d %H:%M").to_string();
-        
+
         // 获取提交消息的第一行
         let message = commit.message.lines().next().unwrap_or(&commit.message);
-        
+
         // 根据选中状态确定颜色
-        let hash_color = if is_selected { Color::Yellow } else { Color::DarkGray };
-        let time_color = if is_selected { Color::Cyan } else { Color::Blue };
-        let message_color = if is_selected { Color::White } else { Color::White };
-        let author_color = if is_selected { Color::LightGreen } else { Color::Gray };
-        
+        let hash_color = if is_selected {
+            Color::Yellow
+        } else {
+            Color::DarkGray
+        };
+        let time_color = if is_selected {
+            Color::Cyan
+        } else {
+            Color::Blue
+        };
+        let message_color = if is_selected {
+            Color::White
+        } else {
+            Color::White
+        };
+        let author_color = if is_selected {
+            Color::LightGreen
+        } else {
+            Color::Gray
+        };
+
         // 使用多个 Span 创建彩色显示
         let content = Line::from(vec![
-            Span::styled(format!("{} ", short_hash), Style::default().fg(hash_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("{} ", short_hash),
+                Style::default().fg(hash_color).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(format!("[{}] ", timestamp), Style::default().fg(time_color)),
             Span::styled(message.to_string(), Style::default().fg(message_color)),
-            Span::styled(format!(" - {}", commit.author), Style::default().fg(author_color)),
+            Span::styled(
+                format!(" - {}", commit.author),
+                Style::default().fg(author_color),
+            ),
         ]);
-        
+
         ListItem::new(content)
     }
 }
@@ -219,7 +252,7 @@ impl Component for GitLogView {
         let commits = &self.commits;
         let selected_index = self.selected_index;
         let focused = self.focused;
-        
+
         // 创建彩色的列表项
         let list_items: Vec<ListItem> = commits
             .iter()
@@ -246,7 +279,7 @@ impl Component for GitLogView {
                 Block::default()
                     .title(title)
                     .borders(Borders::ALL)
-                    .border_style(border_style)
+                    .border_style(border_style),
             )
             .highlight_style(if focused {
                 Style::default().fg(Color::Black).bg(Color::Yellow)
@@ -310,9 +343,7 @@ impl Component for GitLogView {
                 }
                 EventResult::Handled
             }
-            _ => {
-                EventResult::NotHandled
-            }
+            _ => EventResult::NotHandled,
         }
     }
 
@@ -367,13 +398,14 @@ impl ViewComponent for GitLogView {
     fn set_selected_index(&mut self, index: Option<usize>) {
         if let Some(idx) = index {
             if idx < self.list_widget.len() {
-                self.list_widget.set_items(self.list_widget.items().to_vec());
+                self.list_widget
+                    .set_items(self.list_widget.items().to_vec());
             }
         }
     }
 }
 
-pub struct BranchesView; 
+pub struct BranchesView;
 pub struct TagsView;
 pub struct RemotesView;
 pub struct StashView;
