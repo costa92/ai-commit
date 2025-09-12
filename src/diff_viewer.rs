@@ -108,8 +108,20 @@ pub struct DiffLine {
 impl DiffViewer {
     /// 创建新的 Diff 查看器
     pub async fn new(commit_hash: &str) -> Result<Self> {
-        let commit_info = Self::load_commit_info(commit_hash).await?;
-        let files = Self::load_diff_files(commit_hash).await?;
+        // 首先验证提交是否存在
+        let commit_exists = Command::new("git")
+            .args(["rev-parse", "--verify", commit_hash])
+            .output()
+            .await?;
+            
+        if !commit_exists.status.success() {
+            return Err(anyhow::anyhow!("Commit {} does not exist", commit_hash));
+        }
+        
+        let commit_info = Self::load_commit_info(commit_hash).await
+            .map_err(|e| anyhow::anyhow!("Failed to load commit info for {}: {}", commit_hash, e))?;
+        let files = Self::load_diff_files(commit_hash).await
+            .map_err(|e| anyhow::anyhow!("Failed to load diff files for {}: {}", commit_hash, e))?;
         
         let mut file_list_state = ListState::default();
         if !files.is_empty() {
@@ -117,9 +129,14 @@ impl DiffViewer {
         }
         
         let current_diff = if !files.is_empty() {
-            Self::load_file_diff(commit_hash, &files[0].path).await?
+            Self::load_file_diff(commit_hash, &files[0].path).await.unwrap_or_else(|e| {
+                format!("Failed to load diff: {}", e)
+            })
         } else {
-            String::new()
+            // 如果没有文件，尝试获取完整的提交diff
+            Self::load_commit_diff(commit_hash).await.unwrap_or_else(|e| {
+                format!("No files changed in this commit. Error: {}", e)
+            })
         };
         
         let mut viewer = Self {
@@ -175,10 +192,16 @@ impl DiffViewer {
     
     /// 加载 diff 文件列表
     async fn load_diff_files(commit_hash: &str) -> Result<Vec<DiffFile>> {
+        // 使用更可靠的 git 命令来获取文件变更
         let output = Command::new("git")
-            .args(["diff-tree", "--no-commit-id", "--name-status", "-r", commit_hash])
+            .args(["show", "--name-status", "--format=", commit_hash])
             .output()
             .await?;
+            
+        if !output.status.success() {
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("Git command failed: {}", error_msg));
+        }
         
         let mut files = Vec::new();
         let file_list = String::from_utf8_lossy(&output.stdout);
@@ -229,11 +252,49 @@ impl DiffViewer {
     /// 加载单个文件的 diff
     async fn load_file_diff(commit_hash: &str, file_path: &str) -> Result<String> {
         let output = Command::new("git")
-            .args(["diff", &format!("{}^", commit_hash), commit_hash, "--", file_path])
+            .args(["show", &format!("{}:{}", commit_hash, file_path)])
+            .output()
+            .await;
+            
+        match output {
+            Ok(result) if result.status.success() => {
+                // 如果可以显示文件内容，则获取完整的diff
+                let diff_output = Command::new("git")
+                    .args(["show", commit_hash, "--", file_path])
+                    .output()
+                    .await?;
+                    
+                if diff_output.status.success() {
+                    Ok(String::from_utf8_lossy(&diff_output.stdout).to_string())
+                } else {
+                    Ok(format!("Could not load diff for file: {}", file_path))
+                }
+            }
+            _ => {
+                // 如果文件不存在，可能是新增或删除的文件
+                let diff_output = Command::new("git")
+                    .args(["show", commit_hash, "--", file_path])
+                    .output()
+                    .await?;
+                    
+                Ok(String::from_utf8_lossy(&diff_output.stdout).to_string())
+            }
+        }
+    }
+    
+    /// 加载完整提交的 diff
+    async fn load_commit_diff(commit_hash: &str) -> Result<String> {
+        let output = Command::new("git")
+            .args(["show", commit_hash])
             .output()
             .await?;
-        
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            let error_msg = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow::anyhow!("Failed to load commit diff: {}", error_msg))
+        }
     }
     
     /// 选择下一个文件

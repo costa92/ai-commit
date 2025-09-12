@@ -88,6 +88,13 @@ impl BranchesView {
         self.list_widget.set_items(branches);
     }
 
+    /// 通知应用状态当前选中的分支
+    pub fn update_selected_branch_in_state(&self, state: &mut AppState) {
+        if let Some(selected_branch) = self.selected_branch() {
+            state.select_branch(selected_branch.name.clone());
+        }
+    }
+
     fn update_title(&mut self) {
         let title = if self.show_remotes {
             "Branches (All)".to_string()
@@ -180,11 +187,37 @@ impl Component for BranchesView {
             }
             // 移除了 'c' 键，因为现在它用于分支切换
             KeyCode::Char('d') => {
-                // TODO: 删除选中的分支
-                EventResult::Handled
+                // 显示选中分支的git diff
+                if let Some(selected_branch) = self.selected_branch() {
+                    if let Some(commit_hash) = &selected_branch.last_commit {
+                        state.request_diff(commit_hash.clone());
+                        EventResult::Handled
+                    } else {
+                        state.add_notification(
+                            "No commit hash available for this branch".to_string(),
+                            crate::tui_unified::state::app_state::NotificationLevel::Warning
+                        );
+                        EventResult::Handled
+                    }
+                } else {
+                    EventResult::NotHandled
+                }
+            }
+            KeyCode::Up | KeyCode::Down | KeyCode::Char('k') | KeyCode::Char('j') => {
+                // 处理方向键选择，并更新分支状态
+                let old_selection = self.list_widget.selected_index();
+                let result = self.list_widget.handle_key_event(key, state);
+                let new_selection = self.list_widget.selected_index();
+                
+                // 如果选择发生变化，更新应用状态中的选中分支
+                if old_selection != new_selection {
+                    self.update_selected_branch_in_state(state);
+                }
+                
+                result
             }
             _ => {
-                // 委托给列表组件处理
+                // 委托给列表组件处理其他按键
                 self.list_widget.handle_key_event(key, state)
             }
         }

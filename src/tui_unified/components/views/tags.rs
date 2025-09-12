@@ -85,8 +85,13 @@ impl Component for TagsView {
         // 处理视图特定的按键
         match key.code {
             KeyCode::Enter => {
-                // TODO: 显示选中标签的详细信息或差异
-                EventResult::Handled
+                // 显示选中标签的git diff
+                if let Some(selected_tag) = self.selected_tag() {
+                    state.request_diff(selected_tag.commit_hash.clone());
+                    EventResult::Handled
+                } else {
+                    EventResult::NotHandled
+                }
             }
             KeyCode::Char('r') => {
                 // 刷新标签列表
