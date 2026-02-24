@@ -101,14 +101,20 @@ impl super::app::TuiUnifiedApp {
                     match commit_agent.execute(task, agent_manager.context()).await {
                         Ok(result) => {
                             if result.success {
-                                self.ai_commit_message = Some(result.content.clone());
+                                // 应用 gitmoji（如果启用）
+                                let content = if config.emoji {
+                                    crate::core::gitmoji::add_emoji(&result.content)
+                                } else {
+                                    result.content.clone()
+                                };
+                                self.ai_commit_message = Some(content.clone());
                                 self.ai_commit_status =
                                     Some("Commit message generated successfully".to_string());
 
                                 // 更新模态框内容
                                 let mut state = self.state.write().await;
                                 state.show_ai_commit_modal(
-                                    result.content,
+                                    content,
                                     "Commit message generated successfully".to_string(),
                                 );
                             } else {

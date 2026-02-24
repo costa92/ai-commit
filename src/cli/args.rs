@@ -979,5 +979,33 @@ mod tests {
         assert!(!args.hook_install);
         assert!(!args.hook_uninstall);
     }
+
+    #[test]
+    fn test_args_emoji_flag() {
+        let args = Args::try_parse_from(["ai-commit", "--emoji"]).unwrap();
+        assert!(args.emoji);
+
+        let args = Args::try_parse_from(["ai-commit", "-e"]).unwrap();
+        assert!(args.emoji);
+
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.emoji);
+    }
+
+    #[test]
+    fn test_args_emoji_with_other_flags() {
+        let args = Args::try_parse_from([
+            "ai-commit",
+            "--emoji",
+            "--push",
+            "--provider",
+            "deepseek",
+        ])
+        .unwrap();
+
+        assert!(args.emoji);
+        assert!(args.push);
+        assert_eq!(args.provider, "deepseek");
+    }
 }
 // CLI参数修改
