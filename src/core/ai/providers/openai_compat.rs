@@ -212,6 +212,55 @@ impl OpenAICompatibleBase {
     }
 }
 
+/// 生成 OpenAI 兼容 Provider 的声明式宏
+///
+/// 用法: `impl_openai_provider!(/// doc comment  StructName, "DisplayName", top_p_option);`
+macro_rules! impl_openai_provider {
+    ($(#[$meta:meta])* $name:ident, $display:literal, $top_p:expr) => {
+        $(#[$meta])*
+        pub struct $name {
+            base: $crate::core::ai::providers::openai_compat::OpenAICompatibleBase,
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        impl $name {
+            pub fn new() -> Self {
+                Self {
+                    base: $crate::core::ai::providers::openai_compat::OpenAICompatibleBase::new(),
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::core::ai::provider::AIProvider for $name {
+            async fn generate(
+                &self,
+                prompt: &str,
+                config: &$crate::core::ai::provider::ProviderConfig,
+            ) -> anyhow::Result<String> {
+                self.base
+                    .generate_chat(prompt, config, $display, $top_p)
+                    .await
+            }
+
+            async fn stream_generate(
+                &self,
+                prompt: &str,
+                config: &$crate::core::ai::provider::ProviderConfig,
+            ) -> anyhow::Result<$crate::core::ai::provider::StreamResponse> {
+                self.base
+                    .stream_chat(prompt, config, $display, $top_p)
+                    .await
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

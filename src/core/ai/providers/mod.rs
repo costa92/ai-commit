@@ -1,10 +1,12 @@
+#[macro_use]
+pub mod openai_compat;
+
 pub mod claude;
 pub mod deepseek;
 pub mod gemini;
 pub mod kimi;
 pub mod ollama;
 pub mod openai;
-pub mod openai_compat;
 pub mod qwen;
 pub mod siliconflow;
 

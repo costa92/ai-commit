@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::ai::diff_analyzer::DiffAnalysis;
 use crate::core::ai::provider::{AIProvider, ProviderConfig};
 use crate::core::ai::validation::COMMIT_FORMAT_REGEX;
 use async_trait::async_trait;
@@ -32,64 +33,6 @@ impl CommitAgent {
         }
     }
 
-    /// 分析 diff 内容
-    fn analyze_diff(&self, diff: &str) -> DiffAnalysis {
-        let mut analysis = DiffAnalysis::default();
-
-        // 统计文件变更
-        for line in diff.lines() {
-            if line.starts_with("+++") || line.starts_with("---") {
-                analysis.files_changed += 1;
-            } else if line.starts_with('+') && !line.starts_with("+++") {
-                analysis.lines_added += 1;
-            } else if line.starts_with('-') && !line.starts_with("---") {
-                analysis.lines_deleted += 1;
-            }
-        }
-
-        // 推断变更类型
-        analysis.change_type = self.infer_change_type(diff);
-        analysis.scope = self.extract_scope(diff);
-
-        analysis
-    }
-
-    /// 推断变更类型
-    fn infer_change_type(&self, diff: &str) -> String {
-        let lower_diff = diff.to_lowercase();
-
-        if lower_diff.contains("test") || lower_diff.contains("spec") {
-            "test".to_string()
-        } else if lower_diff.contains("readme") || lower_diff.contains(".md") {
-            "docs".to_string()
-        } else if lower_diff.contains("fix") || lower_diff.contains("bug") {
-            "fix".to_string()
-        } else if lower_diff.contains("feat") || lower_diff.contains("add") {
-            "feat".to_string()
-        } else if lower_diff.contains("refactor") || lower_diff.contains("optimize") {
-            "refactor".to_string()
-        } else if lower_diff.contains("style") || lower_diff.contains("format") {
-            "style".to_string()
-        } else {
-            "chore".to_string()
-        }
-    }
-
-    /// 提取作用域
-    fn extract_scope(&self, diff: &str) -> Option<String> {
-        // 从文件路径提取作用域
-        for line in diff.lines() {
-            if line.starts_with("+++") || line.starts_with("---") {
-                if let Some(path) = line.split('/').nth(1) {
-                    if let Some(name) = path.split('.').next() {
-                        return Some(name.to_string());
-                    }
-                }
-            }
-        }
-        None
-    }
-
     /// 生成提交消息
     async fn generate_commit_message(&self, diff: &str, context: &AgentContext) -> Result<String> {
         let provider = self
@@ -98,7 +41,7 @@ impl CommitAgent {
             .ok_or_else(|| anyhow::anyhow!("AI provider not initialized"))?;
 
         // 分析 diff
-        let analysis = self.analyze_diff(diff);
+        let analysis = DiffAnalysis::analyze_diff(diff);
 
         // 加载项目记忆上下文
         let memory_context = context
@@ -160,12 +103,12 @@ impl CommitAgent {
         prompt.push_str("- \"test(core): 添加单元测试\" ✅\n\n");
 
         // 提供分析信息作为参考
-        prompt.push_str(&"变更分析（仅供参考）：\n".to_string());
-        prompt.push_str(&format!("- 推荐类型：{}\n", analysis.change_type));
-        if let Some(scope) = &analysis.scope {
+        prompt.push_str("变更分析（仅供参考）：\n");
+        prompt.push_str(&format!("- 推荐类型：{}\n", analysis.primary_change_type));
+        if let Some(scope) = &analysis.dominant_scope {
             prompt.push_str(&format!("- 推荐作用域：{}\n", scope));
         }
-        prompt.push_str(&format!("- 文件变更：{} 个\n", analysis.files_changed));
+        prompt.push_str(&format!("- 文件变更：{} 个\n", analysis.total_files));
 
         // 注入项目记忆上下文
         if !memory_context.is_empty() {
@@ -327,16 +270,6 @@ impl Agent for CommitAgent {
     }
 }
 
-/// Diff 分析结果
-#[derive(Debug, Default)]
-struct DiffAnalysis {
-    files_changed: usize,
-    lines_added: usize,
-    lines_deleted: usize,
-    change_type: String,
-    scope: Option<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,19 +314,6 @@ mod tests {
 
         let message = "  feat(api): 添加功能  \n额外的行\n更多内容";
         assert_eq!(agent.clean_commit_message(message), "feat(api): 添加功能");
-    }
-
-    #[test]
-    fn test_infer_change_type() {
-        let agent = CommitAgent::new();
-
-        assert_eq!(agent.infer_change_type("test_file.rs"), "test");
-        assert_eq!(agent.infer_change_type("README.md"), "docs");
-        assert_eq!(agent.infer_change_type("fix bug in login"), "fix");
-        assert_eq!(agent.infer_change_type("add new feature"), "feat");
-        assert_eq!(agent.infer_change_type("refactor code"), "refactor");
-        assert_eq!(agent.infer_change_type("format code"), "style");
-        assert_eq!(agent.infer_change_type("random changes"), "chore");
     }
 
     #[tokio::test]

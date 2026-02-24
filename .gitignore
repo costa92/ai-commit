@@ -1,2 +1,26 @@
+# Build
 /target
+
+# Environment
 .env
+.env.*
+
+# Test artifacts
+test_*
+!tests/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Binary outputs (accidentally compiled outside target/)
+*.exe
+*.bin
+*.out
