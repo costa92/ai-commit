@@ -61,27 +61,58 @@ api_format = "openai"
 description = "月之暗面 Kimi AI 服务，需要 API Key"
 env_prefix = "AI_COMMIT_KIMI"
 
+[[providers]]
+name = "openai"
+display_name = "OpenAI"
+default_url = "https://api.openai.com/v1/chat/completions"
+requires_api_key = true
+default_model = "gpt-4o-mini"
+supported_models = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "o1-mini"]
+api_format = "openai"
+description = "OpenAI GPT 系列模型，需要 API Key"
+env_prefix = "AI_COMMIT_OPENAI"
+
+[[providers]]
+name = "claude"
+display_name = "Claude"
+default_url = "https://api.anthropic.com/v1/messages"
+requires_api_key = true
+default_model = "claude-sonnet-4-20250514"
+supported_models = ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-6"]
+api_format = "anthropic"
+description = "Anthropic Claude 系列模型，需要 API Key"
+env_prefix = "AI_COMMIT_CLAUDE"
+
+[[providers]]
+name = "gemini"
+display_name = "Gemini"
+default_url = "https://generativelanguage.googleapis.com/v1beta"
+requires_api_key = true
+default_model = "gemini-2.0-flash"
+supported_models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro"]
+api_format = "google"
+description = "Google Gemini 系列模型，需要 API Key"
+env_prefix = "AI_COMMIT_GEMINI"
+
+[[providers]]
+name = "qwen"
+display_name = "Qwen"
+default_url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+requires_api_key = true
+default_model = "qwen-turbo"
+supported_models = ["qwen-turbo", "qwen-plus", "qwen-max"]
+api_format = "openai"
+description = "阿里云通义千问 AI 服务，需要 API Key"
+env_prefix = "AI_COMMIT_QWEN"
+
 # === 如何添加新的提供商 ===
 #
 # 只需要在此文件中添加新的 [[providers]] 配置段即可
-# 例如添加 Claude：
-#
-# [[providers]]
-# name = "claude"
-# display_name = "Anthropic Claude"
-# default_url = "https://api.anthropic.com/v1/messages"
-# requires_api_key = true
-# default_model = "claude-3-sonnet-20240229"
-# supported_models = ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
-# api_format = "openai"
-# description = "Anthropic Claude AI 服务，需要 API Key"
-# env_prefix = "AI_COMMIT_CLAUDE"
-#
 # 添加后即可通过以下方式使用：
-# - 环境变量：AI_COMMIT_PROVIDER=claude
-# - 命令行：ai-commit --provider claude
-# - API Key：AI_COMMIT_CLAUDE_API_KEY=your-key
-# - 自定义URL：AI_COMMIT_CLAUDE_URL=your-custom-url
+# - 环境变量：AI_COMMIT_PROVIDER=<name>
+# - 命令行：ai-commit --provider <name>
+# - API Key：AI_COMMIT_<NAME>_API_KEY=your-key
+# - 自定义URL：AI_COMMIT_<NAME>_URL=your-custom-url
 
 # === 自定义本地服务 ===
 #

@@ -30,6 +30,7 @@ pub struct Config {
     pub provider: String,
     pub model: String,
     pub debug: bool,
+    pub emoji: bool,
 }
 
 impl Config {
@@ -44,6 +45,9 @@ impl Config {
             debug: env::var("AI_COMMIT_DEBUG")
                 .map(|v| v.to_lowercase() == "true" || v == "1")
                 .unwrap_or(false),
+            emoji: env::var("AI_COMMIT_EMOJI")
+                .map(|v| v.to_lowercase() == "true" || v == "1")
+                .unwrap_or(false),
         }
     }
 
@@ -54,6 +58,9 @@ impl Config {
         }
         if !args.model.is_empty() {
             self.model = args.model.clone();
+        }
+        if args.emoji {
+            self.emoji = true;
         }
     }
 

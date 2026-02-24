@@ -243,6 +243,11 @@ pub struct Args {
     #[arg(long = "yes", short = 'y', default_value_t = false)]
     pub skip_confirm: bool,
 
+    // =============== Gitmoji 相关参数 ===============
+    /// 在 commit message 前添加 gitmoji（如 ✨ feat, 🐛 fix）
+    #[arg(long = "emoji", short = 'e', default_value_t = false)]
+    pub emoji: bool,
+
     // =============== Git Hook 相关参数 ===============
     /// 安装 prepare-commit-msg hook 到 .git/hooks/
     #[arg(long = "hook-install", default_value_t = false)]

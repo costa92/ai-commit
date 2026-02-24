@@ -23,7 +23,7 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
 
     // 使用 Agent 生成 commit message
     let start_time = Instant::now();
-    let ai_message = generate_commit_message_with_agent(&diff, config).await?;
+    let mut ai_message = generate_commit_message_with_agent(&diff, config).await?;
     let elapsed_time = start_time.elapsed();
 
     if config.debug {
@@ -36,6 +36,11 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
     if ai_message.is_empty() {
         eprintln!("AI 生成 commit message 为空，请检查 AI 服务。");
         std::process::exit(1);
+    }
+
+    // 应用 gitmoji（如果启用）
+    if config.emoji {
+        ai_message = crate::core::gitmoji::add_emoji(&ai_message);
     }
 
     // 用户确认 commit message
@@ -79,7 +84,12 @@ pub async fn handle_tag_creation_commit(
         // 没有提供 tag_note，使用 AI 生成或默认使用 tag_name
         if !diff.trim().is_empty() {
             // 有代码变更，使用 Agent 生成 commit message
-            let ai_message = generate_commit_message_with_agent(diff, config).await?;
+            let mut ai_message = generate_commit_message_with_agent(diff, config).await?;
+
+            // 应用 gitmoji（如果启用）
+            if config.emoji {
+                ai_message = crate::core::gitmoji::add_emoji(&ai_message);
+            }
 
             if !ai_message.is_empty() {
                 // 用户确认 AI 生成的消息
