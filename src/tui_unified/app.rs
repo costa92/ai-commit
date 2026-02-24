@@ -153,6 +153,7 @@ impl TuiUnifiedApp {
 
             self.handle_pending_diff_request().await?;
             self.handle_direct_branch_switch_request().await?;
+            self.handle_pending_hunk_stage().await?;
 
             if self.should_quit {
                 break;

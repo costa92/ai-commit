@@ -1,6 +1,7 @@
 use crate::cli::args::Args;
 use crate::config::Config;
 use crate::core::ai::agents::{AgentConfig, AgentContext, AgentManager, AgentTask, TaskType};
+use crate::core::ai::memory::ProjectMemory;
 use crate::{git, ui};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -21,9 +22,26 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
         return Ok(());
     }
 
-    // 使用 Agent 生成 commit message
+    // 加载项目记忆
+    let working_dir = std::env::current_dir()?;
+    let mut memory = ProjectMemory::load(&working_dir).unwrap_or_default();
+
+    // 如果记忆为空，从 git log 初始化
+    if memory.conventions.total_commits_analyzed == 0 {
+        if config.debug {
+            println!("初始化项目记忆...");
+        }
+        let _ = memory.initialize_from_git_log().await;
+        let _ = memory.save(&working_dir);
+    }
+
+    // 生成 commit message（单个或多候选）
     let start_time = Instant::now();
-    let mut ai_message = generate_commit_message_with_agent(&diff, config).await?;
+    let ai_message = if config.candidates > 1 {
+        generate_and_select_candidates(&diff, config, &memory).await?
+    } else {
+        generate_commit_message_with_agent(&diff, config, &memory).await?
+    };
     let elapsed_time = start_time.elapsed();
 
     if config.debug {
@@ -39,18 +57,26 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
     }
 
     // 应用 gitmoji（如果启用）
-    if config.emoji {
-        ai_message = crate::core::gitmoji::add_emoji(&ai_message);
-    }
+    let ai_message = if config.emoji {
+        crate::core::gitmoji::add_emoji(&ai_message)
+    } else {
+        ai_message
+    };
 
-    // 用户确认 commit message
-    let final_message = match ui::confirm_commit_message(&ai_message, args.skip_confirm)? {
+    // 用户确认 commit message（多候选模式已选择过，可跳过二次确认）
+    let skip = args.skip_confirm || config.candidates > 1;
+    let final_message = match ui::confirm_commit_message(&ai_message, skip)? {
         ui::ConfirmResult::Confirmed(message) => message,
         ui::ConfirmResult::Rejected => {
             println!("操作已取消。");
             return Ok(());
         }
     };
+
+    // 记录用户修正（如有）并更新记忆
+    memory.record_correction(&ai_message, &final_message);
+    memory.record_commit(&final_message);
+    let _ = memory.save(&working_dir);
 
     // 提交更改
     git::git_commit(&final_message).await?;
@@ -65,6 +91,58 @@ pub async fn handle_commit_commands(args: &Args, config: &Config) -> anyhow::Res
     }
 
     Ok(())
+}
+
+/// 生成多个候选 commit message 并让用户选择
+async fn generate_and_select_candidates(
+    diff: &str,
+    config: &Config,
+    memory: &ProjectMemory,
+) -> anyhow::Result<String> {
+    let n = config.candidates.min(5) as usize; // 最多5个候选
+
+    if config.debug {
+        println!("正在生成 {} 个候选 commit message...", n);
+    }
+
+    // 生成 N 个候选（顺序生成，因为 AgentManager 不是 Send）
+    let mut candidates = Vec::with_capacity(n);
+    for i in 0..n {
+        match generate_commit_message_with_agent(diff, config, memory).await {
+            Ok(msg) if !msg.trim().is_empty() => {
+                if config.debug {
+                    println!("候选 {} 已生成", i + 1);
+                }
+                candidates.push(msg);
+            }
+            Ok(_) => {
+                if config.debug {
+                    eprintln!("候选 {} 生成为空", i + 1);
+                }
+            }
+            Err(e) => {
+                if config.debug {
+                    eprintln!("候选 {} 生成失败: {}", i + 1, e);
+                }
+            }
+        }
+    }
+
+    if candidates.is_empty() {
+        anyhow::bail!("所有候选 commit message 生成均失败");
+    }
+
+    // 去重
+    candidates.dedup();
+
+    if candidates.len() == 1 {
+        return Ok(candidates.into_iter().next().unwrap());
+    }
+
+    // 显示候选列表
+    let options: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
+    let choice = ui::show_menu_and_get_choice(&options)?;
+    Ok(candidates.into_iter().nth(choice).unwrap())
 }
 
 /// 处理 tag 创建相关的 commit 逻辑
@@ -83,8 +161,12 @@ pub async fn handle_tag_creation_commit(
     } else {
         // 没有提供 tag_note，使用 AI 生成或默认使用 tag_name
         if !diff.trim().is_empty() {
+            // 加载项目记忆
+            let working_dir = std::env::current_dir()?;
+            let memory = ProjectMemory::load(&working_dir).unwrap_or_default();
+
             // 有代码变更，使用 Agent 生成 commit message
-            let mut ai_message = generate_commit_message_with_agent(diff, config).await?;
+            let mut ai_message = generate_commit_message_with_agent(diff, config, &memory).await?;
 
             // 应用 gitmoji（如果启用）
             if config.emoji {
@@ -136,7 +218,7 @@ pub async fn handle_tag_creation_commit(
 }
 
 /// 使用 Agent 生成 commit message
-async fn generate_commit_message_with_agent(diff: &str, config: &Config) -> anyhow::Result<String> {
+async fn generate_commit_message_with_agent(diff: &str, config: &Config, memory: &ProjectMemory) -> anyhow::Result<String> {
     // 创建 Agent 管理器
     let mut agent_manager = AgentManager::with_default_context();
 
@@ -151,6 +233,12 @@ async fn generate_commit_message_with_agent(diff: &str, config: &Config) -> anyh
     // 设置 API URL
     let api_url = config.get_url();
     env_vars.insert("API_URL".to_string(), api_url);
+
+    // 注入项目记忆上下文
+    let memory_context = memory.to_prompt_context();
+    if !memory_context.is_empty() {
+        env_vars.insert("MEMORY_CONTEXT".to_string(), memory_context);
+    }
 
     let agent_config = AgentConfig {
         provider: config.provider.clone(),
@@ -235,13 +323,13 @@ mod tests {
     async fn test_generate_commit_message_with_agent() {
         let config = Config::new();
         let test_diff = "diff --git a/test.txt b/test.txt\n+new line";
+        let memory = ProjectMemory::default();
 
-        let result = generate_commit_message_with_agent(test_diff, &config).await;
+        let result = generate_commit_message_with_agent(test_diff, &config, &memory).await;
 
         match result {
             Ok(message) => {
                 println!("Generated commit message: {}", message);
-                // 基本验证：消息不应该为空
                 assert!(!message.is_empty());
             }
             Err(e) => {
@@ -251,6 +339,19 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_candidates_config_default() {
+        let config = Config::default();
+        assert_eq!(config.candidates, 0); // Default is 0, new() sets 1
+    }
+
+    #[test]
+    fn test_candidates_config_from_env() {
+        std::env::remove_var("AI_COMMIT_CANDIDATES");
+        let config = Config::new();
+        assert_eq!(config.candidates, 1);
     }
 
     fn create_test_args() -> Args {

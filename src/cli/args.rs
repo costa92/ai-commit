@@ -248,6 +248,11 @@ pub struct Args {
     #[arg(long = "emoji", short = 'e', default_value_t = false)]
     pub emoji: bool,
 
+    // =============== 多候选相关参数 ===============
+    /// 生成多个候选 commit message 供选择（默认1个）
+    #[arg(long = "candidates", short = 'c', default_value_t = 1)]
+    pub candidates: u8,
+
     // =============== Git Hook 相关参数 ===============
     /// 安装 prepare-commit-msg hook 到 .git/hooks/
     #[arg(long = "hook-install", default_value_t = false)]
@@ -256,6 +261,20 @@ pub struct Args {
     /// 卸载 prepare-commit-msg hook
     #[arg(long = "hook-uninstall", default_value_t = false)]
     pub hook_uninstall: bool,
+
+    // =============== MCP Server 相关参数 ===============
+    /// 启动 MCP Server（JSON-RPC over stdio，供 Claude Code / Cursor 等调用）
+    #[arg(long = "mcp-server", default_value_t = false)]
+    pub mcp_server: bool,
+
+    // =============== Memory 管理相关参数 ===============
+    /// 显示项目记忆信息（提交约定、修正记录等）
+    #[arg(long = "memory-show", default_value_t = false)]
+    pub memory_show: bool,
+
+    /// 重置项目记忆
+    #[arg(long = "memory-reset", default_value_t = false)]
+    pub memory_reset: bool,
 }
 
 #[cfg(test)]
@@ -1006,6 +1025,54 @@ mod tests {
         assert!(args.emoji);
         assert!(args.push);
         assert_eq!(args.provider, "deepseek");
+    }
+
+    #[test]
+    fn test_args_candidates_flag() {
+        let args = Args::try_parse_from(["ai-commit", "--candidates", "3"]).unwrap();
+        assert_eq!(args.candidates, 3);
+
+        let args = Args::try_parse_from(["ai-commit", "-c", "5"]).unwrap();
+        assert_eq!(args.candidates, 5);
+
+        // Default is 1
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert_eq!(args.candidates, 1);
+    }
+
+    #[test]
+    fn test_args_candidates_with_emoji() {
+        let args =
+            Args::try_parse_from(["ai-commit", "--candidates", "3", "--emoji", "--push"]).unwrap();
+
+        assert_eq!(args.candidates, 3);
+        assert!(args.emoji);
+        assert!(args.push);
+    }
+
+    #[test]
+    fn test_args_mcp_server_flag() {
+        let args = Args::try_parse_from(["ai-commit", "--mcp-server"]).unwrap();
+        assert!(args.mcp_server);
+
+        // Default is false
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.mcp_server);
+    }
+
+    #[test]
+    fn test_args_memory_flags() {
+        let args = Args::try_parse_from(["ai-commit", "--memory-show"]).unwrap();
+        assert!(args.memory_show);
+        assert!(!args.memory_reset);
+
+        let args = Args::try_parse_from(["ai-commit", "--memory-reset"]).unwrap();
+        assert!(!args.memory_show);
+        assert!(args.memory_reset);
+
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.memory_show);
+        assert!(!args.memory_reset);
     }
 }
 // CLI参数修改

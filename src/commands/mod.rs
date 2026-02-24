@@ -40,6 +40,27 @@ pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool>
         return Ok(true);
     }
 
+    // MCP Server 模式
+    if args.mcp_server {
+        crate::mcp::server::run_server().await?;
+        return Ok(true);
+    }
+
+    // Memory 管理命令
+    if args.memory_show {
+        let working_dir = std::env::current_dir()?;
+        let memory = crate::core::ai::memory::ProjectMemory::load(&working_dir)
+            .unwrap_or_default();
+        println!("{}", memory.display_summary());
+        return Ok(true);
+    }
+    if args.memory_reset {
+        let working_dir = std::env::current_dir()?;
+        crate::core::ai::memory::ProjectMemory::reset(&working_dir)?;
+        println!("Project memory has been reset.");
+        return Ok(true);
+    }
+
     // 增强功能命令（最高优先级，基于GRV功能）
     if has_enhanced_commands(args) {
         return handle_enhanced_commands(args, config).await.map(|_| true);
@@ -438,5 +459,12 @@ mod tests {
                 println!("Hook uninstall command was routed correctly but execution failed (expected in test environment)");
             }
         }
+    }
+
+    #[test]
+    fn test_mcp_server_flag_detection() {
+        let mut args = Args::default();
+        args.mcp_server = true;
+        assert!(args.mcp_server, "MCP server flag should be detected");
     }
 }

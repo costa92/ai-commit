@@ -228,6 +228,59 @@ impl super::app::TuiUnifiedApp {
         Ok(())
     }
 
+    /// 处理 hunk 级暂存请求
+    pub(crate) async fn handle_pending_hunk_stage(&mut self) -> Result<()> {
+        let hunk_request = {
+            let state = self.state.read().await;
+            let value = state
+                .selected_items
+                .pending_hunk_stage
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take();
+            value
+        };
+
+        if let Some((_file_path, patch)) = hunk_request {
+            // 使用 git apply --cached 暂存单个 hunk
+            let mut child = tokio::process::Command::new("git")
+                .args(["apply", "--cached", "--allow-empty"])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| anyhow::anyhow!("Failed to spawn git apply: {}", e))?;
+
+            if let Some(mut stdin) = child.stdin.take() {
+                use tokio::io::AsyncWriteExt;
+                stdin.write_all(patch.as_bytes()).await.map_err(|e| {
+                    anyhow::anyhow!("Failed to write patch to stdin: {}", e)
+                })?;
+                drop(stdin);
+            }
+
+            let output = child.wait_with_output().await.map_err(|e| {
+                anyhow::anyhow!("Failed to wait for git apply: {}", e)
+            })?;
+
+            let mut state = self.state.write().await;
+            if output.status.success() {
+                state.add_notification(
+                    "Hunk staged successfully".to_string(),
+                    crate::tui_unified::state::app_state::NotificationLevel::Info,
+                );
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                state.add_notification(
+                    format!("Failed to stage hunk: {}", stderr.trim()),
+                    crate::tui_unified::state::app_state::NotificationLevel::Error,
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     /// 同步获取特定分支的提交历史
     pub(crate) fn get_branch_commits_sync(
         &self,

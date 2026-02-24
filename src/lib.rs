@@ -5,6 +5,7 @@ pub mod core;
 pub mod diff_viewer;
 pub mod git;
 pub mod internationalization;
+pub mod mcp;
 pub mod query_history;
 pub mod tui_unified;
 pub mod ui;

@@ -31,6 +31,7 @@ pub struct Config {
     pub model: String,
     pub debug: bool,
     pub emoji: bool,
+    pub candidates: u8,
 }
 
 impl Config {
@@ -48,6 +49,11 @@ impl Config {
             emoji: env::var("AI_COMMIT_EMOJI")
                 .map(|v| v.to_lowercase() == "true" || v == "1")
                 .unwrap_or(false),
+            candidates: env::var("AI_COMMIT_CANDIDATES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1)
+                .max(1),
         }
     }
 
@@ -61,6 +67,9 @@ impl Config {
         }
         if args.emoji {
             self.emoji = true;
+        }
+        if args.candidates > 1 {
+            self.candidates = args.candidates;
         }
     }
 

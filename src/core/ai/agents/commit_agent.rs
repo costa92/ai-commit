@@ -100,8 +100,15 @@ impl CommitAgent {
         // 分析 diff
         let analysis = self.analyze_diff(diff);
 
+        // 加载项目记忆上下文
+        let memory_context = context
+            .env_vars
+            .get("MEMORY_CONTEXT")
+            .cloned()
+            .unwrap_or_default();
+
         // 构建增强的提示词
-        let enhanced_prompt = self.build_enhanced_prompt(diff, &analysis)?;
+        let enhanced_prompt = self.build_enhanced_prompt(diff, &analysis, &memory_context)?;
 
         // 调用 AI 生成
         let provider_config = ProviderConfig {
@@ -128,7 +135,7 @@ impl CommitAgent {
     }
 
     /// 构建增强的提示词
-    fn build_enhanced_prompt(&self, diff: &str, analysis: &DiffAnalysis) -> Result<String> {
+    fn build_enhanced_prompt(&self, diff: &str, analysis: &DiffAnalysis, memory_context: &str) -> Result<String> {
         let mut prompt = String::new();
 
         prompt.push_str("你必须严格按照 Conventional Commits 规范输出 Git 提交消息。\n\n");
@@ -159,6 +166,11 @@ impl CommitAgent {
             prompt.push_str(&format!("- 推荐作用域：{}\n", scope));
         }
         prompt.push_str(&format!("- 文件变更：{} 个\n", analysis.files_changed));
+
+        // 注入项目记忆上下文
+        if !memory_context.is_empty() {
+            prompt.push_str(memory_context);
+        }
 
         prompt.push_str("\n现在直接输出符合格式的提交消息：\n\n");
         prompt.push_str("Diff 内容：\n");

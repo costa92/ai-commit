@@ -99,6 +99,7 @@ pub struct SelectionState {
     pub direct_branch_switch: std::sync::Mutex<Option<String>>, // 直接切换的分支名（不通过模态框）
     pub pending_staging_toggle: std::sync::Mutex<Option<usize>>, // 待切换暂存状态的文件索引
     pub pending_stage_all: std::sync::Mutex<bool>,             // 待暂存全部文件
+    pub pending_hunk_stage: std::sync::Mutex<Option<(String, String)>>, // (file_path, hunk_patch) 待暂存的 hunk
 }
 
 impl Clone for SelectionState {
@@ -140,6 +141,12 @@ impl Clone for SelectionState {
                     .pending_stage_all
                     .lock()
                     .unwrap_or_else(|e| e.into_inner()),
+            ),
+            pending_hunk_stage: std::sync::Mutex::new(
+                self.pending_hunk_stage
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
             ),
         }
     }

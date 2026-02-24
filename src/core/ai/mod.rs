@@ -4,6 +4,7 @@ use std::sync::Arc;
 pub mod agents;
 pub mod diff_analyzer;
 pub mod http;
+pub mod memory;
 pub mod prompt;
 pub mod provider;
 pub mod providers;
