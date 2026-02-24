@@ -92,7 +92,8 @@ fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<V
     let mut worktrees = Vec::new();
 
     for line in output.lines() {
-        if line.trim().is_empty() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
 
@@ -101,43 +102,68 @@ fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<V
         // /path/to/worktree  abc1234 (bare)
         // /path/to/worktree  abc1234 (detached HEAD)
 
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
-            continue;
-        }
-
-        let path = PathBuf::from(parts[0]);
-        let commit = parts[1].to_string();
-
         let mut branch = String::new();
         let mut is_bare = false;
         let mut is_detached = false;
 
-        if parts.len() > 2 {
-            let remainder = parts[2..].join(" ");
-            if remainder.contains("(bare)") {
-                is_bare = true;
-                branch = "bare".to_string();
-            } else if remainder.contains("(detached HEAD)") {
-                is_detached = true;
-                branch = "detached".to_string();
-            } else if remainder.starts_with('[') && remainder.ends_with(']') {
-                branch = remainder
-                    .trim_start_matches('[')
-                    .trim_end_matches(']')
-                    .to_string();
+        // 从右向左解析：先找 branch 部分 [xxx] 或 (bare) 或 (detached HEAD)
+        let before_branch;
+        if let Some(bracket_pos) = trimmed.rfind('[') {
+            if trimmed.ends_with(']') {
+                branch = trimmed[bracket_pos + 1..trimmed.len() - 1].to_string();
+                before_branch = trimmed[..bracket_pos].trim_end();
             } else {
-                branch = remainder;
+                before_branch = trimmed;
+            }
+        } else if trimmed.ends_with("(bare)") {
+            is_bare = true;
+            branch = "bare".to_string();
+            before_branch = trimmed[..trimmed.len() - 6].trim_end();
+        } else if trimmed.ends_with("(detached HEAD)") {
+            is_detached = true;
+            branch = "detached".to_string();
+            before_branch = trimmed[..trimmed.len() - 15].trim_end();
+        } else {
+            before_branch = trimmed;
+        }
+
+        // 从 before_branch 中找最后一个空白分隔的 token 作为 hash
+        if let Some(space_pos) = before_branch.rfind(char::is_whitespace) {
+            let hash_candidate = &before_branch[space_pos + 1..];
+            let path_str = before_branch[..space_pos].trim_end();
+
+            if hash_candidate.len() >= 6
+                && hash_candidate
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit())
+            {
+                worktrees.push(WorktreeInfo::new(
+                    PathBuf::from(path_str),
+                    branch,
+                    hash_candidate.to_string(),
+                    is_bare,
+                    is_detached,
+                ));
+                continue;
             }
         }
 
-        worktrees.push(WorktreeInfo::new(
-            path,
-            branch,
-            commit,
-            is_bare,
-            is_detached,
-        ));
+        // Fallback: 用 split_whitespace 处理简单情况
+        let parts: Vec<&str> = before_branch.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let path = PathBuf::from(parts[0]);
+            let commit = parts[1].to_string();
+            worktrees.push(WorktreeInfo::new(path, branch, commit, is_bare, is_detached));
+        } else if parts.len() == 1 {
+            let path = PathBuf::from(parts[0]);
+            worktrees.push(WorktreeInfo::new(
+                path,
+                branch,
+                String::new(),
+                is_bare,
+                is_detached,
+            ));
+        }
     }
 
     Ok(worktrees)

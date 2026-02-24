@@ -384,7 +384,7 @@ mod tests {
         let test_error_patterns = vec![
             "Failed to run git push",
             "Git push failed",
-            "Failed to get current branch",
+            "Failed to get current git branch",
             "Failed to run git pull",
             "Git pull failed. 请手动解决冲突后重试。",
         ];

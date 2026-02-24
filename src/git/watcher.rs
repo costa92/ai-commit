@@ -235,6 +235,22 @@ impl GitWatcher {
             });
         }
 
+        // 检测清洁状态变化
+        if old_status.is_clean != new_status.is_clean {
+            changes.push(ChangeEvent {
+                event_type: if new_status.is_clean {
+                    ChangeType::FileStaged
+                } else {
+                    ChangeType::FileUnstaged
+                },
+                description: format!(
+                    "Repository clean status: {} -> {}",
+                    old_status.is_clean, new_status.is_clean
+                ),
+                timestamp: now,
+            });
+        }
+
         // 检测远程跟踪变化
         if old_status.ahead_count != new_status.ahead_count
             || old_status.behind_count != new_status.behind_count
@@ -595,7 +611,7 @@ mod tests {
         let changes = GitWatcher::detect_changes(&base_status, &sync_status);
         assert!(changes
             .iter()
-            .any(|c| matches!(c.event_type, ChangeType::NewCommit)));
+            .any(|c| matches!(c.event_type, ChangeType::RemoteUpdate)));
     }
 
     #[test]

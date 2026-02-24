@@ -800,7 +800,7 @@ mod tests {
             NameTest { name: "", should_be_valid: false, reason: "empty name invalid" },
             NameTest { name: "name with spaces", should_be_valid: false, reason: "spaces invalid" },
             NameTest { name: "name/with/slashes", should_be_valid: false, reason: "slashes typically invalid" },
-            NameTest { name: "very-very-very-very-very-very-very-very-long-name-that-exceeds-reasonable-limits", should_be_valid: false, reason: "too long" },
+            NameTest { name: "very-very-very-very-very-very-very-very-very-very-very-very-long-name-that-exceeds-reasonable-limits-for-workflow", should_be_valid: false, reason: "too long" },
         ];
 
         for test in name_tests {
@@ -824,8 +824,10 @@ mod tests {
                     test.reason
                 );
             } else {
-                let has_issues =
-                    test.name.is_empty() || test.name.contains(' ') || test.name.len() > 100;
+                let has_issues = test.name.is_empty()
+                    || test.name.contains(' ')
+                    || test.name.contains('/')
+                    || test.name.len() > 100;
                 assert!(
                     has_issues,
                     "Invalid name should have issues: {} - {}",

@@ -191,7 +191,8 @@ mod tests {
         ];
 
         for (search_term, branch_name, should_match) in test_cases {
-            let path_contains = format!("/repo/worktree-{}", search_term).contains(search_term);
+            let path = format!("/repo/worktree-{}", branch_name.replace('/', "-"));
+            let path_contains = path.contains(search_term);
             let branch_contains = branch_name.contains(search_term);
             let matches = path_contains || branch_contains;
 

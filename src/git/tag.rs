@@ -507,7 +507,8 @@ mod tests {
 
         for (input, expected) in test_cases {
             let result = {
-                let trimmed = input.trim_start_matches('v');
+                let clean = input.trim();
+                let trimmed = clean.trim_start_matches('v');
                 if trimmed.trim().is_empty() {
                     None
                 } else {

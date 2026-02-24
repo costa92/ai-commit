@@ -240,7 +240,12 @@ mod tests {
 
         for (input, expected) in test_cases {
             let parts: Vec<&str> = input.split("..").collect();
-            let result = if parts.len() == 2 {
+            let result = if parts.len() == 2
+                && !parts[0].is_empty()
+                && !parts[1].is_empty()
+                && !parts[0].ends_with('.')
+                && !parts[1].starts_with('.')
+            {
                 Some((parts[0].trim(), parts[1].trim()))
             } else {
                 None

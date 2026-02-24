@@ -239,6 +239,10 @@ impl PromptOptimizer {
         }
 
         let result = optimized.join("\n");
+        if result.is_empty() {
+            // 非 diff 格式的内容直接截断
+            return diff.chars().take(max_chars).collect();
+        }
         if result.len() > max_chars {
             result.chars().take(max_chars).collect()
         } else {

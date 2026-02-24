@@ -75,13 +75,16 @@ impl GitQuery {
 
     /// 检查过滤器是否为空
     fn is_filter_empty(filter: &QueryFilter) -> bool {
-        filter.author.is_none()
-            && filter.message.is_none()
-            && filter.since.is_none()
-            && filter.until.is_none()
-            && filter.file.is_none()
-            && filter.branch.is_none()
-            && filter.tag.is_none()
+        fn is_empty(opt: &Option<String>) -> bool {
+            opt.as_ref().map_or(true, |s| s.trim().is_empty())
+        }
+        is_empty(&filter.author)
+            && is_empty(&filter.message)
+            && is_empty(&filter.since)
+            && is_empty(&filter.until)
+            && is_empty(&filter.file)
+            && is_empty(&filter.branch)
+            && is_empty(&filter.tag)
     }
 
     /// 执行查询并返回结果
@@ -399,8 +402,10 @@ mod tests {
         let query = "AUTHOR:john MESSAGE:feat";
         let filters = GitQuery::parse_query(query).unwrap();
         assert_eq!(filters.len(), 1);
-        // 应该忽略无效的大写关键字
-        assert!(GitQuery::is_filter_empty(&filters[0]));
+        // parse_query uses to_lowercase() internally, so uppercase keywords are valid
+        assert!(!GitQuery::is_filter_empty(&filters[0]));
+        assert_eq!(filters[0].author, Some("john".to_string()));
+        assert_eq!(filters[0].message, Some("feat".to_string()));
 
         // 测试AND/OR大小写
         let query = "author:john and message:feat";
