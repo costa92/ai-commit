@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AI-Commit 安装脚本
-# 支持安装 ai-commit 并创建 ac 简称
+# 支持安装 ai-commit 并创建 aic 简称
 
 set -e
 
@@ -43,10 +43,10 @@ build_project() {
 # 安装二进制文件
 install_binaries() {
     local INSTALL_DIR="$HOME/.cargo/bin"
-    
+
     # 确保安装目录存在
     mkdir -p "$INSTALL_DIR"
-    
+
     # 安装 ai-commit
     if [ -f "target/release/ai-commit" ]; then
         cp target/release/ai-commit "$INSTALL_DIR/"
@@ -55,23 +55,23 @@ install_binaries() {
     else
         error "未找到 ai-commit 二进制文件"
     fi
-    
-    # 创建 ac 符号链接
+
+    # 创建 aic 符号链接
     if [ -f "$INSTALL_DIR/ai-commit" ]; then
-        ln -sf "$INSTALL_DIR/ai-commit" "$INSTALL_DIR/ac"
-        info "已创建 'ac' 简称链接"
+        ln -sf "$INSTALL_DIR/ai-commit" "$INSTALL_DIR/aic"
+        info "已创建 'aic' 简称链接"
     fi
 }
 
 # 配置 Shell 别名（可选）
 setup_shell_alias() {
     echo ""
-    read -p "是否要在 Shell 配置中添加 'ac' 别名？(y/n) " -n 1 -r
+    read -p "是否要在 Shell 配置中添加 'aic' 别名？(y/n) " -n 1 -r
     echo ""
-    
+
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         local SHELL_RC=""
-        
+
         # 检测 Shell 类型
         if [ -n "$ZSH_VERSION" ]; then
             SHELL_RC="$HOME/.zshrc"
@@ -81,12 +81,12 @@ setup_shell_alias() {
             warning "未检测到支持的 Shell，请手动添加别名"
             return
         fi
-        
+
         # 检查是否已存在别名
-        if ! grep -q "alias ac=" "$SHELL_RC" 2>/dev/null; then
+        if ! grep -q "alias aic=" "$SHELL_RC" 2>/dev/null; then
             echo "" >> "$SHELL_RC"
             echo "# AI-Commit 简称" >> "$SHELL_RC"
-            echo "alias ac='ai-commit'" >> "$SHELL_RC"
+            echo "alias aic='ai-commit'" >> "$SHELL_RC"
             info "已添加别名到 $SHELL_RC"
             info "请运行 'source $SHELL_RC' 或重新打开终端以生效"
         else
@@ -98,18 +98,18 @@ setup_shell_alias() {
 # 验证安装
 verify_installation() {
     info "验证安装..."
-    
+
     if command -v ai-commit &> /dev/null; then
         info "✓ ai-commit 已成功安装"
         ai-commit --version
     else
         error "ai-commit 安装失败"
     fi
-    
-    if command -v ac &> /dev/null; then
-        info "✓ ac 简称已可用"
+
+    if command -v aic &> /dev/null; then
+        info "✓ aic 简称已可用"
     else
-        warning "ac 简称未生效，可能需要重新加载 PATH"
+        warning "aic 简称未生效，可能需要重新加载 PATH"
     fi
 }
 
@@ -119,27 +119,27 @@ main() {
     echo "   AI-Commit 安装脚本"
     echo "========================================="
     echo ""
-    
+
     info "开始安装..."
-    
+
     check_rust
     build_project
     install_binaries
     setup_shell_alias
     verify_installation
-    
+
     echo ""
     echo "========================================="
     info "安装完成！"
     echo ""
     echo "使用方法："
     echo "  ai-commit [命令]  # 完整命令"
-    echo "  ac [命令]         # 简称"
+    echo "  aic [命令]        # 简称"
     echo ""
     echo "示例："
-    echo "  ac commit generate"
-    echo "  ac tag create v1.0.0"
-    echo "  ac flow init"
+    echo "  aic commit generate"
+    echo "  aic tag create v1.0.0"
+    echo "  aic flow init"
     echo "========================================="
 }
 

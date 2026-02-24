@@ -77,6 +77,7 @@ impl AsyncGitImpl {
     }
 
     // Helper method to get file change count for a commit
+    #[allow(dead_code)]
     async fn get_commit_files_changed(
         &self,
         hash: &str,

@@ -115,46 +115,7 @@ impl BranchesView {
         } else {
             "Branches (Local)".to_string()
         };
-
-        // 重新创建 ListWidget 来更新标题
-        let format_fn: Box<dyn Fn(&Branch) -> String + Send> =
-            Box::new(|branch: &Branch| -> String {
-                let indicator = if branch.is_current { "* " } else { "  " };
-                let upstream_info = if let Some(ref upstream) = branch.upstream {
-                    format!(" -> {}", upstream)
-                } else {
-                    String::new()
-                };
-                format!("{}{}{}", indicator, branch.name, upstream_info)
-            });
-
-        let style_fn = Box::new(
-            |branch: &Branch, is_selected: bool, is_focused: bool| -> Style {
-                let base_style = if branch.is_current {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::White)
-                };
-
-                if is_selected && is_focused {
-                    base_style.bg(Color::Yellow).fg(Color::Black)
-                } else if is_selected {
-                    base_style.bg(Color::DarkGray)
-                } else {
-                    base_style
-                }
-            },
-        );
-
-        let current_items = self.list_widget.items().to_vec();
-        let selected = self.list_widget.selected_index();
-
-        self.list_widget = ListWidget::new(title, format_fn, style_fn).with_items(current_items);
-
-        if let Some(_idx) = selected {
-            self.list_widget
-                .set_items(self.list_widget.items().to_vec());
-        }
+        self.list_widget.set_title(title);
     }
 }
 

@@ -55,17 +55,7 @@ impl GitLogView {
             )
         });
 
-        let style_fn = Box::new(
-            |_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
-                if is_selected && is_focused {
-                    Style::default().fg(Color::Black).bg(Color::Yellow)
-                } else if is_selected {
-                    Style::default().fg(Color::White).bg(Color::DarkGray)
-                } else {
-                    Style::default().fg(Color::White)
-                }
-            },
-        );
+        let style_fn = Box::new(super::shared::default_selection_style);
 
         let search_fn = Box::new(|commit: &Commit, query: &str| -> bool {
             let query = query.to_lowercase();
@@ -113,42 +103,7 @@ impl GitLogView {
         } else {
             "Git Log".to_string()
         };
-
-        // 重新创建 ListWidget 来更新标题
-        let format_fn = Box::new(|commit: &Commit| -> String {
-            let short_hash = &commit.hash[..8.min(commit.hash.len())];
-            let timestamp = commit.date.format("%m-%d %H:%M").to_string();
-            let message = commit.message.lines().next().unwrap_or(&commit.message);
-            format!(
-                "{} [{}] {} - {}",
-                short_hash, timestamp, message, commit.author
-            )
-        });
-
-        let style_fn = Box::new(
-            |_commit: &Commit, is_selected: bool, is_focused: bool| -> Style {
-                if is_selected && is_focused {
-                    Style::default().fg(Color::Black).bg(Color::Yellow)
-                } else if is_selected {
-                    Style::default().fg(Color::White).bg(Color::DarkGray)
-                } else {
-                    Style::default().fg(Color::White)
-                }
-            },
-        );
-
-        let search_fn = Box::new(|commit: &Commit, query: &str| -> bool {
-            let query = query.to_lowercase();
-            commit.message.to_lowercase().contains(&query)
-                || commit.author.to_lowercase().contains(&query)
-                || commit.author_email.to_lowercase().contains(&query)
-                || commit.hash.to_lowercase().contains(&query)
-        });
-
-        let current_items = self.commits.clone();
-        self.list_widget = ListWidget::new(title, format_fn, style_fn)
-            .with_search_fn(search_fn)
-            .with_items(current_items);
+        self.list_widget.set_title(title);
     }
 
     /// 更新commit列表数据

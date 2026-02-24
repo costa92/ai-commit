@@ -2,6 +2,7 @@
 //!
 //! 这个模块实现了整合后的 TUI 界面，结合了 `--query-tui-pro` 和 `--tui` 的最佳功能。
 
+mod ai_agent_handler;
 mod ai_commit_handler;
 pub mod algorithms;
 pub mod app;

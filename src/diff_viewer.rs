@@ -51,6 +51,8 @@ pub struct DiffViewer {
     pub hunks: Vec<DiffHunk>,
     /// 当前选中的修改块索引
     pub current_hunk: usize,
+    /// 上次渲染的视口高度（用于 clamp_scroll 计算）
+    pub viewport_height: u16,
 }
 
 /// Diff 修改块（hunk）
@@ -158,6 +160,7 @@ impl DiffViewer {
             show_file_list: true, // 默认显示文件列表
             hunks: Vec::new(),
             current_hunk: 0,
+            viewport_height: 40, // 合理默认值，渲染时会更新
         };
 
         // 解析当前文件的修改块
@@ -268,7 +271,7 @@ impl DiffViewer {
             Ok(result) if result.status.success() => {
                 // 如果可以显示文件内容，则获取完整的diff
                 let diff_output = Command::new("git")
-                    .args(["show", commit_hash, "--", file_path])
+                    .args(["show", "--format=", commit_hash, "--", file_path])
                     .output()
                     .await?;
 
@@ -281,7 +284,7 @@ impl DiffViewer {
             _ => {
                 // 如果文件不存在，可能是新增或删除的文件
                 let diff_output = Command::new("git")
-                    .args(["show", commit_hash, "--", file_path])
+                    .args(["show", "--format=", commit_hash, "--", file_path])
                     .output()
                     .await?;
 
@@ -293,7 +296,7 @@ impl DiffViewer {
     /// 加载完整提交的 diff
     async fn load_commit_diff(commit_hash: &str) -> Result<String> {
         let output = Command::new("git")
-            .args(["show", commit_hash])
+            .args(["show", "--format=", commit_hash])
             .output()
             .await?;
 
@@ -415,7 +418,7 @@ impl DiffViewer {
                 // 删除的行只显示在左边
                 old_lines.push(DiffLine {
                     line_type: DiffLineType::Removed,
-                    content: line[1..].to_string(),
+                    content: line.strip_prefix('-').unwrap_or(line).to_string(),
                     old_line_num: Some(old_line_num),
                     new_line_num: None,
                 });
@@ -431,7 +434,7 @@ impl DiffViewer {
                 // 添加的行只显示在右边
                 new_lines.push(DiffLine {
                     line_type: DiffLineType::Added,
-                    content: line[1..].to_string(),
+                    content: line.strip_prefix('+').unwrap_or(line).to_string(),
                     old_line_num: None,
                     new_line_num: Some(new_line_num),
                 });
@@ -445,8 +448,8 @@ impl DiffViewer {
                 new_line_num += 1;
             } else if !in_header && !line.is_empty() {
                 // 上下文行显示在两边
-                let content = if line.starts_with(" ") {
-                    line[1..].to_string()
+                let content = if let Some(s) = line.strip_prefix(' ') {
+                    s.to_string()
                 } else {
                     line.to_string()
                 };
@@ -488,7 +491,7 @@ impl DiffViewer {
                     if let Some((old_start, new_start)) = parse_hunk_header(line) {
                         // 尝试解析行数信息
                         let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2 {
+                        if parts.len() >= 3 {
                             let old_info = &parts[1]; // -old_start,old_lines
                             let new_info = &parts[2]; // +new_start,new_lines
 
@@ -518,8 +521,7 @@ impl DiffViewer {
                 let mut processed_new = 0;
 
                 while end_line < lines.len()
-                    && processed_old < old_lines
-                    && processed_new < new_lines
+                    && (processed_old < old_lines || processed_new < new_lines)
                 {
                     let content_line = lines[end_line];
 
@@ -603,6 +605,16 @@ impl DiffViewer {
         if let Some(hunk) = self.hunks.get(self.current_hunk) {
             // 将当前 hunk 滚动到视图中央
             self.diff_scroll = hunk.start_line.saturating_sub(5) as u16;
+        }
+        self.clamp_scroll();
+    }
+
+    /// 限制 diff_scroll 不超过内容可滚动范围
+    pub fn clamp_scroll(&mut self) {
+        let total_lines = self.current_diff.lines().count() as u16;
+        let max = total_lines.saturating_sub(self.viewport_height);
+        if self.diff_scroll > max {
+            self.diff_scroll = max;
         }
     }
 

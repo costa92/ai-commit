@@ -51,6 +51,14 @@ impl super::app::TuiUnifiedApp {
                     return self.enter_ai_commit_mode().await;
                 }
             }
+            KeyCode::Char('v') => {
+                // AI Code Review
+                return self.enter_review_mode().await;
+            }
+            KeyCode::Char('f') => {
+                // AI Refactor Suggestions
+                return self.enter_refactor_mode().await;
+            }
             KeyCode::Tab => {
                 if self.current_mode == AppMode::Normal {
                     self.focus_manager.next_focus();
@@ -131,6 +139,9 @@ impl super::app::TuiUnifiedApp {
                 crate::tui_unified::state::app_state::ViewType::QueryHistory => {
                     self.query_history_view.handle_key_event(key, &mut state)
                 }
+                crate::tui_unified::state::app_state::ViewType::Staging => {
+                    self.staging_view.handle_key_event(key, &mut state)
+                }
             },
             _ => EventResult::NotHandled,
         };
@@ -196,6 +207,11 @@ impl super::app::TuiUnifiedApp {
                     state.set_current_view(
                         crate::tui_unified::state::app_state::ViewType::QueryHistory,
                     );
+                    self.focus_manager.set_focus(FocusPanel::Content);
+                }
+                KeyCode::Char('7') => {
+                    state.set_current_view(crate::tui_unified::state::app_state::ViewType::Staging);
+                    self.staging_view.refresh_file_list(&state);
                     self.focus_manager.set_focus(FocusPanel::Content);
                 }
                 KeyCode::Tab => {
@@ -264,6 +280,9 @@ impl super::app::TuiUnifiedApp {
             }
             crate::tui_unified::state::app_state::ViewType::QueryHistory => {
                 self.query_history_view.search(query);
+            }
+            crate::tui_unified::state::app_state::ViewType::Staging => {
+                // Staging view does not support search
             }
         }
 

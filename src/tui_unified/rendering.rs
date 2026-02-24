@@ -82,15 +82,19 @@ impl TuiUnifiedApp {
                         let selected_branch = state.selected_items.selected_branch.clone();
                         self.git_log_view.set_branch_filter(selected_branch.clone());
 
-                        // 获取并显示选中分支的提交历史
-                        let commits_to_show = if let Some(ref branch_name) = selected_branch {
-                            self.get_branch_commits_sync(branch_name)
-                                .unwrap_or_else(|_| state.repo_state.commits.clone())
-                        } else {
-                            state.repo_state.commits.clone()
-                        };
-
-                        self.git_log_view.update_commits(commits_to_show);
+                        // 使用缓存避免每帧重新加载分支提交
+                        let branch_changed = selected_branch != self.cached_branch_name;
+                        if branch_changed {
+                            let commits_to_show = if let Some(ref branch_name) = selected_branch {
+                                self.get_branch_commits_sync(branch_name)
+                                    .unwrap_or_else(|_| state.repo_state.commits.clone())
+                            } else {
+                                state.repo_state.commits.clone()
+                            };
+                            self.cached_branch_name = selected_branch;
+                            self.cached_branch_commits = commits_to_show.clone();
+                            self.git_log_view.update_commits(commits_to_show);
+                        }
                         self.git_log_view.set_focus(false); // git log在分支视图中不获得焦点
                         self.git_log_view.render(frame, chunks[1], &state);
                     }
@@ -114,6 +118,11 @@ impl TuiUnifiedApp {
                             .set_focus(self.focus_manager.current_panel == FocusPanel::Content);
                         self.query_history_view
                             .render(frame, layout.content, &state);
+                    }
+                    crate::tui_unified::state::app_state::ViewType::Staging => {
+                        self.staging_view
+                            .set_focus(self.focus_manager.current_panel == FocusPanel::Content);
+                        self.staging_view.render(frame, layout.content, &state);
                     }
                 }
 
@@ -184,10 +193,13 @@ impl TuiUnifiedApp {
             crate::tui_unified::state::app_state::ViewType::QueryHistory => {
                 "Enter to execute query"
             }
+            crate::tui_unified::state::app_state::ViewType::Staging => {
+                "Space-toggle, a-stage all, c-commit"
+            }
         };
 
         let status_content = format!(
-            "[{}] Focus: {} | View: {:?} | {} | Tab-focus, c-AI commit, r-refresh, ?-help, q-quit",
+            "[{}] Focus: {} | View: {:?} | {} | Tab-focus, c-AI commit, v-review, f-refactor, r-refresh, ?-help, q-quit",
             mode_text, focus_text, state.current_view, view_specific_keys
         );
 

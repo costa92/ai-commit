@@ -51,7 +51,8 @@ impl ProviderFactory {
     /// 根据名称创建提供商
     pub fn create(name: &str) -> Result<Box<dyn AIProvider>> {
         use crate::core::ai::providers::{
-            DeepseekProvider, KimiProvider, OllamaProvider, SiliconFlowProvider,
+            ClaudeProvider, DeepseekProvider, GeminiProvider, KimiProvider, OllamaProvider,
+            OpenAIProvider, QwenProvider, SiliconFlowProvider,
         };
 
         match name.to_lowercase().as_str() {
@@ -59,13 +60,26 @@ impl ProviderFactory {
             "deepseek" => Ok(Box::new(DeepseekProvider::new())),
             "siliconflow" => Ok(Box::new(SiliconFlowProvider::new())),
             "kimi" => Ok(Box::new(KimiProvider::new())),
+            "openai" => Ok(Box::new(OpenAIProvider::new())),
+            "claude" => Ok(Box::new(ClaudeProvider::new())),
+            "gemini" => Ok(Box::new(GeminiProvider::new())),
+            "qwen" => Ok(Box::new(QwenProvider::new())),
             _ => anyhow::bail!("Unknown AI provider: {}", name),
         }
     }
 
     /// 获取所有支持的提供商列表
     pub fn list_providers() -> Vec<&'static str> {
-        vec!["ollama", "deepseek", "siliconflow", "kimi"]
+        vec![
+            "ollama",
+            "deepseek",
+            "siliconflow",
+            "kimi",
+            "openai",
+            "claude",
+            "gemini",
+            "qwen",
+        ]
     }
 }
 
@@ -89,6 +103,10 @@ mod tests {
         assert!(providers.contains(&"deepseek"));
         assert!(providers.contains(&"siliconflow"));
         assert!(providers.contains(&"kimi"));
+        assert!(providers.contains(&"openai"));
+        assert!(providers.contains(&"claude"));
+        assert!(providers.contains(&"gemini"));
+        assert!(providers.contains(&"qwen"));
     }
 
     #[test]
@@ -97,6 +115,10 @@ mod tests {
         assert!(ProviderFactory::create("deepseek").is_ok());
         assert!(ProviderFactory::create("siliconflow").is_ok());
         assert!(ProviderFactory::create("kimi").is_ok());
+        assert!(ProviderFactory::create("openai").is_ok());
+        assert!(ProviderFactory::create("claude").is_ok());
+        assert!(ProviderFactory::create("gemini").is_ok());
+        assert!(ProviderFactory::create("qwen").is_ok());
         assert!(ProviderFactory::create("unknown").is_err());
     }
 }

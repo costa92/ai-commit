@@ -36,7 +36,7 @@ latest-tag:
 tag-changelog:
 	@echo "Getting tag changelog..."
 	@git-cliff --config .git-cliff.toml --tag $(tag)
-	
+
 
 # 运行默认程序 (ai-commit)
 # 用法: make run ARGS="--help"
@@ -45,12 +45,12 @@ run:
 	@echo "Running ai-commit..."
 	@cargo run -- $(ARGS)
 
-# 运行简化版本  
-# 用法: make run-ac ARGS="--help"
-.PHONY: run-ac
-run-ac:
-	@echo "Running ac..."
-	@cargo run --bin ac -- $(ARGS) 
+# 运行简化版本
+# 用法: make run-aic ARGS="--help"
+.PHONY: run-aic
+run-aic:
+	@echo "Running aic..."
+	@cargo run --bin aic -- $(ARGS)
 
 
 # 运行测试
@@ -136,9 +136,9 @@ install: build-only
 		mkdir -p ~/.cargo/bin; \
 	fi
 	@cp target/release/ai-commit ~/.cargo/bin/
-	@cp target/release/ac ~/.cargo/bin/
+	@cp target/release/aic ~/.cargo/bin/
 	@echo "Installation completed successfully"
-	@echo "You can now use both 'ai-commit' and 'ac' commands"
+	@echo "You can now use both 'ai-commit' and 'aic' commands"
 
 # 安装到系统 (包含完整测试)
 .PHONY: install-with-test
@@ -148,17 +148,17 @@ install-with-test: build
 		mkdir -p ~/.cargo/bin; \
 	fi
 	@cp target/release/ai-commit ~/.cargo/bin/
-	@cp target/release/ac ~/.cargo/bin/
+	@cp target/release/aic ~/.cargo/bin/
 	@echo "Installation completed successfully"
-	@echo "You can now use both 'ai-commit' and 'ac' commands"
+	@echo "You can now use both 'ai-commit' and 'aic' commands"
 
 # 仅安装简称
 .PHONY: install-alias
 install-alias:
-	@echo "Creating 'ac' alias..."
+	@echo "Creating 'aic' alias..."
 	@if [ -f ~/.cargo/bin/ai-commit ]; then \
-		ln -sf ~/.cargo/bin/ai-commit ~/.cargo/bin/ac; \
-		echo "Alias 'ac' created successfully"; \
+		ln -sf ~/.cargo/bin/ai-commit ~/.cargo/bin/aic; \
+		echo "Alias 'aic' created successfully"; \
 	else \
 		echo "Error: ai-commit not found. Run 'make install' first"; \
 		exit 1; \
@@ -169,5 +169,4 @@ install-alias:
 install-with-script:
 	@echo "Running installation script..."
 	@bash ./install.sh
-
 

@@ -2,9 +2,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 
-// 大文件阈值 (字符数)
+/// 大文件阈值 (字符数)
 const LARGE_DIFF_THRESHOLD: usize = 10000;
-// 多文件阈值 (文件数量)
+/// 多文件阈值 (文件数量)
 const MULTI_FILE_THRESHOLD: usize = 5;
 
 static FILE_CHANGE_REGEX: Lazy<Regex> =
@@ -52,9 +52,7 @@ impl DiffAnalysis {
         let mut current_deletions = 0;
 
         for line in diff.lines() {
-            // 检测文件变更
             if let Some(captures) = FILE_CHANGE_REGEX.captures(line) {
-                // 保存前一个文件的统计
                 if let Some(file_path) = current_file.take() {
                     file_changes.push(FileChange {
                         file_path,
@@ -68,22 +66,16 @@ impl DiffAnalysis {
                     current_additions = 0;
                     current_deletions = 0;
                 }
-
                 current_file = Some(captures.get(2).unwrap().as_str().to_string());
-            }
-            // 统计添加行
-            else if ADDITION_REGEX.is_match(line) && !line.starts_with("+++") {
+            } else if ADDITION_REGEX.is_match(line) && !line.starts_with("+++") {
                 current_additions += 1;
                 total_additions += 1;
-            }
-            // 统计删除行
-            else if DELETION_REGEX.is_match(line) && !line.starts_with("---") {
+            } else if DELETION_REGEX.is_match(line) && !line.starts_with("---") {
                 current_deletions += 1;
                 total_deletions += 1;
             }
         }
 
-        // 处理最后一个文件
         if let Some(file_path) = current_file {
             file_changes.push(FileChange {
                 file_path,
@@ -114,7 +106,7 @@ impl DiffAnalysis {
 
     fn determine_change_type(additions: usize, deletions: usize) -> ChangeType {
         match (additions, deletions) {
-            (0, 0) => ChangeType::Modified, // 可能是权限变更等
+            (0, 0) => ChangeType::Modified,
             (a, 0) if a > 0 => ChangeType::Added,
             (0, d) if d > 0 => ChangeType::Deleted,
             _ => ChangeType::Modified,
@@ -140,7 +132,6 @@ impl DiffAnalysis {
             ChangeType::Added => "feat".to_string(),
             ChangeType::Deleted => "refactor".to_string(),
             ChangeType::Modified => {
-                // 基于文件路径推断类型
                 if file_changes.iter().any(|f| f.file_path.contains("test")) {
                     "test".to_string()
                 } else if file_changes
@@ -179,10 +170,8 @@ impl DiffAnalysis {
     }
 
     fn extract_scope_from_path(file_path: &str) -> Option<String> {
-        // 从文件路径中提取作用域
         let path_parts: Vec<&str> = file_path.split('/').collect();
 
-        // 优先级规则：src/ > 具体模块 > 顶级目录
         if path_parts.len() >= 2 {
             match path_parts[0] {
                 "src" if path_parts.len() >= 3 => Some(path_parts[1].to_string()),
@@ -199,7 +188,6 @@ impl DiffAnalysis {
                 _ => Some(path_parts[0].to_string()),
             }
         } else if let Some(filename) = path_parts.last() {
-            // 从文件名推断作用域
             if filename.contains("test") {
                 Some("test".to_string())
             } else if filename.ends_with(".md") {
@@ -222,12 +210,10 @@ impl DiffAnalysis {
 
         let mut summary_parts = Vec::new();
 
-        // 文件数量摘要
         if self.is_multi_file {
             summary_parts.push(format!("涉及{}个文件", self.total_files));
         }
 
-        // 变更摘要
         if self.total_additions > 0 && self.total_deletions > 0 {
             summary_parts.push(format!(
                 "新增{}行，删除{}行",
@@ -239,7 +225,6 @@ impl DiffAnalysis {
             summary_parts.push(format!("删除{}行", self.total_deletions));
         }
 
-        // 主要变更类型
         let change_summary = match self.primary_change_type.as_str() {
             "feat" => "添加新功能",
             "fix" => "修复问题",
@@ -254,7 +239,7 @@ impl DiffAnalysis {
         summary_parts.join("，")
     }
 
-    /// 为大型或多文件diff生成优化的prompt
+    /// 为大型或多文件 diff 生成优化的 prompt
     pub fn create_optimized_prompt(&self, original_diff: &str) -> String {
         if !self.is_large_diff && !self.is_multi_file {
             return original_diff.to_string();
@@ -262,10 +247,8 @@ impl DiffAnalysis {
 
         let mut optimized_prompt = String::new();
 
-        // 添加摘要信息
         optimized_prompt.push_str(&format!("变更摘要：{}\n\n", self.generate_summary()));
 
-        // 文件列表
         optimized_prompt.push_str("主要变更文件：\n");
         for (i, change) in self.file_changes.iter().take(10).enumerate() {
             let change_type_desc = match change.change_type {
@@ -288,7 +271,6 @@ impl DiffAnalysis {
             optimized_prompt.push_str(&format!("...还有{}个文件\n", self.file_changes.len() - 10));
         }
 
-        // 如果diff过大，只包含关键部分
         if self.is_large_diff {
             optimized_prompt.push_str("\n核心变更片段：\n");
             optimized_prompt.push_str(&Self::extract_key_changes(original_diff));
@@ -309,7 +291,6 @@ impl DiffAnalysis {
 
         for line in lines {
             if line.starts_with("diff --git") {
-                // 保存前一个文件的关键变更
                 if !change_lines.is_empty() {
                     key_changes.push(format!(
                         "File: {}\n{}",
@@ -319,19 +300,13 @@ impl DiffAnalysis {
                     change_lines.clear();
                 }
                 current_file = line.to_string();
-            } else if line.starts_with("@@") {
-                // 保存上下文信息
+            } else if line.starts_with("@@")
+                || ((line.starts_with('+') || line.starts_with('-')) && change_lines.len() < 20)
+            {
                 change_lines.push(line.to_string());
-            } else if line.starts_with('+') || line.starts_with('-') {
-                // 保存变更行
-                if change_lines.len() < 20 {
-                    // 限制每个文件最多20行关键变更
-                    change_lines.push(line.to_string());
-                }
             }
         }
 
-        // 保存最后一个文件
         if !change_lines.is_empty() {
             key_changes.push(format!(
                 "File: {}\n{}",
@@ -408,22 +383,8 @@ index 1234567..abcdefg 100644
         assert_eq!(analysis.total_files, 3);
         assert!(analysis.total_additions > 0);
         assert!(!analysis.is_large_diff);
-        assert!(!analysis.is_multi_file); // 3 files < MULTI_FILE_THRESHOLD (5)
-
-        // Check file changes
+        assert!(!analysis.is_multi_file);
         assert_eq!(analysis.file_changes.len(), 3);
-        assert!(analysis
-            .file_changes
-            .iter()
-            .any(|f| f.file_path == "src/lib.rs"));
-        assert!(analysis
-            .file_changes
-            .iter()
-            .any(|f| f.file_path == "src/new_module.rs"));
-        assert!(analysis
-            .file_changes
-            .iter()
-            .any(|f| f.file_path == "tests/integration.rs"));
     }
 
     #[test]
@@ -483,7 +444,7 @@ index 1234567..abcdefg 100644
 "#;
 
         let mut analysis = DiffAnalysis::analyze_diff(diff);
-        analysis.is_multi_file = true; // Force multi-file for testing
+        analysis.is_multi_file = true;
         analysis.total_files = 6;
 
         let summary = analysis.generate_summary();

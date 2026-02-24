@@ -29,6 +29,7 @@ pub struct SidebarPanel {
 struct MenuItem {
     label: String,
     key: char,
+    #[allow(dead_code)]
     description: String,
 }
 
@@ -87,6 +88,7 @@ impl SidebarPanel {
             crate::tui_unified::state::app_state::ViewType::Remotes => 2,
             crate::tui_unified::state::app_state::ViewType::Stash => 3,
             crate::tui_unified::state::app_state::ViewType::QueryHistory => 4,
+            crate::tui_unified::state::app_state::ViewType::Staging => 5,
         };
 
         if new_index < self.menu_items.len() {

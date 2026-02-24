@@ -1,6 +1,6 @@
-use ai_commit::ai::prompt;
 use ai_commit::cli::args::Args;
 use ai_commit::config::{ensure_env_loaded, Config};
+use ai_commit::core::ai::prompt;
 use ai_commit::internationalization::{I18n, Language};
 use clap::Parser;
 

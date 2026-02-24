@@ -10,7 +10,10 @@ impl GitFlow {
         // 检查是否在 git 仓库中，如果不是则先初始化
         if !GitCore::is_git_repo().await {
             println!("Not in a Git repository, initializing...");
-            GitCore::init_repository().await?;
+            let messages = GitCore::init_repository().await?;
+            for msg in messages {
+                println!("{}", msg);
+            }
         }
 
         // 确保 develop 分支存在

@@ -8,22 +8,14 @@ use ai_commit::config::Config;
 
 /// 测试辅助函数：清理所有相关环境变量
 fn clear_all_env_vars() {
-    // 基础环境变量
-    let basic_vars = ["AI_COMMIT_PROVIDER", "AI_COMMIT_MODEL", "AI_COMMIT_DEBUG"];
-
-    // 所有提供商的环境变量
-    let providers = ProviderRegistry::list_providers();
-    let mut provider_vars = Vec::new();
-
-    for provider_name in providers {
-        if let Some(provider_info) = ProviderRegistry::get_provider(provider_name) {
-            provider_vars.push(provider_info.api_key_env_var());
-            provider_vars.push(provider_info.url_env_var());
-        }
-    }
-
-    // 清理所有变量
-    for var in basic_vars.iter().chain(provider_vars.iter()) {
+    let vars = [
+        "AI_COMMIT_PROVIDER",
+        "AI_COMMIT_MODEL",
+        "AI_COMMIT_DEBUG",
+        "AI_COMMIT_PROVIDER_API_KEY",
+        "AI_COMMIT_PROVIDER_URL",
+    ];
+    for var in &vars {
         env::remove_var(var);
     }
 }
@@ -49,7 +41,7 @@ fn test_e2e_environment_variable_detection() {
     env::set_var("AI_COMMIT_PROVIDER", "deepseek");
     env::set_var("AI_COMMIT_MODEL", "deepseek-coder");
     env::set_var("AI_COMMIT_DEBUG", "true");
-    env::set_var("AI_COMMIT_DEEPSEEK_API_KEY", "test-key-123");
+    env::set_var("AI_COMMIT_PROVIDER_API_KEY", "test-key-123");
 
     // 验证环境变量设置成功
     let current_vars = get_ai_commit_env_vars();
@@ -68,7 +60,7 @@ fn test_e2e_environment_variable_detection() {
         Some(&"true".to_string())
     );
     assert_eq!(
-        current_vars.get("AI_COMMIT_DEEPSEEK_API_KEY"),
+        current_vars.get("AI_COMMIT_PROVIDER_API_KEY"),
         Some(&"test-key-123".to_string())
     );
 
@@ -88,9 +80,8 @@ fn test_e2e_basic_environment_variable_loading() {
     env::set_var("AI_COMMIT_MODEL", "llama3");
     env::set_var("AI_COMMIT_DEBUG", "false");
 
-    // 创建配置并加载环境变量
-    let mut config = Config::new();
-    config.load_from_env();
+    // Config::new() 自动从环境变量加载
+    let config = Config::new();
 
     // 验证环境变量正确加载
     assert_eq!(config.provider, "ollama", "provider 应该从环境变量加载");
@@ -103,80 +94,45 @@ fn test_e2e_basic_environment_variable_loading() {
 }
 
 #[test]
-fn test_e2e_provider_specific_environment_variables() {
-    println!("🧪 E2E 测试：提供商特定环境变量");
+fn test_e2e_unified_provider_api_key_and_url() {
+    println!("🧪 E2E 测试：统一提供商 API Key 和 URL");
 
     let test_cases = [
-        (
-            "deepseek",
-            "AI_COMMIT_DEEPSEEK_API_KEY",
-            "AI_COMMIT_DEEPSEEK_URL",
-            "deepseek-chat",
-        ),
-        (
-            "siliconflow",
-            "AI_COMMIT_SILICONFLOW_API_KEY",
-            "AI_COMMIT_SILICONFLOW_URL",
-            "qwen/Qwen2-7B-Instruct",
-        ),
-        (
-            "kimi",
-            "AI_COMMIT_KIMI_API_KEY",
-            "AI_COMMIT_KIMI_URL",
-            "moonshot-v1-8k",
-        ),
+        ("deepseek", "deepseek-chat"),
+        ("siliconflow", "qwen/Qwen2-7B-Instruct"),
+        ("kimi", "moonshot-v1-8k"),
     ];
 
-    for (provider, api_key_var, url_var, model) in &test_cases {
+    for (provider, model) in &test_cases {
         clear_all_env_vars();
 
-        println!("测试提供商环境变量: {}", provider);
+        println!("测试提供商: {}", provider);
 
-        // 设置提供商特定的环境变量
+        // 设置统一的环境变量
         env::set_var("AI_COMMIT_PROVIDER", provider);
         env::set_var("AI_COMMIT_MODEL", model);
-        env::set_var(api_key_var, "test-api-key-456");
-        env::set_var(url_var, "https://custom.example.com/api");
+        env::set_var("AI_COMMIT_PROVIDER_API_KEY", "test-api-key-456");
+        env::set_var("AI_COMMIT_PROVIDER_URL", "https://custom.example.com/api");
 
-        // 加载配置
-        let mut config = Config::new();
-        config.load_from_env();
+        let config = Config::new();
 
         // 验证基础配置
         assert_eq!(config.provider, *provider);
         assert_eq!(config.model, *model);
 
-        // 验证提供商特定配置
-        match *provider {
-            "deepseek" => {
-                assert_eq!(
-                    config.deepseek_api_key(),
-                    Some("test-api-key-456".to_string())
-                );
-                assert_eq!(config.deepseek_url(), "https://custom.example.com/api");
-            }
-            "siliconflow" => {
-                assert_eq!(
-                    config.siliconflow_api_key(),
-                    Some("test-api-key-456".to_string())
-                );
-                assert_eq!(config.siliconflow_url(), "https://custom.example.com/api");
-            }
-            "kimi" => {
-                assert_eq!(config.kimi_api_key(), Some("test-api-key-456".to_string()));
-                assert_eq!(config.kimi_url(), "https://custom.example.com/api");
-            }
-            _ => panic!("未知的测试提供商: {}", provider),
-        }
-
-        // 验证当前提供商方法
+        // 验证统一 API Key 和 URL
         assert_eq!(
-            config.current_api_key(),
-            Some("test-api-key-456".to_string())
+            config.get_api_key(),
+            Some("test-api-key-456".to_string()),
+            "API Key 应该从统一环境变量加载"
         );
-        assert_eq!(config.current_url(), "https://custom.example.com/api");
+        assert_eq!(
+            config.get_url(),
+            "https://custom.example.com/api",
+            "URL 应该从统一环境变量加载"
+        );
 
-        println!("✅ 提供商 {} 环境变量验证通过", provider);
+        println!("✅ 提供商 {} 统一环境变量验证通过", provider);
     }
 
     clear_all_env_vars();
@@ -191,33 +147,32 @@ fn test_e2e_environment_variable_override_defaults() {
     // 1. 测试默认配置
     let default_config = Config::new();
     assert_eq!(default_config.provider, "ollama", "默认提供商应该是 ollama");
-
-    // 获取默认的 ollama 配置
-    let default_ollama_url = default_config.ollama_url();
-    let default_ollama_api_key = default_config.ollama_api_key();
+    assert_eq!(default_config.model, "mistral", "默认模型应该是 mistral");
 
     // 2. 使用环境变量覆盖默认值
     env::set_var("AI_COMMIT_PROVIDER", "ollama");
     env::set_var("AI_COMMIT_MODEL", "qwen2"); // 不是默认的 mistral
     env::set_var(
-        "AI_COMMIT_OLLAMA_URL",
+        "AI_COMMIT_PROVIDER_URL",
         "http://custom.ollama:11434/api/generate",
     );
 
-    let mut override_config = Config::new();
-    override_config.load_from_env();
+    let override_config = Config::new();
 
     // 验证环境变量覆盖了默认值
     assert_eq!(override_config.provider, "ollama");
-    assert_eq!(override_config.model, "qwen2", "环境变量应该覆盖默认模型");
     assert_eq!(
-        override_config.ollama_url(),
+        override_config.model, "qwen2",
+        "环境变量应该覆盖默认模型"
+    );
+    assert_eq!(
+        override_config.get_url(),
         "http://custom.ollama:11434/api/generate",
         "环境变量应该覆盖默认 URL"
     );
 
-    // API Key 应该保持默认（None，因为 Ollama 不需要）
-    assert_eq!(override_config.ollama_api_key(), default_ollama_api_key);
+    // API Key 应该为 None（Ollama 不需要，且未设置统一 Key）
+    assert_eq!(override_config.get_api_key(), None);
 
     println!("✅ 环境变量覆盖默认值验证通过");
 
@@ -252,10 +207,8 @@ fn test_e2e_debug_mode_environment_variables() {
         if !debug_value.is_empty() {
             env::set_var("AI_COMMIT_DEBUG", debug_value);
         }
-        // 如果是空字符串，则不设置环境变量
 
-        let mut config = Config::new();
-        config.load_from_env();
+        let config = Config::new();
 
         assert_eq!(
             config.debug, *expected,
@@ -273,76 +226,43 @@ fn test_e2e_debug_mode_environment_variables() {
 fn test_e2e_multiple_providers_environment_switching() {
     println!("🧪 E2E 测试：多提供商环境切换");
 
-    // 准备多个提供商的完整配置
     let provider_configs = vec![
-        (
-            "ollama",
-            "mistral",
-            None,
-            Some("http://localhost:11434/api/generate"),
-        ),
-        (
-            "deepseek",
-            "deepseek-coder",
-            Some("sk-deepseek-test"),
-            Some("https://api.deepseek.com/v1/chat/completions"),
-        ),
-        (
-            "siliconflow",
-            "qwen/Qwen2-72B-Instruct",
-            Some("sk-siliconflow-test"),
-            Some("https://api.siliconflow.cn/v1/chat/completions"),
-        ),
-        (
-            "kimi",
-            "moonshot-v1-32k",
-            Some("sk-kimi-test"),
-            Some("https://api.moonshot.cn/v1/chat/completions"),
-        ),
+        ("ollama", "mistral", false),
+        ("deepseek", "deepseek-coder", true),
+        ("siliconflow", "qwen/Qwen2-72B-Instruct", true),
+        ("kimi", "moonshot-v1-32k", true),
     ];
 
-    for (provider, model, api_key, url) in &provider_configs {
+    for (provider, model, needs_key) in &provider_configs {
         clear_all_env_vars();
 
         println!("切换到提供商: {}", provider);
 
-        // 设置基础配置
         env::set_var("AI_COMMIT_PROVIDER", provider);
         env::set_var("AI_COMMIT_MODEL", model);
         env::set_var("AI_COMMIT_DEBUG", "false");
 
-        // 设置提供商特定配置
-        let provider_info = ProviderRegistry::get_provider(provider).unwrap();
-
-        if let Some(key) = api_key {
-            env::set_var(&provider_info.api_key_env_var(), key);
+        if *needs_key {
+            env::set_var("AI_COMMIT_PROVIDER_API_KEY", "test-key-for-switch");
         }
 
-        if let Some(custom_url) = url {
-            env::set_var(&provider_info.url_env_var(), custom_url);
-        }
-
-        // 加载并验证配置
-        let mut config = Config::new();
-        config.load_from_env();
+        let config = Config::new();
 
         assert_eq!(config.provider, *provider);
         assert_eq!(config.model, *model);
 
         // 验证当前提供商信息
-        let current_provider = config.current_provider_info().unwrap();
+        let current_provider = config.get_current_provider_info().unwrap();
         assert_eq!(current_provider.name, *provider);
 
         // 验证 API Key
-        if api_key.is_some() {
-            assert_eq!(config.current_api_key(), api_key.map(|s| s.to_string()));
+        if *needs_key {
+            assert_eq!(
+                config.get_api_key(),
+                Some("test-key-for-switch".to_string())
+            );
         } else {
-            assert_eq!(config.current_api_key(), None);
-        }
-
-        // 验证 URL
-        if let Some(expected_url) = url {
-            assert_eq!(config.current_url(), *expected_url);
+            assert_eq!(config.get_api_key(), None);
         }
 
         // 验证配置有效性
@@ -361,131 +281,34 @@ fn test_e2e_multiple_providers_environment_switching() {
 }
 
 #[test]
-fn test_e2e_environment_variable_isolation() {
-    println!("🧪 E2E 测试：环境变量隔离");
+fn test_e2e_url_fallback_to_provider_default() {
+    println!("🧪 E2E 测试：URL 回退到提供商默认值");
 
     clear_all_env_vars();
 
-    // 设置多个提供商的环境变量，验证它们互不干扰
-    env::set_var("AI_COMMIT_DEEPSEEK_API_KEY", "deepseek-key");
-    env::set_var("AI_COMMIT_DEEPSEEK_URL", "https://deepseek.custom.com");
-    env::set_var("AI_COMMIT_SILICONFLOW_API_KEY", "siliconflow-key");
-    env::set_var(
-        "AI_COMMIT_SILICONFLOW_URL",
-        "https://siliconflow.custom.com",
-    );
-    env::set_var("AI_COMMIT_KIMI_API_KEY", "kimi-key");
-    env::set_var("AI_COMMIT_KIMI_URL", "https://kimi.custom.com");
-    env::set_var(
-        "AI_COMMIT_OLLAMA_URL",
-        "http://ollama.custom.com:11434/api/generate",
-    );
-
-    // 测试每个提供商都能正确获取自己的配置
-    let test_providers = ["deepseek", "siliconflow", "kimi", "ollama"];
-
-    for provider in &test_providers {
-        env::set_var("AI_COMMIT_PROVIDER", provider);
-
-        let mut config = Config::new();
-        config.load_from_env();
-
-        assert_eq!(config.provider, *provider);
-
-        // 验证每个提供商只获取自己的配置
-        match *provider {
-            "deepseek" => {
-                assert_eq!(config.deepseek_api_key(), Some("deepseek-key".to_string()));
-                assert_eq!(config.deepseek_url(), "https://deepseek.custom.com");
-                assert_eq!(config.current_api_key(), Some("deepseek-key".to_string()));
-                assert_eq!(config.current_url(), "https://deepseek.custom.com");
-
-                // 验证其他提供商的配置不受影响但可以访问
-                assert_eq!(
-                    config.siliconflow_api_key(),
-                    Some("siliconflow-key".to_string())
-                );
-                assert_eq!(config.kimi_api_key(), Some("kimi-key".to_string()));
-            }
-            "siliconflow" => {
-                assert_eq!(
-                    config.siliconflow_api_key(),
-                    Some("siliconflow-key".to_string())
-                );
-                assert_eq!(config.siliconflow_url(), "https://siliconflow.custom.com");
-                assert_eq!(
-                    config.current_api_key(),
-                    Some("siliconflow-key".to_string())
-                );
-                assert_eq!(config.current_url(), "https://siliconflow.custom.com");
-            }
-            "kimi" => {
-                assert_eq!(config.kimi_api_key(), Some("kimi-key".to_string()));
-                assert_eq!(config.kimi_url(), "https://kimi.custom.com");
-                assert_eq!(config.current_api_key(), Some("kimi-key".to_string()));
-                assert_eq!(config.current_url(), "https://kimi.custom.com");
-            }
-            "ollama" => {
-                assert_eq!(config.ollama_api_key(), None); // Ollama 不需要 API Key
-                assert_eq!(
-                    config.ollama_url(),
-                    "http://ollama.custom.com:11434/api/generate"
-                );
-                assert_eq!(config.current_api_key(), None);
-                assert_eq!(
-                    config.current_url(),
-                    "http://ollama.custom.com:11434/api/generate"
-                );
-            }
-            _ => panic!("未知的测试提供商: {}", provider),
-        }
-
-        println!("✅ 提供商 {} 环境变量隔离验证通过", provider);
-    }
-
-    clear_all_env_vars();
-}
-
-#[test]
-fn test_e2e_environment_variable_fallback_to_defaults() {
-    println!("🧪 E2E 测试：环境变量回退到默认值");
-
-    clear_all_env_vars();
-
-    // 只设置部分环境变量，验证其他配置使用默认值
+    // 只设置 provider，不设置 URL，应该使用提供商默认 URL
     env::set_var("AI_COMMIT_PROVIDER", "deepseek");
-    env::set_var("AI_COMMIT_DEEPSEEK_API_KEY", "partial-test-key");
-    // 故意不设置 MODEL, DEBUG, URL 等其他变量
+    env::set_var("AI_COMMIT_PROVIDER_API_KEY", "test-key");
 
-    let mut config = Config::new();
-    config.load_from_env();
+    let config = Config::new();
 
-    // 验证设置的环境变量生效
-    assert_eq!(config.provider, "deepseek");
-    assert_eq!(
-        config.deepseek_api_key(),
-        Some("partial-test-key".to_string())
-    );
-
-    // 验证未设置的环境变量使用默认值
     let provider_info = ProviderRegistry::get_provider("deepseek").unwrap();
     assert_eq!(
-        config.model, provider_info.default_model,
-        "模型应该使用默认值"
-    );
-    assert!(!config.debug, "debug 应该使用默认值 false");
-    assert_eq!(
-        config.deepseek_url(),
+        config.get_url(),
         provider_info.default_url,
-        "URL 应该使用默认值"
+        "URL 应该使用提供商默认值"
     );
 
-    // 验证其他提供商使用默认配置
-    let ollama_info = ProviderRegistry::get_provider("ollama").unwrap();
-    assert_eq!(config.ollama_url(), ollama_info.default_url);
-    assert_eq!(config.ollama_api_key(), None);
+    // 设置自定义 URL 后应该覆盖默认值
+    env::set_var("AI_COMMIT_PROVIDER_URL", "https://custom.deepseek.com/api");
+    let config2 = Config::new();
+    assert_eq!(
+        config2.get_url(),
+        "https://custom.deepseek.com/api",
+        "自定义 URL 应该覆盖默认值"
+    );
 
-    println!("✅ 环境变量回退到默认值验证通过");
+    println!("✅ URL 回退验证通过");
 
     clear_all_env_vars();
 }
@@ -499,34 +322,32 @@ fn test_e2e_environment_variable_validation_integration() {
     // 测试有效的环境变量配置
     env::set_var("AI_COMMIT_PROVIDER", "kimi");
     env::set_var("AI_COMMIT_MODEL", "moonshot-v1-128k");
-    env::set_var("AI_COMMIT_KIMI_API_KEY", "valid-kimi-key");
+    env::set_var("AI_COMMIT_PROVIDER_API_KEY", "valid-kimi-key");
     env::set_var("AI_COMMIT_DEBUG", "true");
 
-    let mut config = Config::new();
-    config.load_from_env();
+    let config = Config::new();
 
-    // 验证配置加载
     assert_eq!(config.provider, "kimi");
     assert_eq!(config.model, "moonshot-v1-128k");
     assert!(config.debug);
-    assert_eq!(config.kimi_api_key(), Some("valid-kimi-key".to_string()));
+    assert_eq!(config.get_api_key(), Some("valid-kimi-key".to_string()));
 
-    // 验证配置有效性
     let validation_result = config.validate();
-    assert!(validation_result.is_ok(), "有效的环境变量配置应该验证通过");
+    assert!(
+        validation_result.is_ok(),
+        "有效的环境变量配置应该验证通过"
+    );
 
     println!("✅ 有效环境变量配置验证通过");
 
-    // 测试无效的环境变量配置
+    // 测试无效的环境变量配置（缺少必需的 API Key）
     clear_all_env_vars();
 
     env::set_var("AI_COMMIT_PROVIDER", "deepseek");
     env::set_var("AI_COMMIT_MODEL", "deepseek-chat");
-    // 故意不设置必需的 API Key
+    // 故意不设置 API Key
 
-    config = Config::new();
-    config.load_from_env();
-
+    let config = Config::new();
     let validation_result = config.validate();
     assert!(
         validation_result.is_err(),
@@ -535,8 +356,9 @@ fn test_e2e_environment_variable_validation_integration() {
 
     let error_msg = validation_result.err().unwrap().to_string();
     assert!(
-        error_msg.contains("Deepseek API key"),
-        "错误消息应该提及 Deepseek API key"
+        error_msg.contains("API key"),
+        "错误消息应该提及 API key, got: {}",
+        error_msg
     );
 
     println!("✅ 无效环境变量配置验证通过");
@@ -550,7 +372,6 @@ fn test_e2e_all_provider_environment_variables() {
 
     let all_providers = ProviderRegistry::list_providers();
 
-    // 为每个提供商测试完整的环境变量配置
     for provider_name in &all_providers {
         clear_all_env_vars();
 
@@ -563,37 +384,33 @@ fn test_e2e_all_provider_environment_variables() {
         env::set_var("AI_COMMIT_MODEL", &provider_info.default_model);
         env::set_var("AI_COMMIT_DEBUG", "false");
 
-        // 设置提供商特定环境变量
         if provider_info.requires_api_key {
-            env::set_var(&provider_info.api_key_env_var(), "test-key-for-validation");
+            env::set_var("AI_COMMIT_PROVIDER_API_KEY", "test-key-for-validation");
         }
 
         let custom_url = format!("https://custom-{}.example.com/api", provider_name);
-        env::set_var(&provider_info.url_env_var(), &custom_url);
+        env::set_var("AI_COMMIT_PROVIDER_URL", &custom_url);
 
-        // 加载配置
-        let mut config = Config::new();
-        config.load_from_env();
+        let config = Config::new();
 
         // 验证基础配置
         assert_eq!(config.provider, *provider_name);
         assert_eq!(config.model, provider_info.default_model);
         assert!(!config.debug);
 
-        // 验证提供商特定配置
+        // 验证 API Key
         if provider_info.requires_api_key {
             assert_eq!(
-                config.current_api_key(),
+                config.get_api_key(),
                 Some("test-key-for-validation".to_string())
             );
-        } else {
-            assert_eq!(config.current_api_key(), None);
         }
 
-        assert_eq!(config.current_url(), custom_url);
+        // 验证 URL
+        assert_eq!(config.get_url(), custom_url);
 
         // 验证当前提供商信息
-        let current_provider = config.current_provider_info().unwrap();
+        let current_provider = config.get_current_provider_info().unwrap();
         assert_eq!(current_provider.name, *provider_name);
 
         // 验证配置有效性
@@ -607,6 +424,32 @@ fn test_e2e_all_provider_environment_variables() {
 
         println!("✅ 提供商 {} 完整环境变量验证通过", provider_name);
     }
+
+    clear_all_env_vars();
+}
+
+#[test]
+fn test_e2e_config_default_values() {
+    println!("🧪 E2E 测试：配置默认值");
+
+    clear_all_env_vars();
+
+    let config = Config::new();
+
+    assert_eq!(config.provider, "ollama", "默认 provider 应该是 ollama");
+    assert_eq!(config.model, "mistral", "默认 model 应该是 mistral");
+    assert!(!config.debug, "默认 debug 应该是 false");
+    assert_eq!(config.get_api_key(), None, "默认 API Key 应该是 None");
+
+    // 默认 URL 应该来自 ollama provider info
+    let ollama_info = ProviderRegistry::get_provider("ollama").unwrap();
+    assert_eq!(
+        config.get_url(),
+        ollama_info.default_url,
+        "默认 URL 应该是 ollama 的默认 URL"
+    );
+
+    println!("✅ 配置默认值验证通过");
 
     clear_all_env_vars();
 }

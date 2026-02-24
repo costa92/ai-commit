@@ -1,5 +1,65 @@
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// 提示词模板文件缓存
+static PROMPT_FILE_CACHE: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
+
+/// 从文件系统加载提示词模板（带缓存）
+///
+/// 加载优先级:
+/// 1. 本地 `commit-prompt.txt`
+/// 2. 环境变量 `AI_COMMIT_PROMPT_PATH` 指定的文件
+/// 3. 内置模板（编译时嵌入）
+pub fn load_prompt_template_cached() -> String {
+    // 检查缓存
+    {
+        let cache = PROMPT_FILE_CACHE.read().unwrap();
+        if let Some(ref template) = *cache {
+            return template.clone();
+        }
+    }
+
+    // 加载模板
+    let template = load_prompt_template_from_fs();
+    *PROMPT_FILE_CACHE.write().unwrap() = Some(template.clone());
+
+    template
+}
+
+/// 从文件系统加载提示词模板
+fn load_prompt_template_from_fs() -> String {
+    let default_path = "commit-prompt.txt";
+    let prompt_path = if std::path::Path::new(default_path).exists() {
+        default_path.to_string()
+    } else {
+        std::env::var("AI_COMMIT_PROMPT_PATH").unwrap_or_else(|_| default_path.to_owned())
+    };
+
+    if std::path::Path::new(&prompt_path).exists() {
+        match std::fs::read_to_string(&prompt_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("无法读取提示词文件 {}: {}，使用内置模板", prompt_path, e);
+                include_str!("../../../commit-prompt.txt").to_owned()
+            }
+        }
+    } else {
+        include_str!("../../../commit-prompt.txt").to_owned()
+    }
+}
+
+/// 获取替换了 diff 的完整提示词（兼容旧 API）
+pub fn get_prompt(diff: &str) -> String {
+    let template = load_prompt_template_cached();
+    template.replace("{{git_diff}}", diff)
+}
+
+/// 清除提示词文件缓存
+pub fn clear_prompt_cache() {
+    *PROMPT_FILE_CACHE.write().unwrap() = None;
+}
 
 /// 提示词模板
 #[derive(Debug, Clone)]
@@ -65,16 +125,15 @@ impl PromptBuilder {
             templates: HashMap::new(),
         };
 
-        // 加载默认模板
         builder.load_default_templates();
         builder
     }
 
     /// 加载默认模板
     fn load_default_templates(&mut self) {
-        // Commit 提示词模板
-        let commit_template =
-            PromptTemplate::new("commit", include_str!("../../../commit-prompt.txt"));
+        // 优先从文件加载 commit 模板
+        let commit_template_str = load_prompt_template_cached();
+        let commit_template = PromptTemplate::new("commit", commit_template_str);
         self.templates.insert("commit".to_string(), commit_template);
 
         // Tag 提示词模板
@@ -153,7 +212,6 @@ impl PromptOptimizer {
             return diff.to_string();
         }
 
-        // 提取关键变更
         let lines: Vec<&str> = diff.lines().collect();
         let mut optimized = Vec::new();
         let mut current_file = String::new();
@@ -168,7 +226,7 @@ impl PromptOptimizer {
                 important_lines = 0;
             } else if line.starts_with("@@") {
                 optimized.push(line.to_string());
-                important_lines = 10; // 保留上下文行数
+                important_lines = 10;
             } else if important_lines > 0 {
                 optimized.push(line.to_string());
                 important_lines -= 1;
@@ -182,7 +240,6 @@ impl PromptOptimizer {
 
         let result = optimized.join("\n");
         if result.len() > max_chars {
-            // 如果还是太长，截取前面部分
             result.chars().take(max_chars).collect()
         } else {
             result
@@ -254,5 +311,29 @@ mod tests {
         let optimized = PromptOptimizer::optimize_for_large_diff(&diff, 100);
 
         assert_eq!(optimized.len(), 100);
+    }
+
+    #[test]
+    fn test_get_prompt_replaces_diff() {
+        clear_prompt_cache();
+        let prompt = get_prompt("test diff content");
+        assert!(prompt.contains("test diff content"));
+        assert!(!prompt.contains("{{git_diff}}"));
+    }
+
+    #[test]
+    fn test_get_prompt_cached() {
+        clear_prompt_cache();
+        let p1 = get_prompt("diff1");
+        let p2 = get_prompt("diff2");
+        assert!(p1.contains("diff1"));
+        assert!(p2.contains("diff2"));
+    }
+
+    #[test]
+    fn test_clear_prompt_cache() {
+        clear_prompt_cache();
+        let cache = PROMPT_FILE_CACHE.read().unwrap();
+        assert!(cache.is_none());
     }
 }

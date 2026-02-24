@@ -3,65 +3,65 @@
 # 将此文件 source 到你的 .bashrc 或 .zshrc 中
 
 # 基本别名
-alias ac='ai-commit'
+alias aic='ai-commit'
 
 # 常用命令别名
-alias acc='ai-commit commit'
-alias acg='ai-commit commit generate'
-alias acp='ai-commit commit generate --push'
-alias act='ai-commit tag'
-alias acf='ai-commit flow'
-alias acw='ai-commit worktree'
-alias ach='ai-commit history'
+alias aicc='ai-commit commit'
+alias aicg='ai-commit commit generate'
+alias aicp='ai-commit commit generate --push'
+alias aict='ai-commit tag'
+alias aicf='ai-commit flow'
+alias aicw='ai-commit worktree'
+alias aich='ai-commit history'
 
 # Git Flow 快捷方式
-alias acff='ai-commit flow feature'
-alias acfh='ai-commit flow hotfix'
-alias acfr='ai-commit flow release'
+alias aicff='ai-commit flow feature'
+alias aicfh='ai-commit flow hotfix'
+alias aicfr='ai-commit flow release'
 
 # 带参数的函数别名
-ac-commit() {
+aic-commit() {
     ai-commit commit generate "$@"
 }
 
-ac-tag() {
+aic-tag() {
     ai-commit tag create "$@"
 }
 
-ac-feature() {
+aic-feature() {
     ai-commit flow feature start "$@"
 }
 
-ac-worktree() {
+aic-worktree() {
     ai-commit worktree create "$@"
 }
 
 # 快速提交并推送
-acp() {
+aicp() {
     ai-commit commit generate --add --push "$@"
 }
 
 # 快速创建标签并推送
-act-push() {
+aict-push() {
     ai-commit tag create "$1" --push
 }
 
 # 显示帮助信息
-ac-help() {
+aic-help() {
     echo "AI-Commit 快捷命令："
-    echo "  ac         - ai-commit 简称"
-    echo "  acc        - ai-commit commit"
-    echo "  acg        - 生成提交消息"
-    echo "  acp        - 生成并推送"
-    echo "  act        - 标签管理"
-    echo "  acf        - Git Flow"
-    echo "  acw        - 工作树管理"
-    echo "  ach        - 历史查看"
+    echo "  aic        - ai-commit 简称"
+    echo "  aicc       - ai-commit commit"
+    echo "  aicg       - 生成提交消息"
+    echo "  aicp       - 生成并推送"
+    echo "  aict       - 标签管理"
+    echo "  aicf       - Git Flow"
+    echo "  aicw       - 工作树管理"
+    echo "  aich       - 历史查看"
     echo ""
     echo "函数别名："
-    echo "  ac-commit  - 生成提交消息（可带参数）"
-    echo "  ac-tag     - 创建标签（可带参数）"
-    echo "  ac-feature - 创建功能分支"
-    echo "  acp        - 快速提交并推送"
-    echo "  act-push   - 创建并推送标签"
+    echo "  aic-commit  - 生成提交消息（可带参数）"
+    echo "  aic-tag     - 创建标签（可带参数）"
+    echo "  aic-feature - 创建功能分支"
+    echo "  aicp        - 快速提交并推送"
+    echo "  aict-push   - 创建并推送标签"
 }

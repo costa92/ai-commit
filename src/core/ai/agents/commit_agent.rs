@@ -1,16 +1,9 @@
 use super::*;
 use crate::core::ai::provider::{AIProvider, ProviderConfig};
+use crate::core::ai::validation::COMMIT_FORMAT_REGEX;
 use async_trait::async_trait;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use std::sync::Arc;
 use std::time::Instant;
-
-/// 提交消息验证正则表达式
-static COMMIT_FORMAT_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\([^)]+\))?:\s+.+")
-        .unwrap()
-});
 
 /// 提交消息 Agent
 pub struct CommitAgent {

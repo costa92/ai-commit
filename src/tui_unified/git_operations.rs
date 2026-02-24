@@ -3,97 +3,142 @@ use crate::tui_unified::components::base::component::Component;
 use crate::tui_unified::git::interface::GitRepositoryAPI;
 use crate::tui_unified::Result;
 
+/// 将 git interface 的 Commit 转换为 TUI state 的 Commit
+fn convert_commits(
+    commits_data: Vec<crate::tui_unified::git::models::Commit>,
+) -> Vec<crate::tui_unified::state::git_state::Commit> {
+    commits_data
+        .into_iter()
+        .map(|c| crate::tui_unified::state::git_state::Commit {
+            hash: c.hash.clone(),
+            short_hash: c.hash[..8.min(c.hash.len())].to_string(),
+            author: c.author.clone(),
+            author_email: format!("{}@example.com", c.author),
+            committer: c.author.clone(),
+            committer_email: format!("{}@example.com", c.author),
+            date: chrono::DateTime::parse_from_str(
+                &format!("{} 00:00:00 +0000", c.date),
+                "%Y-%m-%d %H:%M:%S %z",
+            )
+            .unwrap_or_else(|_| chrono::Utc::now().into())
+            .with_timezone(&chrono::Utc),
+            message: c.message.clone(),
+            subject: c.message,
+            body: None,
+            parents: Vec::new(),
+            refs: Vec::new(),
+            files_changed: c.files_changed as usize,
+            insertions: 0,
+            deletions: 0,
+        })
+        .collect()
+}
+
+/// 将 git interface 的 Branch 转换为 TUI state 的 Branch
+fn convert_branches(
+    branches_data: Vec<crate::tui_unified::git::models::Branch>,
+) -> Vec<crate::tui_unified::state::git_state::Branch> {
+    branches_data
+        .into_iter()
+        .map(|b| crate::tui_unified::state::git_state::Branch {
+            name: b.name.clone(),
+            full_name: format!("refs/heads/{}", b.name),
+            is_current: b.is_current,
+            is_remote: false,
+            upstream: b.upstream,
+            last_commit: None,
+            ahead_count: 0,
+            behind_count: 0,
+            last_updated: chrono::Utc::now(),
+        })
+        .collect()
+}
+
+/// 将 git interface 的 Tag 转换为 TUI state 的 Tag
+fn convert_tags(
+    tags_data: Vec<crate::tui_unified::git::models::Tag>,
+) -> Vec<crate::tui_unified::state::git_state::Tag> {
+    tags_data
+        .into_iter()
+        .map(|t| crate::tui_unified::state::git_state::Tag {
+            name: t.name,
+            commit_hash: t.commit_hash,
+            message: t.message,
+            tagger: None,
+            date: chrono::Utc::now(),
+            is_annotated: true,
+        })
+        .collect()
+}
+
+/// 将 git interface 的 Remote 转换为 TUI state 的 Remote
+fn convert_remotes(
+    remotes_data: Vec<crate::tui_unified::git::models::Remote>,
+) -> Vec<crate::tui_unified::state::git_state::Remote> {
+    remotes_data
+        .into_iter()
+        .map(|r| crate::tui_unified::state::git_state::Remote {
+            name: r.name.clone(),
+            url: r.url,
+            fetch_url: r.name.clone(),
+            push_url: None,
+            is_default: r.name == "origin",
+        })
+        .collect()
+}
+
+/// 将 git interface 的 Stash 转换为 TUI state 的 Stash
+fn convert_stashes(
+    stashes_data: Vec<crate::tui_unified::git::models::Stash>,
+) -> Vec<crate::tui_unified::state::git_state::Stash> {
+    stashes_data
+        .into_iter()
+        .map(|s| crate::tui_unified::state::git_state::Stash {
+            index: s.index as usize,
+            hash: format!("stash@{{{}}}", s.index),
+            branch: s.branch,
+            message: s.message,
+            date: chrono::Utc::now(),
+            files_changed: 0,
+        })
+        .collect()
+}
+
 impl super::app::TuiUnifiedApp {
     /// 加载初始Git数据
+    ///
+    /// 使用 Load → Transform → Update 模式：
+    /// 1. 无锁加载所有 git 数据到局部变量
+    /// 2. 短暂写锁更新 state
+    /// 3. 读锁通知组件
     pub(crate) async fn load_initial_git_data(&mut self) -> Result<()> {
-        // 获取当前目录作为Git仓库路径
         let repo_path = std::env::current_dir()?;
-
-        // 创建AsyncGitImpl实例
         let git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path.clone());
 
-        // 获取写锁访问状态
-        let mut state = self.state.write().await;
+        // Step 1: 无锁加载所有数据到局部变量
+        let current_branch = git.get_current_branch().await.ok();
+        let commits = git.get_commits(Some(100)).await.ok().map(convert_commits);
+        let branches = git.get_branches().await.ok().map(convert_branches);
+        let status = git.get_status().await.ok();
+        let tags = git.get_tags().await.ok().map(convert_tags);
+        let remotes = git.get_remotes().await.ok().map(convert_remotes);
+        let stashes = git.get_stashes().await.ok().map(convert_stashes);
 
-        // 加载基础Git数据
-        match git.get_current_branch().await {
-            Ok(branch) => {
+        // Step 2: 短暂写锁更新 state
+        {
+            let mut state = self.state.write().await;
+
+            if let Some(branch) = current_branch {
                 state.repo_state.update_current_branch(branch);
             }
-            Err(e) => {
-                // 如果获取分支失败，可能不是Git仓库，记录但继续
-                eprintln!("Warning: Failed to get current branch: {}", e);
+            if let Some(ref commits) = commits {
+                state.repo_state.update_commits(commits.clone());
             }
-        }
-
-        // 加载提交历史
-        match git.get_commits(Some(100)).await {
-            Ok(commits_data) => {
-                // 转换为内部数据结构
-                let commits: Vec<crate::tui_unified::state::git_state::Commit> = commits_data
-                    .into_iter()
-                    .map(|c| crate::tui_unified::state::git_state::Commit {
-                        hash: c.hash.clone(),
-                        short_hash: c.hash[..8.min(c.hash.len())].to_string(),
-                        author: c.author.clone(),
-                        author_email: format!("{}@example.com", c.author), // Git interface doesn't provide email yet
-                        committer: c.author.clone(),
-                        committer_email: format!("{}@example.com", c.author),
-                        date: chrono::DateTime::parse_from_str(
-                            &format!("{} 00:00:00 +0000", c.date),
-                            "%Y-%m-%d %H:%M:%S %z",
-                        )
-                        .unwrap_or_else(|_| chrono::Utc::now().into())
-                        .with_timezone(&chrono::Utc),
-                        message: c.message.clone(),
-                        subject: c.message,
-                        body: None,
-                        parents: Vec::new(),
-                        refs: Vec::new(),
-                        files_changed: c.files_changed as usize,
-                        insertions: 0,
-                        deletions: 0,
-                    })
-                    .collect();
-
-                state.repo_state.update_commits(commits);
-            }
-            Err(e) => {
-                eprintln!("Warning: Failed to load commits: {}", e);
-            }
-        }
-
-        // 加载分支信息
-        match git.get_branches().await {
-            Ok(branches_data) => {
-                let branches: Vec<crate::tui_unified::state::git_state::Branch> = branches_data
-                    .into_iter()
-                    .map(|b| crate::tui_unified::state::git_state::Branch {
-                        name: b.name.clone(),
-                        full_name: format!("refs/heads/{}", b.name),
-                        is_current: b.is_current,
-                        is_remote: false,
-                        upstream: b.upstream,
-                        last_commit: None,
-                        ahead_count: 0,
-                        behind_count: 0,
-                        last_updated: chrono::Utc::now(),
-                    })
-                    .collect();
-
+            if let Some(branches) = branches {
                 state.repo_state.update_branches(branches);
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load branches: {}", e);
-            }
-        }
-
-        // 加载仓库状态
-        match git.get_status().await {
-            Ok(status_text) => {
-                // 简单的状态解析 - 如果状态文本包含文件变更信息则认为不干净
+            if let Some(status_text) = status {
                 let is_clean = status_text.trim() == "Working tree clean";
-
                 state
                     .repo_state
                     .update_status(crate::tui_unified::state::git_state::RepoStatus {
@@ -107,93 +152,31 @@ impl super::app::TuiUnifiedApp {
                         is_detached: false,
                     });
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to get repository status: {}", e);
-            }
-        }
-
-        // 加载标签信息
-        match git.get_tags().await {
-            Ok(tags_data) => {
-                let tags: Vec<crate::tui_unified::state::git_state::Tag> = tags_data
-                    .into_iter()
-                    .map(|t| crate::tui_unified::state::git_state::Tag {
-                        name: t.name,
-                        commit_hash: t.commit_hash,
-                        message: t.message,
-                        tagger: None,
-                        date: chrono::Utc::now(), // TODO: Parse actual date from Git
-                        is_annotated: true,       // TODO: Detect if annotated
-                    })
-                    .collect();
-
+            if let Some(tags) = tags {
                 state.repo_state.update_tags(tags);
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load tags: {}", e);
-            }
-        }
-
-        // 加载远程仓库信息
-        match git.get_remotes().await {
-            Ok(remotes_data) => {
-                let remotes: Vec<crate::tui_unified::state::git_state::Remote> = remotes_data
-                    .into_iter()
-                    .map(|r| crate::tui_unified::state::git_state::Remote {
-                        name: r.name.clone(),
-                        url: r.url,
-                        fetch_url: r.name.clone(), // TODO: Get actual fetch URL
-                        push_url: None,
-                        is_default: r.name == "origin",
-                    })
-                    .collect();
-
+            if let Some(remotes) = remotes {
                 state.repo_state.update_remotes(remotes);
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load remotes: {}", e);
-            }
-        }
-
-        // 加载储藏信息
-        match git.get_stashes().await {
-            Ok(stashes_data) => {
-                let stashes: Vec<crate::tui_unified::state::git_state::Stash> = stashes_data
-                    .into_iter()
-                    .map(|s| crate::tui_unified::state::git_state::Stash {
-                        index: s.index as usize,
-                        hash: format!("stash@{{{}}}", s.index), // Use stash reference as hash
-                        branch: s.branch,
-                        message: s.message,
-                        date: chrono::Utc::now(), // TODO: Parse actual date from Git
-                        files_changed: 0,         // TODO: Get actual file count
-                    })
-                    .collect();
-
+            if let Some(stashes) = stashes {
                 state.repo_state.update_stashes(stashes);
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load stashes: {}", e);
-            }
         }
+        // 写锁在此自动释放
 
-        // 释放状态锁
-        drop(state);
-
-        // 加载各组件的数据
+        // Step 3: 读锁通知组件
         let state_ref = &*self.state.read().await;
         self.remotes_view.load_remotes(state_ref).await;
         self.stash_view.load_stashes(state_ref).await;
         self.query_history_view.load_history().await;
 
         // 更新GitLogView的commit数据
-        let commits = state_ref.repo_state.commits.clone();
-        let has_commits = !commits.is_empty();
-        self.git_log_view.update_commits(commits);
-
-        // 确保GitLogView获得焦点（因为它是默认视图）
-        if has_commits {
-            self.git_log_view.set_focus(true);
+        if let Some(commits) = commits {
+            let has_commits = !commits.is_empty();
+            self.git_log_view.update_commits(commits);
+            if has_commits {
+                self.git_log_view.set_focus(true);
+            }
         }
 
         Ok(())
@@ -201,29 +184,13 @@ impl super::app::TuiUnifiedApp {
 
     /// 处理pending diff请求
     pub(crate) async fn handle_pending_diff_request(&mut self) -> Result<()> {
-        // 获取并清除pending diff请求
+        // 获取并清除pending diff请求（只需读锁，Mutex提供内部可变性）
         let commit_hash = {
-            let mut state = self.state.write().await;
+            let state = self.state.read().await;
             state.get_pending_diff_commit()
         };
 
         if let Some(hash) = commit_hash {
-            // 获取当前目录作为Git仓库路径
-            let repo_path = std::env::current_dir()?;
-            let _git = crate::tui_unified::git::interface::AsyncGitImpl::new(repo_path);
-
-            // 添加调试信息
-            {
-                let mut state = self.state.write().await;
-                state.add_notification(
-                    format!(
-                        "Creating diff viewer for commit: {}",
-                        &hash[..8.min(hash.len())]
-                    ),
-                    crate::tui_unified::state::app_state::NotificationLevel::Info,
-                );
-            }
-
             // 创建DiffViewer实例
             match DiffViewer::new(&hash).await {
                 Ok(diff_viewer) => {
@@ -310,7 +277,7 @@ impl super::app::TuiUnifiedApp {
                         short_hash,
                         author: author.clone(),
                         author_email: author_email.clone(),
-                        committer: author.clone(), // 简化处理，使用author作为committer
+                        committer: author.clone(),
                         committer_email: author_email.clone(),
                         date: date.with_timezone(&Utc),
                         message: message.clone(),
@@ -320,11 +287,11 @@ impl super::app::TuiUnifiedApp {
                         } else {
                             None
                         },
-                        parents: Vec::new(), // 简化处理
-                        refs: Vec::new(),    // 简化处理
-                        files_changed: 0,    // 简化处理
-                        insertions: 0,       // 简化处理
-                        deletions: 0,        // 简化处理
+                        parents: Vec::new(),
+                        refs: Vec::new(),
+                        files_changed: 0,
+                        insertions: 0,
+                        deletions: 0,
                     });
                 }
             }
@@ -334,9 +301,9 @@ impl super::app::TuiUnifiedApp {
     }
 
     pub(crate) async fn handle_direct_branch_switch_request(&mut self) -> Result<()> {
-        // 获取并清除直接分支切换请求
+        // 获取并清除直接分支切换请求（只需读锁，Mutex提供内部可变性）
         let branch_name = {
-            let mut state = self.state.write().await;
+            let state = self.state.read().await;
             state.get_direct_branch_switch()
         };
 
@@ -350,7 +317,6 @@ impl super::app::TuiUnifiedApp {
 
     /// 重新加载 Git 数据（在提交后刷新）
     pub(crate) async fn reload_git_data(&mut self) -> Result<()> {
-        // 直接调用现有的加载逻辑
         self.load_initial_git_data().await
     }
 
@@ -370,6 +336,7 @@ impl super::app::TuiUnifiedApp {
             crate::tui_unified::state::app_state::ViewType::QueryHistory => {
                 self.refresh_query_history().await
             }
+            crate::tui_unified::state::app_state::ViewType::Staging => self.refresh_staging().await,
         }
     }
 
@@ -380,39 +347,12 @@ impl super::app::TuiUnifiedApp {
 
         match git.get_commits(Some(100)).await {
             Ok(commits_data) => {
-                // 转换为内部数据结构
-                let commits: Vec<crate::tui_unified::state::git_state::Commit> = commits_data
-                    .into_iter()
-                    .map(|c| crate::tui_unified::state::git_state::Commit {
-                        hash: c.hash.clone(),
-                        short_hash: c.hash[..8.min(c.hash.len())].to_string(),
-                        author: c.author.clone(),
-                        author_email: format!("{}@example.com", c.author),
-                        committer: c.author.clone(),
-                        committer_email: format!("{}@example.com", c.author),
-                        date: chrono::DateTime::parse_from_str(
-                            &format!("{} 00:00:00 +0000", c.date),
-                            "%Y-%m-%d %H:%M:%S %z",
-                        )
-                        .unwrap_or_else(|_| chrono::Utc::now().into())
-                        .with_timezone(&chrono::Utc),
-                        message: c.message.clone(),
-                        subject: c.message,
-                        body: None,
-                        parents: Vec::new(),
-                        refs: Vec::new(),
-                        files_changed: c.files_changed as usize,
-                        insertions: 0,
-                        deletions: 0,
-                    })
-                    .collect();
+                let commits = convert_commits(commits_data);
 
-                // 更新状态
                 let mut state = self.state.write().await;
                 state.repo_state.update_commits(commits.clone());
                 drop(state);
 
-                // 更新GitLogView
                 self.git_log_view.update_commits(commits);
                 Ok(())
             }
@@ -427,22 +367,8 @@ impl super::app::TuiUnifiedApp {
 
         match git.get_branches().await {
             Ok(branches_data) => {
-                let branches: Vec<crate::tui_unified::state::git_state::Branch> = branches_data
-                    .into_iter()
-                    .map(|b| crate::tui_unified::state::git_state::Branch {
-                        name: b.name.clone(),
-                        full_name: format!("refs/heads/{}", b.name),
-                        is_current: b.is_current,
-                        is_remote: false,
-                        upstream: b.upstream,
-                        last_commit: None,
-                        ahead_count: 0,
-                        behind_count: 0,
-                        last_updated: chrono::Utc::now(),
-                    })
-                    .collect();
+                let branches = convert_branches(branches_data);
 
-                // 更新状态
                 let mut state = self.state.write().await;
                 state.repo_state.update_branches(branches);
                 Ok(())
@@ -458,19 +384,8 @@ impl super::app::TuiUnifiedApp {
 
         match git.get_tags().await {
             Ok(tags_data) => {
-                let tags: Vec<crate::tui_unified::state::git_state::Tag> = tags_data
-                    .into_iter()
-                    .map(|t| crate::tui_unified::state::git_state::Tag {
-                        name: t.name,
-                        commit_hash: t.commit_hash,
-                        message: t.message,
-                        tagger: None,
-                        date: chrono::Utc::now(),
-                        is_annotated: true,
-                    })
-                    .collect();
+                let tags = convert_tags(tags_data);
 
-                // 更新状态
                 let mut state = self.state.write().await;
                 state.repo_state.update_tags(tags);
                 Ok(())
@@ -486,23 +401,12 @@ impl super::app::TuiUnifiedApp {
 
         match git.get_remotes().await {
             Ok(remotes_data) => {
-                let remotes: Vec<crate::tui_unified::state::git_state::Remote> = remotes_data
-                    .into_iter()
-                    .map(|r| crate::tui_unified::state::git_state::Remote {
-                        name: r.name.clone(),
-                        url: r.url,
-                        fetch_url: r.name.clone(),
-                        push_url: None,
-                        is_default: r.name == "origin",
-                    })
-                    .collect();
+                let remotes = convert_remotes(remotes_data);
 
-                // 更新状态并通知视图
                 let mut state = self.state.write().await;
                 state.repo_state.update_remotes(remotes);
                 drop(state);
 
-                // 通知RemotesView重新加载数据
                 let state_ref = &*self.state.read().await;
                 self.remotes_view.load_remotes(state_ref).await;
                 Ok(())
@@ -518,24 +422,12 @@ impl super::app::TuiUnifiedApp {
 
         match git.get_stashes().await {
             Ok(stashes_data) => {
-                let stashes: Vec<crate::tui_unified::state::git_state::Stash> = stashes_data
-                    .into_iter()
-                    .map(|s| crate::tui_unified::state::git_state::Stash {
-                        index: s.index as usize,
-                        hash: format!("stash@{{{}}}", s.index),
-                        branch: s.branch,
-                        message: s.message,
-                        date: chrono::Utc::now(),
-                        files_changed: 0,
-                    })
-                    .collect();
+                let stashes = convert_stashes(stashes_data);
 
-                // 更新状态并通知视图
                 let mut state = self.state.write().await;
                 state.repo_state.update_stashes(stashes);
                 drop(state);
 
-                // 通知StashView重新加载数据
                 let state_ref = &*self.state.read().await;
                 self.stash_view.load_stashes(state_ref).await;
                 Ok(())
@@ -546,8 +438,14 @@ impl super::app::TuiUnifiedApp {
 
     /// 刷新Query History视图
     async fn refresh_query_history(&mut self) -> Result<()> {
-        // 重新加载查询历史
         self.query_history_view.load_history().await;
+        Ok(())
+    }
+
+    /// 刷新Staging视图
+    async fn refresh_staging(&mut self) -> Result<()> {
+        let state = self.state.read().await;
+        self.staging_view.refresh_file_list(&state);
         Ok(())
     }
 }

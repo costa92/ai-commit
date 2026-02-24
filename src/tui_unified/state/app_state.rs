@@ -37,6 +37,7 @@ pub enum ViewType {
     Remotes,
     Stash,
     QueryHistory,
+    Staging,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -84,7 +85,7 @@ impl Default for NewLayoutState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct SelectionState {
     pub selected_commit: Option<String>,
     pub selected_branch: Option<String>,
@@ -93,9 +94,55 @@ pub struct SelectionState {
     pub selected_stash: Option<String>,
     pub multi_selection: Vec<String>,
     pub selection_mode: SelectionMode,
-    pub pending_diff_commit: Option<String>, // 待显示diff的提交哈希
-    pub pending_branch_switch: Option<String>, // 待切换的分支名
-    pub direct_branch_switch: Option<String>, // 直接切换的分支名（不通过模态框）
+    pub pending_diff_commit: std::sync::Mutex<Option<String>>, // 待显示diff的提交哈希
+    pub pending_branch_switch: std::sync::Mutex<Option<String>>, // 待切换的分支名
+    pub direct_branch_switch: std::sync::Mutex<Option<String>>, // 直接切换的分支名（不通过模态框）
+    pub pending_staging_toggle: std::sync::Mutex<Option<usize>>, // 待切换暂存状态的文件索引
+    pub pending_stage_all: std::sync::Mutex<bool>,             // 待暂存全部文件
+}
+
+impl Clone for SelectionState {
+    fn clone(&self) -> Self {
+        Self {
+            selected_commit: self.selected_commit.clone(),
+            selected_branch: self.selected_branch.clone(),
+            selected_tag: self.selected_tag.clone(),
+            selected_remote: self.selected_remote.clone(),
+            selected_stash: self.selected_stash.clone(),
+            multi_selection: self.multi_selection.clone(),
+            selection_mode: self.selection_mode.clone(),
+            pending_diff_commit: std::sync::Mutex::new(
+                self.pending_diff_commit
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            ),
+            pending_branch_switch: std::sync::Mutex::new(
+                self.pending_branch_switch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            ),
+            direct_branch_switch: std::sync::Mutex::new(
+                self.direct_branch_switch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            ),
+            pending_staging_toggle: std::sync::Mutex::new(
+                self.pending_staging_toggle
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            ),
+            pending_stage_all: std::sync::Mutex::new(
+                *self
+                    .pending_stage_all
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner()),
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -146,6 +193,8 @@ pub enum ModalType {
     AICommit,
     GitPull,
     BranchSwitch,
+    AIReview,
+    AIRefactor,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +290,7 @@ impl AppState {
             ViewType::Remotes => self.selected_items.selected_remote.clone(),
             ViewType::Stash => self.selected_items.selected_stash.clone(),
             ViewType::QueryHistory => None,
+            ViewType::Staging => None,
         }
     }
 
@@ -249,11 +299,19 @@ impl AppState {
     }
 
     pub fn request_diff(&mut self, commit_hash: String) {
-        self.selected_items.pending_diff_commit = Some(commit_hash);
+        *self
+            .selected_items
+            .pending_diff_commit
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(commit_hash);
     }
 
-    pub fn get_pending_diff_commit(&mut self) -> Option<String> {
-        self.selected_items.pending_diff_commit.take()
+    pub fn get_pending_diff_commit(&self) -> Option<String> {
+        self.selected_items
+            .pending_diff_commit
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     pub fn request_git_pull(&mut self) {
@@ -301,19 +359,35 @@ impl AppState {
         self.show_modal(modal);
 
         // 存储要切换的分支名（我们需要在 SelectionState 中添加字段）
-        self.selected_items.pending_branch_switch = Some(branch_name);
+        *self
+            .selected_items
+            .pending_branch_switch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(branch_name);
     }
 
-    pub fn get_pending_branch_switch(&mut self) -> Option<String> {
-        self.selected_items.pending_branch_switch.take()
+    pub fn get_pending_branch_switch(&self) -> Option<String> {
+        self.selected_items
+            .pending_branch_switch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     pub fn request_direct_branch_switch(&mut self, branch_name: String) {
-        self.selected_items.direct_branch_switch = Some(branch_name);
+        *self
+            .selected_items
+            .direct_branch_switch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(branch_name);
     }
 
-    pub fn get_direct_branch_switch(&mut self) -> Option<String> {
-        self.selected_items.direct_branch_switch.take()
+    pub fn get_direct_branch_switch(&self) -> Option<String> {
+        self.selected_items
+            .direct_branch_switch
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     // 搜索状态管理
@@ -480,6 +554,36 @@ impl AppState {
                     action: ModalAction::No,
                 },
             ],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+    }
+
+    pub fn show_ai_review_modal(&mut self, content: String) {
+        let modal = ModalState {
+            modal_type: ModalType::AIReview,
+            title: "AI Code Review".to_string(),
+            content,
+            buttons: vec![ModalButton {
+                label: "Close (Esc)".to_string(),
+                action: ModalAction::Cancel,
+            }],
+            default_button: 0,
+            can_cancel: true,
+        };
+        self.show_modal(modal);
+    }
+
+    pub fn show_ai_refactor_modal(&mut self, content: String) {
+        let modal = ModalState {
+            modal_type: ModalType::AIRefactor,
+            title: "AI Refactor Suggestions".to_string(),
+            content,
+            buttons: vec![ModalButton {
+                label: "Close (Esc)".to_string(),
+                action: ModalAction::Cancel,
+            }],
             default_button: 0,
             can_cancel: true,
         };

@@ -242,6 +242,15 @@ pub struct Args {
     /// 跳过 AI 生成 commit message 的二次确认（默认需要确认）
     #[arg(long = "yes", short = 'y', default_value_t = false)]
     pub skip_confirm: bool,
+
+    // =============== Git Hook 相关参数 ===============
+    /// 安装 prepare-commit-msg hook 到 .git/hooks/
+    #[arg(long = "hook-install", default_value_t = false)]
+    pub hook_install: bool,
+
+    /// 卸载 prepare-commit-msg hook
+    #[arg(long = "hook-uninstall", default_value_t = false)]
+    pub hook_uninstall: bool,
 }
 
 #[cfg(test)]
@@ -943,6 +952,27 @@ mod tests {
         assert!(args.push);
         assert_eq!(args.new_tag, Some("v1.2.0".to_string()));
         assert_eq!(args.provider, "deepseek");
+    }
+
+    #[test]
+    fn test_args_hook_install() {
+        let args = Args::try_parse_from(["ai-commit", "--hook-install"]).unwrap();
+        assert!(args.hook_install);
+        assert!(!args.hook_uninstall);
+    }
+
+    #[test]
+    fn test_args_hook_uninstall() {
+        let args = Args::try_parse_from(["ai-commit", "--hook-uninstall"]).unwrap();
+        assert!(!args.hook_install);
+        assert!(args.hook_uninstall);
+    }
+
+    #[test]
+    fn test_args_hook_defaults() {
+        let args = Args::try_parse_from(["ai-commit"]).unwrap();
+        assert!(!args.hook_install);
+        assert!(!args.hook_uninstall);
     }
 }
 // CLI参数修改

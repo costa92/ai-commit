@@ -29,10 +29,14 @@ pub struct ProviderInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiFormat {
-    /// OpenAI 兼容格式 (Deepseek, Kimi, SiliconFlow)
+    /// OpenAI 兼容格式 (Deepseek, Kimi, SiliconFlow, OpenAI, Qwen)
     OpenAI,
     /// Ollama 格式
     Ollama,
+    /// Anthropic Messages API 格式 (Claude)
+    Anthropic,
+    /// Google Generative AI 格式 (Gemini)
+    Google,
     /// 自定义格式
     Custom,
 }
@@ -183,6 +187,88 @@ fn get_default_providers() -> HashMap<String, ProviderInfo> {
         },
     );
 
+    // OpenAI 配置
+    providers.insert(
+        "openai".to_string(),
+        ProviderInfo {
+            name: "openai".to_string(),
+            display_name: "OpenAI".to_string(),
+            default_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            requires_api_key: true,
+            default_model: "gpt-4o-mini".to_string(),
+            supported_models: vec![
+                "gpt-4o-mini".to_string(),
+                "gpt-4o".to_string(),
+                "gpt-4-turbo".to_string(),
+                "o1-mini".to_string(),
+            ],
+            api_format: ApiFormat::OpenAI,
+            env_prefix: "AI_COMMIT_OPENAI".to_string(),
+            description: "OpenAI GPT 系列模型，需要 API Key".to_string(),
+        },
+    );
+
+    // Claude 配置
+    providers.insert(
+        "claude".to_string(),
+        ProviderInfo {
+            name: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_url: "https://api.anthropic.com/v1/messages".to_string(),
+            requires_api_key: true,
+            default_model: "claude-sonnet-4-20250514".to_string(),
+            supported_models: vec![
+                "claude-sonnet-4-20250514".to_string(),
+                "claude-haiku-4-5-20251001".to_string(),
+                "claude-opus-4-6".to_string(),
+            ],
+            api_format: ApiFormat::Anthropic,
+            env_prefix: "AI_COMMIT_CLAUDE".to_string(),
+            description: "Anthropic Claude 系列模型，需要 API Key".to_string(),
+        },
+    );
+
+    // Gemini 配置
+    providers.insert(
+        "gemini".to_string(),
+        ProviderInfo {
+            name: "gemini".to_string(),
+            display_name: "Gemini".to_string(),
+            default_url: "https://generativelanguage.googleapis.com/v1beta".to_string(),
+            requires_api_key: true,
+            default_model: "gemini-2.0-flash".to_string(),
+            supported_models: vec![
+                "gemini-2.0-flash".to_string(),
+                "gemini-2.0-flash-lite".to_string(),
+                "gemini-1.5-pro".to_string(),
+            ],
+            api_format: ApiFormat::Google,
+            env_prefix: "AI_COMMIT_GEMINI".to_string(),
+            description: "Google Gemini 系列模型，需要 API Key".to_string(),
+        },
+    );
+
+    // Qwen 配置
+    providers.insert(
+        "qwen".to_string(),
+        ProviderInfo {
+            name: "qwen".to_string(),
+            display_name: "Qwen".to_string(),
+            default_url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+                .to_string(),
+            requires_api_key: true,
+            default_model: "qwen-turbo".to_string(),
+            supported_models: vec![
+                "qwen-turbo".to_string(),
+                "qwen-plus".to_string(),
+                "qwen-max".to_string(),
+            ],
+            api_format: ApiFormat::OpenAI,
+            env_prefix: "AI_COMMIT_QWEN".to_string(),
+            description: "阿里云通义千问 AI 服务，需要 API Key".to_string(),
+        },
+    );
+
     providers
 }
 
@@ -269,6 +355,10 @@ mod tests {
         assert!(providers.contains(&"deepseek"));
         assert!(providers.contains(&"siliconflow"));
         assert!(providers.contains(&"kimi"));
+        assert!(providers.contains(&"openai"));
+        assert!(providers.contains(&"claude"));
+        assert!(providers.contains(&"gemini"));
+        assert!(providers.contains(&"qwen"));
     }
 
     #[test]
@@ -295,6 +385,18 @@ mod tests {
 
         let deepseek = ProviderRegistry::get_provider("deepseek").unwrap();
         assert_eq!(deepseek.api_format, ApiFormat::OpenAI);
+
+        let openai = ProviderRegistry::get_provider("openai").unwrap();
+        assert_eq!(openai.api_format, ApiFormat::OpenAI);
+
+        let claude = ProviderRegistry::get_provider("claude").unwrap();
+        assert_eq!(claude.api_format, ApiFormat::Anthropic);
+
+        let gemini = ProviderRegistry::get_provider("gemini").unwrap();
+        assert_eq!(gemini.api_format, ApiFormat::Google);
+
+        let qwen = ProviderRegistry::get_provider("qwen").unwrap();
+        assert_eq!(qwen.api_format, ApiFormat::OpenAI);
     }
 
     #[test]
@@ -315,6 +417,10 @@ mod tests {
         assert!(default_providers.contains_key("deepseek"));
         assert!(default_providers.contains_key("siliconflow"));
         assert!(default_providers.contains_key("kimi"));
+        assert!(default_providers.contains_key("openai"));
+        assert!(default_providers.contains_key("claude"));
+        assert!(default_providers.contains_key("gemini"));
+        assert!(default_providers.contains_key("qwen"));
     }
 
     #[test]

@@ -10,11 +10,7 @@ use crate::tui_unified::{
     state::{git_state::Tag, AppState},
 };
 use crossterm::event::KeyEvent;
-use ratatui::{
-    layout::Rect,
-    style::{Color, Style},
-    Frame,
-};
+use ratatui::{layout::Rect, Frame};
 
 /// Tags视图 - 显示所有标签
 pub struct TagsView {
@@ -46,15 +42,7 @@ impl TagsView {
             }
         });
 
-        let style_fn = Box::new(|_tag: &Tag, is_selected: bool, is_focused: bool| -> Style {
-            if is_selected && is_focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            } else if is_selected {
-                Style::default().fg(Color::White).bg(Color::DarkGray)
-            } else {
-                Style::default().fg(Color::White)
-            }
-        });
+        let style_fn = Box::new(super::shared::default_selection_style);
 
         let search_fn = Box::new(|tag: &Tag, query: &str| -> bool {
             let query = query.to_lowercase();

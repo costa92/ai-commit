@@ -351,6 +351,7 @@ impl DiffViewerComponent {
     }
 
     /// 原有的parse_diff方法，保持向后兼容
+    #[allow(dead_code)]
     fn parse_diff(&self, content: &str) -> Vec<DiffLine> {
         let mut lines = Vec::new();
         let mut old_line_no = 0u32;
@@ -553,8 +554,11 @@ impl DiffViewerComponent {
         let mut spans = Vec::new();
 
         // 移除行首的+/-标记
-        let clean_content = if content.starts_with('+') || content.starts_with('-') {
-            &content[1..]
+        let clean_content = if let Some(s) = content
+            .strip_prefix('+')
+            .or_else(|| content.strip_prefix('-'))
+        {
+            s
         } else {
             content
         };
@@ -1035,6 +1039,7 @@ impl DiffViewerComponent {
     }
 
     /// 生成并排对比视图
+    #[allow(dead_code)]
     fn generate_side_by_side_view(
         &self,
         area_width: u16,
@@ -1204,6 +1209,7 @@ impl DiffViewerComponent {
     }
 
     /// 格式化并排显示内容
+    #[allow(dead_code)]
     fn format_side_content(
         &self,
         content: &str,
@@ -1228,12 +1234,15 @@ impl DiffViewerComponent {
         };
 
         // 移除原始的+/-前缀
-        let clean_content =
-            if content.starts_with('+') || content.starts_with('-') || content.starts_with(' ') {
-                &content[1..]
-            } else {
-                content
-            };
+        let clean_content = if let Some(s) = content
+            .strip_prefix('+')
+            .or_else(|| content.strip_prefix('-'))
+            .or_else(|| content.strip_prefix(' '))
+        {
+            s
+        } else {
+            content
+        };
 
         let available_width = max_width.saturating_sub(prefix.len());
         let truncated_content = self.truncate_content(clean_content, available_width);
@@ -1247,6 +1256,7 @@ impl DiffViewerComponent {
     }
 
     /// 截断内容到指定显示宽度（UTF-8字符边界安全）
+    #[allow(dead_code)]
     fn truncate_content(&self, content: &str, max_width: usize) -> String {
         if max_width == 0 {
             return String::new();
@@ -1678,9 +1688,12 @@ impl DiffViewerComponent {
             match line.line_type {
                 DiffLineType::Context | DiffLineType::Removed => {
                     // 上下文行和删除行包含旧内容
-                    let content = if line.content.starts_with(' ') || line.content.starts_with('-')
+                    let content = if let Some(s) = line
+                        .content
+                        .strip_prefix(' ')
+                        .or_else(|| line.content.strip_prefix('-'))
                     {
-                        line.content[1..].to_string() // 去掉前缀符号
+                        s.to_string()
                     } else {
                         line.content.clone()
                     };
@@ -1736,9 +1749,12 @@ impl DiffViewerComponent {
             match line.line_type {
                 DiffLineType::Context | DiffLineType::Added => {
                     // 上下文行和添加行包含新内容
-                    let content = if line.content.starts_with(' ') || line.content.starts_with('+')
+                    let content = if let Some(s) = line
+                        .content
+                        .strip_prefix(' ')
+                        .or_else(|| line.content.strip_prefix('+'))
                     {
-                        line.content[1..].to_string() // 去掉前缀符号
+                        s.to_string()
                     } else {
                         line.content.clone()
                     };

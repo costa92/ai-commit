@@ -30,18 +30,7 @@ impl RemotesView {
         });
 
         // 样式函数：选中时高亮显示
-        let style_fn = Box::new(
-            |_remote: &Remote, is_selected: bool, is_focused: bool| -> ratatui::style::Style {
-                use ratatui::style::{Color, Style};
-                if is_selected && is_focused {
-                    Style::default().fg(Color::Yellow).bg(Color::DarkGray)
-                } else if is_selected {
-                    Style::default().fg(Color::White).bg(Color::DarkGray)
-                } else {
-                    Style::default().fg(Color::White)
-                }
-            },
-        );
+        let style_fn = Box::new(super::shared::default_selection_style);
 
         // 搜索函数：支持按远程仓库名称和URL搜索
         let search_fn = Box::new(|remote: &Remote, query: &str| -> bool {

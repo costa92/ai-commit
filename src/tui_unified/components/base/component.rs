@@ -156,6 +156,7 @@ pub enum ViewType {
     Stash,
     QueryHistory,
     DiffViewer,
+    Staging,
 }
 
 /// 组件工厂，用于创建各种组件实例

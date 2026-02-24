@@ -1,32 +1,115 @@
 use crossterm::event::KeyEvent;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
-use crate::diff_viewer::DiffViewer;
+use crate::diff_viewer::{DiffViewMode, DiffViewer};
 use crate::tui_unified::components::base::component::Component;
 use crate::tui_unified::Result;
 
+/// 缓存 diff 解析结果，避免每帧重新计算
+pub(crate) struct DiffRenderCache {
+    content_hash: u64,
+    view_mode: DiffViewMode,
+    unified: Option<Vec<ratatui::text::Line<'static>>>,
+    side_by_side: Option<(
+        Vec<ratatui::text::Line<'static>>,
+        Vec<ratatui::text::Line<'static>>,
+    )>,
+    split: Option<(
+        Vec<ratatui::text::Line<'static>>,
+        Vec<ratatui::text::Line<'static>>,
+    )>,
+}
+
+impl DiffRenderCache {
+    pub fn new() -> Self {
+        Self {
+            content_hash: 0,
+            view_mode: DiffViewMode::Unified,
+            unified: None,
+            side_by_side: None,
+            split: None,
+        }
+    }
+
+    fn hash_content(content: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
 impl super::app::TuiUnifiedApp {
+    /// 预填充 diff 渲染缓存（在渲染前调用，避免每帧重新解析）
+    fn ensure_diff_cache(&mut self) {
+        let (content_hash, view_mode) = match &self.diff_viewer {
+            Some(v) if !v.current_diff.is_empty() => {
+                let hash = DiffRenderCache::hash_content(&v.current_diff);
+                let mode = v.view_mode.clone();
+                (hash, mode)
+            }
+            _ => return,
+        };
+
+        // 内容变化时清除所有模式的缓存
+        if content_hash != self.diff_render_cache.content_hash {
+            self.diff_render_cache.content_hash = content_hash;
+            self.diff_render_cache.unified = None;
+            self.diff_render_cache.side_by_side = None;
+            self.diff_render_cache.split = None;
+        }
+
+        self.diff_render_cache.view_mode = view_mode.clone();
+
+        // 仅当前模式缓存缺失时才重新解析
+        let need_parse = match view_mode {
+            DiffViewMode::Unified => self.diff_render_cache.unified.is_none(),
+            DiffViewMode::SideBySide => self.diff_render_cache.side_by_side.is_none(),
+            DiffViewMode::Split => self.diff_render_cache.split.is_none(),
+        };
+
+        if !need_parse {
+            return;
+        }
+
+        // Clone diff content for parsing (only on cache miss)
+        let diff_content = self.diff_viewer.as_ref().unwrap().current_diff.clone();
+
+        match view_mode {
+            DiffViewMode::Unified => {
+                let lines = self.parse_diff_for_unified(&diff_content);
+                self.diff_render_cache.unified = Some(lines);
+            }
+            DiffViewMode::SideBySide => {
+                let (left, right) = self.parse_diff_for_side_by_side(&diff_content);
+                self.diff_render_cache.side_by_side = Some((left, right));
+            }
+            DiffViewMode::Split => {
+                let (removed, added) = self.parse_diff_for_split(&diff_content);
+                self.diff_render_cache.split = Some((removed, added));
+            }
+        }
+    }
+
     /// 清除模态框背景，确保不会有底层内容泄露
     fn clear_modal_background(&self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-        use ratatui::text::Text;
-        use ratatui::widgets::{Block, Clear, Paragraph};
+        use ratatui::style::{Color, Style};
+        use ratatui::widgets::Clear;
 
-        // 首先清除整个屏幕区域
+        // 清除整个屏幕区域（重置所有 cell）
         frame.render_widget(Clear, area);
 
-        // 创建一个完全不透明的背景填充
-        let background_text = " ".repeat((area.width as usize) * (area.height as usize));
-        let background_paragraph = Paragraph::new(Text::from(background_text)).style(
-            ratatui::style::Style::default()
-                .bg(ratatui::style::Color::Black)
-                .fg(ratatui::style::Color::Black),
-        );
-        frame.render_widget(background_paragraph, area);
-
-        // 再次渲染一个Block来确保完全遮蔽
-        let background_block = Block::default()
-            .style(ratatui::style::Style::default().bg(ratatui::style::Color::Black));
-        frame.render_widget(background_block, area);
+        // 逐行填充黑色背景，确保每个 cell 都有明确的 bg(Black)
+        let bg_style = Style::default().bg(Color::Black).fg(Color::Black);
+        let buf = frame.buffer_mut();
+        for y in area.top()..area.bottom() {
+            for x in area.left()..area.right() {
+                let cell = buf.get_mut(x, y);
+                cell.set_char(' ');
+                cell.set_style(bg_style);
+            }
+        }
     }
 
     /// 在指定区域内渲染diff viewer，而不是全屏渲染
@@ -66,7 +149,7 @@ impl super::app::TuiUnifiedApp {
         );
         let info_paragraph = Paragraph::new(Text::from(commit_info_text))
             .block(Block::default().borders(Borders::ALL).title("Commit Info"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(Color::White).bg(Color::Black));
         frame.render_widget(info_paragraph, main_chunks[0]);
 
         // 内容区：根据视图模式渲染不同的diff显示
@@ -86,7 +169,7 @@ impl super::app::TuiUnifiedApp {
         );
         let status_paragraph = Paragraph::new(Text::from(status_text))
             .block(Block::default().borders(Borders::ALL).title("Controls"))
-            .style(Style::default().fg(Color::Yellow));
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black));
         frame.render_widget(status_paragraph, main_chunks[2]);
     }
 
@@ -102,28 +185,32 @@ impl super::app::TuiUnifiedApp {
             widgets::{Block, Borders, Paragraph},
         };
 
-        let diff_content = if !viewer.current_diff.is_empty() {
-            viewer.current_diff.clone()
+        // 获取当前文件名，用于显示在标题中
+        let current_file_name = if !viewer.files.is_empty() {
+            let file = &viewer.files[viewer.selected_file];
+            let char_count = file.path.chars().count();
+            if char_count > 35 {
+                let suffix: String = file.path.chars().skip(char_count - 32).collect();
+                format!("...{}", suffix)
+            } else {
+                file.path.clone()
+            }
         } else {
-            "No diff content available".to_string()
+            "Unknown".to_string()
         };
 
         match viewer.view_mode {
             crate::diff_viewer::DiffViewMode::Unified => {
-                // 统一格式：带行号的语法高亮显示
-                let lines = self.parse_diff_for_unified(&diff_content);
-
-                // 获取当前文件名，用于显示在标题中
-                let current_file_name = if !viewer.files.is_empty() {
-                    let file = &viewer.files[viewer.selected_file];
-                    // 如果路径太长，截断显示
-                    if file.path.len() > 35 {
-                        format!("...{}", &file.path[file.path.len() - 32..])
-                    } else {
-                        file.path.clone()
-                    }
+                // 优先使用缓存，否则重新解析（仅在缓存未命中时 clone diff_content）
+                let lines = if let Some(ref cached) = self.diff_render_cache.unified {
+                    cached.clone()
                 } else {
-                    "Unknown".to_string()
+                    let diff_content = if !viewer.current_diff.is_empty() {
+                        viewer.current_diff.clone()
+                    } else {
+                        "No diff content available".to_string()
+                    };
+                    self.parse_diff_for_unified(&diff_content)
                 };
 
                 let diff_paragraph = Paragraph::new(lines)
@@ -132,33 +219,29 @@ impl super::app::TuiUnifiedApp {
                             .borders(Borders::ALL)
                             .title(format!("📄 Unified Diff: {}", current_file_name)),
                     )
-                    .style(Style::default().fg(Color::White))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(diff_paragraph, area);
             }
             crate::diff_viewer::DiffViewMode::SideBySide => {
-                // 并排格式：左右分栏显示
                 let horizontal_chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
 
-                // 解析diff内容，构建并排视图
-                let (left_lines, right_lines) = self.parse_diff_for_side_by_side(&diff_content);
-
-                // 获取当前文件名，用于显示在标题中
-                let current_file_name = if !viewer.files.is_empty() {
-                    let file = &viewer.files[viewer.selected_file];
-                    // 如果路径太长，截断显示
-                    if file.path.len() > 35 {
-                        format!("...{}", &file.path[file.path.len() - 32..])
+                // 优先使用缓存，否则重新解析（仅在缓存未命中时 clone diff_content）
+                let (left_lines, right_lines) =
+                    if let Some(ref cached) = self.diff_render_cache.side_by_side {
+                        cached.clone()
                     } else {
-                        file.path.clone()
-                    }
-                } else {
-                    "Unknown".to_string()
-                };
+                        let diff_content = if !viewer.current_diff.is_empty() {
+                            viewer.current_diff.clone()
+                        } else {
+                            "No diff content available".to_string()
+                        };
+                        self.parse_diff_for_side_by_side(&diff_content)
+                    };
 
                 let left_paragraph = Paragraph::new(left_lines)
                     .block(
@@ -166,7 +249,7 @@ impl super::app::TuiUnifiedApp {
                             .borders(Borders::ALL)
                             .title(format!("🔻 Original: {}", current_file_name)),
                     )
-                    .style(Style::default().fg(Color::White))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(left_paragraph, horizontal_chunks[0]);
@@ -177,33 +260,29 @@ impl super::app::TuiUnifiedApp {
                             .borders(Borders::ALL)
                             .title(format!("🔺 Modified: {}", current_file_name)),
                     )
-                    .style(Style::default().fg(Color::White))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(right_paragraph, horizontal_chunks[1]);
             }
             crate::diff_viewer::DiffViewMode::Split => {
-                // 分割格式：上下分栏显示
                 let vertical_chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
 
-                // 解析diff内容，构建上下分割视图
-                let (removed_lines, added_lines) = self.parse_diff_for_split(&diff_content);
-
-                // 获取当前文件名，用于显示在标题中
-                let current_file_name = if !viewer.files.is_empty() {
-                    let file = &viewer.files[viewer.selected_file];
-                    // 如果路径太长，截断显示
-                    if file.path.len() > 35 {
-                        format!("...{}", &file.path[file.path.len() - 32..])
+                // 优先使用缓存，否则重新解析（仅在缓存未命中时 clone diff_content）
+                let (removed_lines, added_lines) =
+                    if let Some(ref cached) = self.diff_render_cache.split {
+                        cached.clone()
                     } else {
-                        file.path.clone()
-                    }
-                } else {
-                    "Unknown".to_string()
-                };
+                        let diff_content = if !viewer.current_diff.is_empty() {
+                            viewer.current_diff.clone()
+                        } else {
+                            "No diff content available".to_string()
+                        };
+                        self.parse_diff_for_split(&diff_content)
+                    };
 
                 let top_paragraph = Paragraph::new(removed_lines)
                     .block(
@@ -211,7 +290,7 @@ impl super::app::TuiUnifiedApp {
                             .borders(Borders::ALL)
                             .title(format!("🗑️ Removed (-): {}", current_file_name)),
                     )
-                    .style(Style::default().fg(Color::White))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(top_paragraph, vertical_chunks[0]);
@@ -222,7 +301,7 @@ impl super::app::TuiUnifiedApp {
                             .borders(Borders::ALL)
                             .title(format!("➕ Added (+): {}", current_file_name)),
                     )
-                    .style(Style::default().fg(Color::White))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
                     .scroll((viewer.diff_scroll, 0))
                     .wrap(ratatui::widgets::Wrap { trim: false });
                 frame.render_widget(bottom_paragraph, vertical_chunks[1]);
@@ -251,28 +330,36 @@ impl super::app::TuiUnifiedApp {
         // 收集所有行并按块进行处理
         let lines: Vec<&str> = diff_content.lines().collect();
         let mut i = 0;
+        let mut in_diff = false;
 
         while i < lines.len() {
             let line = lines[i];
 
+            // 跳过 diff --git 之前的 commit metadata（Author, Date, message 等）
+            if line.starts_with("diff --git") {
+                in_diff = true;
+            }
+            if !in_diff {
+                i += 1;
+                continue;
+            }
+
             if line.starts_with("@@") {
-                // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@
-                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
-                    let parts: Vec<&str> = captures.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let Some(old_part) = parts[0].strip_prefix('-') {
-                            if let Some((start, _)) = old_part.split_once(',') {
-                                old_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                old_line_num = old_part.parse().unwrap_or(0);
-                            }
+                // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@ [optional context]
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    if let Some(old_part) = parts[1].strip_prefix('-') {
+                        if let Some((start, _)) = old_part.split_once(',') {
+                            old_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            old_line_num = old_part.parse().unwrap_or(0);
                         }
-                        if let Some(new_part) = parts[1].strip_prefix('+') {
-                            if let Some((start, _)) = new_part.split_once(',') {
-                                new_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                new_line_num = new_part.parse().unwrap_or(0);
-                            }
+                    }
+                    if let Some(new_part) = parts[2].strip_prefix('+') {
+                        if let Some((start, _)) = new_part.split_once(',') {
+                            new_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            new_line_num = new_part.parse().unwrap_or(0);
                         }
                     }
                 }
@@ -317,7 +404,9 @@ impl super::app::TuiUnifiedApp {
                 for j in 0..max_lines {
                     if j < removed_lines.len() {
                         // 有删除行，在左侧显示
-                        let line_content = &removed_lines[j][1..];
+                        let line_content = removed_lines[j]
+                            .strip_prefix('-')
+                            .unwrap_or(removed_lines[j]);
                         let formatted_line =
                             format!("{:4} │ {}", old_line_num + j as u32, line_content);
                         left_lines.push(Line::from(Span::styled(
@@ -334,7 +423,8 @@ impl super::app::TuiUnifiedApp {
 
                     if j < added_lines.len() {
                         // 有添加行，在右侧显示
-                        let line_content = &added_lines[j][1..];
+                        let line_content =
+                            added_lines[j].strip_prefix('+').unwrap_or(added_lines[j]);
                         let formatted_line =
                             format!("{:4} │ {}", new_line_num + j as u32, line_content);
                         right_lines.push(Line::from(Span::styled(
@@ -419,26 +509,33 @@ impl super::app::TuiUnifiedApp {
         let mut added_lines = Vec::new();
         let mut old_line_num = 0u32;
         let mut new_line_num = 0u32;
+        let mut in_diff = false;
 
         for line in diff_content.lines() {
+            // 跳过 diff --git 之前的 commit metadata
+            if line.starts_with("diff --git") {
+                in_diff = true;
+            }
+            if !in_diff {
+                continue;
+            }
+
             if line.starts_with("@@") {
-                // 解析行号信息
-                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
-                    let parts: Vec<&str> = captures.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let Some(old_part) = parts[0].strip_prefix('-') {
-                            if let Some((start, _)) = old_part.split_once(',') {
-                                old_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                old_line_num = old_part.parse().unwrap_or(0);
-                            }
+                // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@ [optional context]
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    if let Some(old_part) = parts[1].strip_prefix('-') {
+                        if let Some((start, _)) = old_part.split_once(',') {
+                            old_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            old_line_num = old_part.parse().unwrap_or(0);
                         }
-                        if let Some(new_part) = parts[1].strip_prefix('+') {
-                            if let Some((start, _)) = new_part.split_once(',') {
-                                new_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                new_line_num = new_part.parse().unwrap_or(0);
-                            }
+                    }
+                    if let Some(new_part) = parts[2].strip_prefix('+') {
+                        if let Some((start, _)) = new_part.split_once(',') {
+                            new_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            new_line_num = new_part.parse().unwrap_or(0);
                         }
                     }
                 }
@@ -516,26 +613,33 @@ impl super::app::TuiUnifiedApp {
         let mut lines = Vec::new();
         let mut old_line_num = 0u32;
         let mut new_line_num = 0u32;
+        let mut in_diff = false;
 
         for line in diff_content.lines() {
+            // 跳过 diff --git 之前的 commit metadata
+            if line.starts_with("diff --git") {
+                in_diff = true;
+            }
+            if !in_diff {
+                continue;
+            }
+
             if line.starts_with("@@") {
-                // 解析行号信息
-                if let Some(captures) = line.strip_prefix("@@").and_then(|s| s.strip_suffix("@@")) {
-                    let parts: Vec<&str> = captures.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let Some(old_part) = parts[0].strip_prefix('-') {
-                            if let Some((start, _)) = old_part.split_once(',') {
-                                old_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                old_line_num = old_part.parse().unwrap_or(0);
-                            }
+                // 解析行号信息：@@ -old_start,old_count +new_start,new_count @@ [optional context]
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    if let Some(old_part) = parts[1].strip_prefix('-') {
+                        if let Some((start, _)) = old_part.split_once(',') {
+                            old_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            old_line_num = old_part.parse().unwrap_or(0);
                         }
-                        if let Some(new_part) = parts[1].strip_prefix('+') {
-                            if let Some((start, _)) = new_part.split_once(',') {
-                                new_line_num = start.parse().unwrap_or(0);
-                            } else {
-                                new_line_num = new_part.parse().unwrap_or(0);
-                            }
+                    }
+                    if let Some(new_part) = parts[2].strip_prefix('+') {
+                        if let Some((start, _)) = new_part.split_once(',') {
+                            new_line_num = start.parse().unwrap_or(0);
+                        } else {
+                            new_line_num = new_part.parse().unwrap_or(0);
                         }
                     }
                 }
@@ -636,6 +740,14 @@ impl super::app::TuiUnifiedApp {
                 // 使用专门的背景清除方法
                 self.clear_modal_background(frame, area);
 
+                // 更新视口高度（popup_area 减去 info(3) + status(4) + borders(4)）
+                if let Some(viewer) = &mut self.diff_viewer {
+                    viewer.viewport_height = popup_area.height.saturating_sub(11);
+                }
+
+                // 预填充渲染缓存（避免每帧重新解析 diff）
+                self.ensure_diff_cache();
+
                 // 使用自定义的DiffViewer渲染，限制在popup区域内
                 if let Some(viewer) = &self.diff_viewer {
                     self.render_diff_viewer_in_area(frame, viewer, popup_area);
@@ -660,7 +772,7 @@ impl super::app::TuiUnifiedApp {
 
                 let help_text = "Press [Esc] or [q] to close | [↑↓/jk] scroll | [PgUp/PgDn/ud] page | [g/G] start/end | [←→] files (side-by-side) | [1] unified | [2] side-by-side | [3/t] file list | [w] word-level | [n] line numbers | [h] syntax";
                 let help = Paragraph::new(Text::from(help_text))
-                    .style(Style::default().fg(Color::Gray))
+                    .style(Style::default().fg(Color::Gray).bg(Color::Black))
                     .alignment(Alignment::Center);
                 frame.render_widget(help, help_area);
             }
@@ -773,6 +885,70 @@ impl super::app::TuiUnifiedApp {
                     .alignment(Alignment::Center);
                 frame.render_widget(help, help_area);
             }
+            crate::tui_unified::state::app_state::ModalType::AIReview
+            | crate::tui_unified::state::app_state::ModalType::AIRefactor => {
+                // AI Review / Refactor 结果模态框（大面积，可滚动）
+                let popup_area = {
+                    let vertical = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Length(2),
+                            Constraint::Min(10),
+                            Constraint::Length(2),
+                        ])
+                        .split(area);
+
+                    Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Length(4),
+                            Constraint::Min(60),
+                            Constraint::Length(4),
+                        ])
+                        .split(vertical[1])[1]
+                };
+
+                // 使用专门的背景清除方法
+                self.clear_modal_background(frame, area);
+
+                use ratatui::widgets::{Block, Borders, Wrap};
+
+                let (title, border_color) = match modal.modal_type {
+                    crate::tui_unified::state::app_state::ModalType::AIReview => {
+                        ("AI Code Review", Color::Cyan)
+                    }
+                    crate::tui_unified::state::app_state::ModalType::AIRefactor => {
+                        ("AI Refactor Suggestions", Color::Magenta)
+                    }
+                    _ => unreachable!(),
+                };
+
+                let content_block = Paragraph::new(Text::from(modal.content.clone()))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(title)
+                            .border_style(Style::default().fg(border_color)),
+                    )
+                    .style(Style::default().fg(Color::White))
+                    .wrap(Wrap { trim: false });
+
+                frame.render_widget(content_block, popup_area);
+
+                // 帮助文本
+                let help_area = ratatui::layout::Rect {
+                    x: popup_area.x,
+                    y: popup_area.y + popup_area.height,
+                    width: popup_area.width,
+                    height: 1,
+                };
+
+                let help_text = "[Esc] or [q] Close";
+                let help = Paragraph::new(Text::from(help_text))
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(Alignment::Center);
+                frame.render_widget(help, help_area);
+            }
             _ => {
                 // 对于其他类型的模态框，使用简单的消息框
                 let popup_area = {
@@ -842,6 +1018,7 @@ impl super::app::TuiUnifiedApp {
                     match key.code {
                         KeyCode::Esc | KeyCode::Char('q') => {
                             drop(state);
+                            self.diff_viewer = None;
                             let mut state = self.state.write().await;
                             state.hide_modal();
                             return Ok(());
@@ -863,12 +1040,14 @@ impl super::app::TuiUnifiedApp {
                             }
                             KeyCode::Char('J') => {
                                 viewer.diff_scroll = viewer.diff_scroll.saturating_add(1);
+                                viewer.clamp_scroll();
                             }
                             KeyCode::Char('K') => {
                                 viewer.diff_scroll = viewer.diff_scroll.saturating_sub(1);
                             }
                             KeyCode::PageDown => {
                                 viewer.diff_scroll = viewer.diff_scroll.saturating_add(10);
+                                viewer.clamp_scroll();
                             }
                             KeyCode::PageUp => {
                                 viewer.diff_scroll = viewer.diff_scroll.saturating_sub(10);
@@ -896,6 +1075,19 @@ impl super::app::TuiUnifiedApp {
                             }
                             _ => {}
                         }
+                    }
+                }
+                crate::tui_unified::state::app_state::ModalType::AIReview
+                | crate::tui_unified::state::app_state::ModalType::AIRefactor => {
+                    // AI Review/Refactor 模态框：只处理关闭键
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            drop(state);
+                            let mut state = self.state.write().await;
+                            state.hide_modal();
+                            return Ok(());
+                        }
+                        _ => {}
                     }
                 }
                 _ => {
@@ -991,7 +1183,7 @@ impl super::app::TuiUnifiedApp {
                                 self.commit_editor.set_focused(false);
                                 // 保存编辑的内容
                                 let edited_content = self.commit_editor.get_content();
-                                self.ai_commit_message = Some(edited_content.clone());
+                                self.ai_commit_message = Some(edited_content);
                                 self.ai_commit_status = Some("Message edited".to_string());
 
                                 // 不需要重新显示模态框，因为渲染逻辑会自动切换到非编辑模式显示

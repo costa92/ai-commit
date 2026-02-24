@@ -1,12 +1,45 @@
 use crate::git::core::GitCore;
 use tokio::process::Command;
 
+/// Git 编辑操作的结构化结果
+#[derive(Debug, Clone)]
+pub struct GitEditResult {
+    /// 主要结果消息
+    pub message: String,
+    /// 额外的用户指引/说明
+    pub instructions: Vec<String>,
+}
+
+impl GitEditResult {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn with_instructions(mut self, instructions: Vec<String>) -> Self {
+        self.instructions = instructions;
+        self
+    }
+}
+
+impl std::fmt::Display for GitEditResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)?;
+        for instruction in &self.instructions {
+            write!(f, "\n{}", instruction)?;
+        }
+        Ok(())
+    }
+}
+
 /// Git 提交编辑和修改模块
 pub struct GitEdit;
 
 impl GitEdit {
     /// 修改最后一次提交（amend）
-    pub async fn amend_last_commit(message: Option<&str>) -> anyhow::Result<()> {
+    pub async fn amend_last_commit(message: Option<&str>) -> anyhow::Result<GitEditResult> {
         let mut args = vec!["commit", "--amend"];
 
         if let Some(msg) = message {
@@ -29,12 +62,11 @@ impl GitEdit {
             );
         }
 
-        println!("✓ Successfully amended the last commit");
-        Ok(())
+        Ok(GitEditResult::new("✓ Successfully amended the last commit"))
     }
 
     /// 撤销最后一次提交（保留文件修改）
-    pub async fn undo_last_commit() -> anyhow::Result<()> {
+    pub async fn undo_last_commit() -> anyhow::Result<GitEditResult> {
         let status = Command::new("git")
             .args(["reset", "--soft", "HEAD~1"])
             .status()
@@ -45,26 +77,28 @@ impl GitEdit {
             anyhow::bail!("Git reset failed with exit code: {:?}", status.code());
         }
 
-        println!("✓ Undid the last commit (changes are now staged)");
-        Ok(())
+        Ok(GitEditResult::new(
+            "✓ Undid the last commit (changes are now staged)",
+        ))
     }
 
     /// 交互式 rebase 编辑提交
-    pub async fn interactive_rebase(base_commit: &str) -> anyhow::Result<()> {
+    pub async fn interactive_rebase(base_commit: &str) -> anyhow::Result<GitEditResult> {
         // 验证提交是否存在
         if !GitCore::commit_exists(base_commit).await? {
             anyhow::bail!("Commit '{}' does not exist", base_commit);
         }
 
-        println!("Starting interactive rebase from {}", base_commit);
-        println!("This will open your default Git editor for interactive rebase.");
-        println!("Available actions:");
-        println!("  pick (p)   = use commit");
-        println!("  reword (r) = use commit, but edit the commit message");
-        println!("  edit (e)   = use commit, but stop for amending");
-        println!("  squash (s) = use commit, but meld into previous commit");
-        println!("  drop (d)   = remove commit");
-        println!();
+        let instructions = vec![
+            format!("Starting interactive rebase from {}", base_commit),
+            "This will open your default Git editor for interactive rebase.".to_string(),
+            "Available actions:".to_string(),
+            "  pick (p)   = use commit".to_string(),
+            "  reword (r) = use commit, but edit the commit message".to_string(),
+            "  edit (e)   = use commit, but stop for amending".to_string(),
+            "  squash (s) = use commit, but meld into previous commit".to_string(),
+            "  drop (d)   = remove commit".to_string(),
+        ];
 
         let status = Command::new("git")
             .args(["rebase", "-i", base_commit])
@@ -76,12 +110,11 @@ impl GitEdit {
             anyhow::bail!("Git rebase -i failed with exit code: {:?}", status.code());
         }
 
-        println!("✓ Interactive rebase completed");
-        Ok(())
+        Ok(GitEditResult::new("✓ Interactive rebase completed").with_instructions(instructions))
     }
 
     /// 编辑指定的提交
-    pub async fn edit_specific_commit(commit_hash: &str) -> anyhow::Result<()> {
+    pub async fn edit_specific_commit(commit_hash: &str) -> anyhow::Result<GitEditResult> {
         // 验证提交是否存在
         if !GitCore::commit_exists(commit_hash).await? {
             anyhow::bail!("Commit '{}' does not exist", commit_hash);
@@ -102,12 +135,15 @@ impl GitEdit {
             .trim()
             .to_string();
 
-        println!(
-            "Setting up interactive rebase to edit commit {}",
-            commit_hash
-        );
-        println!("You'll be stopped at the commit to make your changes.");
-        println!("After making changes, use 'git commit --amend' and then 'git rebase --continue'");
+        let pre_instructions = vec![
+            format!(
+                "Setting up interactive rebase to edit commit {}",
+                commit_hash
+            ),
+            "You'll be stopped at the commit to make your changes.".to_string(),
+            "After making changes, use 'git commit --amend' and then 'git rebase --continue'"
+                .to_string(),
+        ];
 
         // 创建临时的 rebase 脚本
         let rebase_script = format!(
@@ -128,17 +164,27 @@ impl GitEdit {
             anyhow::bail!("Failed to edit commit '{}'", commit_hash);
         }
 
-        println!("✓ Positioned at commit {} for editing", commit_hash);
-        println!("💡 Make your changes, then run:");
-        println!("   git add <files>");
-        println!("   git commit --amend");
-        println!("   git rebase --continue");
+        let mut instructions = pre_instructions;
+        instructions.extend([
+            format!("✓ Positioned at commit {} for editing", commit_hash),
+            "💡 Make your changes, then run:".to_string(),
+            "   git add <files>".to_string(),
+            "   git commit --amend".to_string(),
+            "   git rebase --continue".to_string(),
+        ]);
 
-        Ok(())
+        Ok(GitEditResult::new(format!(
+            "✓ Positioned at commit {} for editing",
+            commit_hash
+        ))
+        .with_instructions(instructions))
     }
 
     /// 重写提交消息
-    pub async fn reword_commit(commit_hash: &str, new_message: &str) -> anyhow::Result<()> {
+    pub async fn reword_commit(
+        commit_hash: &str,
+        new_message: &str,
+    ) -> anyhow::Result<GitEditResult> {
         // 验证提交是否存在
         if !GitCore::commit_exists(commit_hash).await? {
             anyhow::bail!("Commit '{}' does not exist", commit_hash);
@@ -151,8 +197,6 @@ impl GitEdit {
         }
 
         // 否则使用 rebase 来重写历史提交的消息
-        println!("Rewriting commit message for {}", commit_hash);
-
         // 获取父提交
         let parent_output = Command::new("git")
             .args(["rev-parse", &format!("{}^", commit_hash)])
@@ -187,12 +231,17 @@ impl GitEdit {
             anyhow::bail!("Failed to rewrite commit message for '{}'", commit_hash);
         }
 
-        println!("✓ Rewrote commit message for {}", commit_hash);
-        Ok(())
+        Ok(GitEditResult::new(format!(
+            "✓ Rewrote commit message for {}",
+            commit_hash
+        )))
     }
 
     /// 压缩提交（squash）
-    pub async fn squash_commits(from_commit: &str, to_commit: &str) -> anyhow::Result<()> {
+    pub async fn squash_commits(
+        from_commit: &str,
+        to_commit: &str,
+    ) -> anyhow::Result<GitEditResult> {
         // 验证两个提交都存在
         if !GitCore::commit_exists(from_commit).await? {
             anyhow::bail!("Commit '{}' does not exist", from_commit);
@@ -201,8 +250,10 @@ impl GitEdit {
             anyhow::bail!("Commit '{}' does not exist", to_commit);
         }
 
-        println!("Squashing commits from {} to {}", from_commit, to_commit);
-        println!("This will combine multiple commits into one.");
+        let instructions = vec![
+            format!("Squashing commits from {} to {}", from_commit, to_commit),
+            "This will combine multiple commits into one.".to_string(),
+        ];
 
         let status = Command::new("git")
             .args(["rebase", "-i", &format!("{}^", from_commit)])
@@ -214,8 +265,7 @@ impl GitEdit {
             anyhow::bail!("Git rebase for squashing failed");
         }
 
-        println!("✓ Squash rebase completed");
-        Ok(())
+        Ok(GitEditResult::new("✓ Squash rebase completed").with_instructions(instructions))
     }
 
     /// 检查 rebase 状态
@@ -252,7 +302,7 @@ impl GitEdit {
     }
 
     /// 继续 rebase
-    pub async fn continue_rebase() -> anyhow::Result<()> {
+    pub async fn continue_rebase() -> anyhow::Result<GitEditResult> {
         let status = Command::new("git")
             .args(["rebase", "--continue"])
             .status()
@@ -263,12 +313,11 @@ impl GitEdit {
             anyhow::bail!("Git rebase --continue failed");
         }
 
-        println!("✓ Rebase continued successfully");
-        Ok(())
+        Ok(GitEditResult::new("✓ Rebase continued successfully"))
     }
 
     /// 中止 rebase
-    pub async fn abort_rebase() -> anyhow::Result<()> {
+    pub async fn abort_rebase() -> anyhow::Result<GitEditResult> {
         let status = Command::new("git")
             .args(["rebase", "--abort"])
             .status()
@@ -279,8 +328,7 @@ impl GitEdit {
             anyhow::bail!("Git rebase --abort failed");
         }
 
-        println!("✓ Rebase aborted successfully");
-        Ok(())
+        Ok(GitEditResult::new("✓ Rebase aborted successfully"))
     }
 
     /// 获取提交的主题行
@@ -299,7 +347,7 @@ impl GitEdit {
     }
 
     /// 显示可编辑的提交列表
-    pub async fn show_editable_commits(limit: Option<u32>) -> anyhow::Result<()> {
+    pub async fn show_editable_commits(limit: Option<u32>) -> anyhow::Result<GitEditResult> {
         let mut args = vec![
             "log".to_string(),
             "--oneline".to_string(),
@@ -322,18 +370,18 @@ impl GitEdit {
 
         let commits = String::from_utf8_lossy(&output.stdout);
 
-        println!("✏️  Editable Commits:");
-        println!("{}", "─".repeat(60));
-        println!("{}", commits);
+        let message = format!("✏️  Editable Commits:\n{}\n{}", "─".repeat(60), commits);
 
-        println!("\n💡 Available edit commands:");
-        println!("  --amend                     Modify the last commit");
-        println!("  --edit-commit HASH          Edit specific commit");
-        println!("  --reword-commit HASH        Change commit message");
-        println!("  --undo-commit               Undo last commit (soft reset)");
-        println!("  --rebase-edit BASE_COMMIT   Interactive rebase from base");
+        let instructions = vec![
+            "\n💡 Available edit commands:".to_string(),
+            "  --amend                     Modify the last commit".to_string(),
+            "  --edit-commit HASH          Edit specific commit".to_string(),
+            "  --reword-commit HASH        Change commit message".to_string(),
+            "  --undo-commit               Undo last commit (soft reset)".to_string(),
+            "  --rebase-edit BASE_COMMIT   Interactive rebase from base".to_string(),
+        ];
 
-        Ok(())
+        Ok(GitEditResult::new(message).with_instructions(instructions))
     }
 }
 

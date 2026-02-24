@@ -262,6 +262,155 @@ pub async fn get_next_tag_name(base_version: Option<&str>) -> anyhow::Result<Str
     resolve_next_tag_name(base_version).await
 }
 
+/// 检查标签是否存在
+pub async fn tag_exists(tag: &str) -> anyhow::Result<bool> {
+    let output = Command::new("git")
+        .args(["tag", "-l", tag])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
+
+    Ok(!output.stdout.is_empty())
+}
+
+/// 删除本地标签
+pub async fn delete_tag_local(tag: &str) -> anyhow::Result<()> {
+    let status = Command::new("git")
+        .args(["tag", "-d", tag])
+        .status()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to delete local tag: {}", e))?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "Failed to delete local tag '{}' with exit code: {:?}",
+            tag,
+            status.code()
+        );
+    }
+
+    Ok(())
+}
+
+/// 删除远程标签，返回是否成功
+pub async fn delete_tag_remote(tag: &str) -> anyhow::Result<bool> {
+    let status = Command::new("git")
+        .args(["push", "origin", &format!(":refs/tags/{}", tag)])
+        .status()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to delete remote tag: {}", e))?;
+
+    Ok(status.success())
+}
+
+/// 获取标签的详细信息（git show --no-patch --format=fuller）
+pub async fn show_tag_info(tag: &str) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(["show", tag, "--no-patch", "--format=fuller"])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to show tag info: {}", e))?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Git show command failed with exit code: {:?}",
+            output.status.code()
+        );
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// 获取标签的注释消息
+pub async fn get_tag_message(tag: &str) -> anyhow::Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["tag", "-l", "-n99", tag])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get tag message: {}", e))?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let tag_line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if tag_line.is_empty() {
+        return Ok(None);
+    }
+
+    // 跳过标签名部分
+    let message = tag_line
+        .split_whitespace()
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if message.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(message))
+    }
+}
+
+/// 获取两个标签之间的 diff --stat 输出
+pub async fn compare_tags_stat(tag1: &str, tag2: &str) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(["diff", "--stat", &format!("{}..{}", tag1, tag2)])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get diff stats: {}", e))?;
+
+    if !output.status.success() {
+        anyhow::bail!("Git diff --stat failed");
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// 获取两个标签之间的 commit log
+pub async fn compare_tags_log(tag1: &str, tag2: &str) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args([
+            "log",
+            "--oneline",
+            "--graph",
+            "--decorate",
+            &format!("{}..{}", tag1, tag2),
+        ])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get commit log: {}", e))?;
+
+    if !output.status.success() {
+        anyhow::bail!("Git log failed");
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// 列出所有标签（带格式化信息）
+pub async fn list_tags_formatted() -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args([
+            "tag",
+            "-l",
+            "--sort=-version:refname",
+            "--format=%(refname:short) %(objectname:short) %(subject) %(authordate:short)",
+        ])
+        .output()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to list tags: {}", e))?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Git tag list failed with exit code: {:?}",
+            output.status.code()
+        );
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

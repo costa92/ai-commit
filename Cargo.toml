@@ -9,7 +9,7 @@ name = "ai-commit"
 path = "src/main.rs"
 
 [[bin]]
-name = "ac"
+name = "aic"
 path = "src/main.rs"
 
 [dependencies]

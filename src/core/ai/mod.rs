@@ -2,9 +2,13 @@ use anyhow::Result;
 use std::sync::Arc;
 
 pub mod agents;
+pub mod diff_analyzer;
+pub mod http;
 pub mod prompt;
 pub mod provider;
 pub mod providers;
+pub mod stream;
+pub mod validation;
 
 pub use agents::{Agent, AgentConfig, AgentContext, AgentManager, AgentTask, TaskType};
 pub use prompt::{PromptBuilder, PromptTemplate};
@@ -31,13 +35,8 @@ impl AIService {
         diff: &str,
         config: &ProviderConfig,
     ) -> Result<String> {
-        // 构建提示词
         let prompt = self.prompt_builder.build_commit_prompt(diff)?;
-
-        // 调用 AI 提供商
         let response = self.provider.generate(&prompt, config).await?;
-
-        // 验证和清理响应
         self.validate_and_clean_response(&response)
     }
 
@@ -54,25 +53,15 @@ impl AIService {
 
     /// 验证和清理 AI 响应
     fn validate_and_clean_response(&self, response: &str) -> Result<String> {
-        // 验证 Conventional Commits 格式
         if !self.is_valid_commit_format(response) {
             anyhow::bail!("Invalid commit message format");
         }
-
-        // 清理响应
         Ok(self.clean_response(response))
     }
 
     /// 检查是否为有效的提交格式
     fn is_valid_commit_format(&self, message: &str) -> bool {
-        use once_cell::sync::Lazy;
-        use regex::Regex;
-
-        static VALID_FORMAT: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"^(feat|fix|docs|style|refactor|test|chore)(\([^)]+\))?:\s+\S+.*$").unwrap()
-        });
-
-        VALID_FORMAT.is_match(message.lines().next().unwrap_or(""))
+        validation::is_valid_commit_format(message)
     }
 
     /// 清理响应内容

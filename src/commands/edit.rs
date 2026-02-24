@@ -1,7 +1,8 @@
-use crate::ai;
 use crate::cli::args::Args;
 use crate::config::Config;
+use crate::core::ai::agents::{AgentConfig, AgentContext, AgentManager, AgentTask, TaskType};
 use crate::git::edit::{GitEdit, RebaseStatus};
+use std::collections::HashMap;
 
 /// 处理所有 commit 编辑相关命令
 pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
@@ -30,19 +31,22 @@ pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Resul
 
     // 处理撤销最后一次提交
     if args.undo_commit {
-        GitEdit::undo_last_commit().await?;
+        let result = GitEdit::undo_last_commit().await?;
+        println!("{}", result);
         return Ok(());
     }
 
     // 处理编辑特定提交
     if let Some(commit_hash) = &args.edit_commit {
-        GitEdit::edit_specific_commit(commit_hash).await?;
+        let result = GitEdit::edit_specific_commit(commit_hash).await?;
+        println!("{}", result);
         return Ok(());
     }
 
     // 处理交互式 rebase
     if let Some(base_commit) = &args.rebase_edit {
-        GitEdit::interactive_rebase(base_commit).await?;
+        let result = GitEdit::interactive_rebase(base_commit).await?;
+        println!("{}", result);
         return Ok(());
     }
 
@@ -53,7 +57,8 @@ pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Resul
     }
 
     // 如果没有具体的编辑操作，显示可编辑的提交列表
-    GitEdit::show_editable_commits(Some(10)).await?;
+    let result = GitEdit::show_editable_commits(Some(10)).await?;
+    println!("{}", result);
 
     Ok(())
 }
@@ -62,7 +67,6 @@ pub async fn handle_edit_commands(args: &Args, config: &Config) -> anyhow::Resul
 async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()> {
     println!("🔄 Amending the last commit...");
 
-    // 检查是否有新的暂存更改
     let diff_output = tokio::process::Command::new("git")
         .args(["diff", "--cached"])
         .output()
@@ -75,7 +79,6 @@ async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()
         println!("Found staged changes, will include them in the amendment");
     }
 
-    // 如果用户没有暂存任何新更改，询问是否要修改提交消息
     if !has_staged_changes {
         println!("No staged changes found.");
         println!("Options:");
@@ -83,28 +86,29 @@ async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()
         println!("  2. Keep the original commit message");
         println!("  3. Abort amendment");
 
-        // 为简化起见，这里直接保持原有消息
-        GitEdit::amend_last_commit(None).await?;
+        let result = GitEdit::amend_last_commit(None).await?;
+        println!("{}", result);
         return Ok(());
     }
 
-    // 如果有暂存更改，可选择使用 AI 生成新的提交消息
     let staged_diff = String::from_utf8_lossy(&diff_output.stdout);
 
     if !staged_diff.trim().is_empty() {
         println!("Generating AI commit message for staged changes...");
 
-        let prompt = crate::ai::prompt::get_prompt(&staged_diff);
-        let ai_message = ai::generate_commit_message(&staged_diff, config, &prompt).await?;
+        let ai_message = generate_message_with_agent(&staged_diff, config).await?;
 
         if !ai_message.is_empty() {
             println!("AI generated message: {}", ai_message);
-            GitEdit::amend_last_commit(Some(&ai_message)).await?;
+            let result = GitEdit::amend_last_commit(Some(&ai_message)).await?;
+            println!("{}", result);
         } else {
-            GitEdit::amend_last_commit(None).await?;
+            let result = GitEdit::amend_last_commit(None).await?;
+            println!("{}", result);
         }
     } else {
-        GitEdit::amend_last_commit(None).await?;
+        let result = GitEdit::amend_last_commit(None).await?;
+        println!("{}", result);
     }
 
     Ok(())
@@ -114,7 +118,6 @@ async fn handle_amend_commit(_args: &Args, config: &Config) -> anyhow::Result<()
 async fn handle_reword_commit(commit_hash: &str, config: &Config) -> anyhow::Result<()> {
     println!("🔄 Rewriting commit message for {}...", commit_hash);
 
-    // 获取该提交的变更内容
     let diff_output = tokio::process::Command::new("git")
         .args(["show", commit_hash, "--pretty=format:", "--name-only"])
         .output()
@@ -125,7 +128,6 @@ async fn handle_reword_commit(commit_hash: &str, config: &Config) -> anyhow::Res
         anyhow::bail!("Failed to get commit information for '{}'", commit_hash);
     }
 
-    // 获取该提交的 diff
     let commit_diff_output = tokio::process::Command::new("git")
         .args(["show", commit_hash, "--pretty=format:"])
         .output()
@@ -144,12 +146,12 @@ async fn handle_reword_commit(commit_hash: &str, config: &Config) -> anyhow::Res
         commit_hash
     );
 
-    let prompt = crate::ai::prompt::get_prompt(&commit_diff);
-    let ai_message = ai::generate_commit_message(&commit_diff, config, &prompt).await?;
+    let ai_message = generate_message_with_agent(&commit_diff, config).await?;
 
     if !ai_message.is_empty() {
         println!("AI generated message: {}", ai_message);
-        GitEdit::reword_commit(commit_hash, &ai_message).await?;
+        let result = GitEdit::reword_commit(commit_hash, &ai_message).await?;
+        println!("{}", result);
     } else {
         println!("Failed to generate AI message, keeping original");
     }
@@ -186,6 +188,45 @@ pub async fn show_edit_help() -> anyhow::Result<()> {
     println!("  - Always backup important work before major edits");
 
     Ok(())
+}
+
+/// 使用 Agent 生成 commit message
+async fn generate_message_with_agent(diff: &str, config: &Config) -> anyhow::Result<String> {
+    let mut agent_manager = AgentManager::with_default_context();
+
+    let mut env_vars: HashMap<String, String> = std::env::vars().collect();
+    if let Some(api_key) = config.get_api_key() {
+        env_vars.insert("API_KEY".to_string(), api_key);
+    }
+    env_vars.insert("API_URL".to_string(), config.get_url());
+
+    let agent_config = AgentConfig {
+        provider: config.provider.clone(),
+        model: config.model.clone(),
+        temperature: 0.7,
+        max_tokens: 2000,
+        stream: true,
+        max_retries: 3,
+        timeout_secs: 60,
+    };
+
+    let context = AgentContext {
+        working_dir: std::env::current_dir()?,
+        env_vars,
+        config: agent_config,
+        history: vec![],
+    };
+
+    agent_manager.update_context(context);
+    let commit_agent = agent_manager.get_or_create_agent("commit").await?;
+    let task = AgentTask::new(TaskType::GenerateCommit, diff);
+    let result = commit_agent.execute(task, agent_manager.context()).await?;
+
+    if !result.success {
+        anyhow::bail!("Agent failed to generate commit message");
+    }
+
+    Ok(result.content)
 }
 
 #[cfg(test)]

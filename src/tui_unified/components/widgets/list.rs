@@ -21,6 +21,7 @@ pub struct ListWidget<T> {
     items: Vec<T>,
     filtered_items: Vec<usize>, // 过滤后的项目索引
     selected_index: Option<usize>,
+    #[allow(dead_code)]
     scroll_offset: usize,
     list_state: ListState,
     title: String,
@@ -133,6 +134,11 @@ where
 
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    /// 更新标题而不重建整个组件
+    pub fn set_title(&mut self, title: String) {
+        self.title = title;
     }
 
     fn move_selection(&mut self, direction: i32) {

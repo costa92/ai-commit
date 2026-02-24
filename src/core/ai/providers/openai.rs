@@ -3,18 +3,23 @@ use crate::core::ai::providers::openai_compat::OpenAICompatibleBase;
 use anyhow::Result;
 use async_trait::async_trait;
 
-/// Deepseek AI 提供商
-pub struct DeepseekProvider {
+/// OpenAI 提供商
+///
+/// 直接使用 OpenAI API，复用 OpenAICompatibleBase。
+/// 默认 URL: https://api.openai.com/v1/chat/completions
+/// 默认 model: gpt-4o-mini
+/// 环境变量: AI_COMMIT_OPENAI_API_KEY
+pub struct OpenAIProvider {
     base: OpenAICompatibleBase,
 }
 
-impl Default for DeepseekProvider {
+impl Default for OpenAIProvider {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl DeepseekProvider {
+impl OpenAIProvider {
     pub fn new() -> Self {
         Self {
             base: OpenAICompatibleBase::new(),
@@ -23,10 +28,10 @@ impl DeepseekProvider {
 }
 
 #[async_trait]
-impl AIProvider for DeepseekProvider {
+impl AIProvider for OpenAIProvider {
     async fn generate(&self, prompt: &str, config: &ProviderConfig) -> Result<String> {
         self.base
-            .generate_chat(prompt, config, "Deepseek", None)
+            .generate_chat(prompt, config, "OpenAI", None)
             .await
     }
 
@@ -35,9 +40,7 @@ impl AIProvider for DeepseekProvider {
         prompt: &str,
         config: &ProviderConfig,
     ) -> Result<StreamResponse> {
-        self.base
-            .stream_chat(prompt, config, "Deepseek", None)
-            .await
+        self.base.stream_chat(prompt, config, "OpenAI", None).await
     }
 }
 
@@ -46,12 +49,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_deepseek_provider_creation() {
-        let _provider = DeepseekProvider::new();
+    fn test_openai_provider_creation() {
+        let _provider = OpenAIProvider::new();
     }
 
     #[test]
-    fn test_deepseek_default() {
-        let _provider = DeepseekProvider::default();
+    fn test_openai_default() {
+        let _provider = OpenAIProvider::default();
     }
 }

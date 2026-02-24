@@ -1,4 +1,3 @@
-pub mod ai;
 pub mod cli;
 pub mod commands;
 pub mod config;

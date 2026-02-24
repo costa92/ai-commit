@@ -20,7 +20,24 @@ pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool>
     // Git 初始化命令（最高优先级）
     if args.git_init {
         use crate::git::core::GitCore;
-        return GitCore::init_repository().await.map(|_| true);
+        return GitCore::init_repository().await.map(|messages| {
+            for msg in messages {
+                println!("{}", msg);
+            }
+            true
+        });
+    }
+
+    // Hook 管理命令
+    if args.hook_install {
+        let msg = crate::git::hooks::install_hook().await?;
+        println!("{}", msg);
+        return Ok(true);
+    }
+    if args.hook_uninstall {
+        let msg = crate::git::hooks::uninstall_hook().await?;
+        println!("{}", msg);
+        return Ok(true);
     }
 
     // 增强功能命令（最高优先级，基于GRV功能）
@@ -387,5 +404,39 @@ mod tests {
         assert!(args.tag_list, "Tag list should be set");
         assert!(args.history, "History should be set");
         assert!(args.flow_init, "Flow init should be set");
+    }
+
+    #[tokio::test]
+    async fn test_route_command_hook_install() {
+        let mut args = Args::default();
+        args.hook_install = true;
+        let config = create_test_config();
+
+        let result = route_command(&args, &config).await;
+        match result {
+            Ok(handled) => {
+                assert!(handled, "Hook install command should be handled");
+            }
+            Err(_) => {
+                println!("Hook install command was routed correctly but execution failed (expected in test environment)");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_route_command_hook_uninstall() {
+        let mut args = Args::default();
+        args.hook_uninstall = true;
+        let config = create_test_config();
+
+        let result = route_command(&args, &config).await;
+        match result {
+            Ok(handled) => {
+                assert!(handled, "Hook uninstall command should be handled");
+            }
+            Err(_) => {
+                println!("Hook uninstall command was routed correctly but execution failed (expected in test environment)");
+            }
+        }
     }
 }

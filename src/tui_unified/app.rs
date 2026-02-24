@@ -14,11 +14,12 @@ use crate::tui_unified::{
         panels::sidebar::SidebarPanel,
         views::{
             branches::BranchesView, git_log::GitLogView, query_history::QueryHistoryView,
-            remotes::RemotesView, stash::StashView, tags::TagsView,
+            remotes::RemotesView, staging::StagingView, stash::StashView, tags::TagsView,
         },
         widgets::{commit_editor::CommitEditor, search_box::SearchBox},
     },
     config::AppConfig,
+    diff_rendering::DiffRenderCache,
     focus::{FocusManager, FocusPanel},
     layout::LayoutManager,
     state::AppState,
@@ -51,8 +52,10 @@ pub struct TuiUnifiedApp {
     pub(crate) remotes_view: RemotesView,
     pub(crate) stash_view: StashView,
     pub(crate) query_history_view: QueryHistoryView,
+    pub(crate) staging_view: StagingView,
     pub(crate) search_box: SearchBox,
     pub(crate) diff_viewer: Option<DiffViewer>,
+    pub(crate) diff_render_cache: DiffRenderCache,
     pub(crate) commit_editor: CommitEditor,
 
     // 配置
@@ -69,6 +72,10 @@ pub struct TuiUnifiedApp {
     pub(crate) ai_commit_editing: bool,
     pub(crate) ai_commit_status: Option<String>,
     pub(crate) ai_commit_push_prompt: bool,
+
+    // 分支提交缓存（避免每帧重新加载）
+    pub(crate) cached_branch_name: Option<String>,
+    pub(crate) cached_branch_commits: Vec<crate::tui_unified::state::git_state::Commit>,
 }
 
 impl TuiUnifiedApp {
@@ -90,8 +97,10 @@ impl TuiUnifiedApp {
             remotes_view: RemotesView::new(),
             stash_view: StashView::new(),
             query_history_view: QueryHistoryView::new(),
+            staging_view: StagingView::new(),
             search_box: SearchBox::new().with_placeholder("Search...".to_string()),
             diff_viewer: None,
+            diff_render_cache: DiffRenderCache::new(),
             commit_editor: CommitEditor::new(),
             _config: config,
             should_quit: false,
@@ -103,6 +112,9 @@ impl TuiUnifiedApp {
             ai_commit_editing: false,
             ai_commit_status: None,
             ai_commit_push_prompt: false,
+
+            cached_branch_name: None,
+            cached_branch_commits: Vec::new(),
         })
     }
 

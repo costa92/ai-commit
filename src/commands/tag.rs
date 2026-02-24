@@ -1,6 +1,6 @@
 use crate::cli::args::Args;
 use crate::config::Config;
-use tokio::process::Command;
+use crate::git::tag;
 
 /// 处理所有 tag 相关命令
 pub async fn handle_tag_commands(args: &Args, config: &Config) -> anyhow::Result<()> {
@@ -8,12 +8,12 @@ pub async fn handle_tag_commands(args: &Args, config: &Config) -> anyhow::Result
         list_tags(config).await?;
     }
 
-    if let Some(tag) = &args.tag_delete {
-        delete_tag(tag, config).await?;
+    if let Some(tag_name) = &args.tag_delete {
+        delete_tag(tag_name, config).await?;
     }
 
-    if let Some(tag) = &args.tag_info {
-        show_tag_info(tag, config).await?;
+    if let Some(tag_name) = &args.tag_info {
+        show_tag_info(tag_name, config).await?;
     }
 
     if let Some(comparison) = &args.tag_compare {
@@ -25,25 +25,7 @@ pub async fn handle_tag_commands(args: &Args, config: &Config) -> anyhow::Result
 
 /// 列出所有标签（增强版）
 async fn list_tags(config: &Config) -> anyhow::Result<()> {
-    let output = Command::new("git")
-        .args([
-            "tag",
-            "-l",
-            "--sort=-version:refname",
-            "--format=%(refname:short) %(objectname:short) %(subject) %(authordate:short)",
-        ])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to list tags: {}", e))?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "Git tag list failed with exit code: {:?}",
-            output.status.code()
-        );
-    }
-
-    let tag_list = String::from_utf8_lossy(&output.stdout);
+    let tag_list = tag::list_tags_formatted().await?;
 
     if tag_list.trim().is_empty() {
         println!("No tags found in this repository.");
@@ -60,7 +42,7 @@ async fn list_tags(config: &Config) -> anyhow::Result<()> {
     for line in tag_list.lines() {
         let parts: Vec<&str> = line.trim().splitn(4, ' ').collect();
         if parts.len() >= 4 {
-            let tag = parts[0];
+            let tag_name = parts[0];
             let commit = parts[1];
             let message = if parts[2].chars().count() > 47 {
                 let truncated: String = parts[2].chars().take(47).collect();
@@ -70,7 +52,10 @@ async fn list_tags(config: &Config) -> anyhow::Result<()> {
             };
             let date = parts[3];
 
-            println!("{:<20} {:<12} {:<50} {:<12}", tag, commit, message, date);
+            println!(
+                "{:<20} {:<12} {:<50} {:<12}",
+                tag_name, commit, message, date
+            );
         }
     }
 
@@ -82,52 +67,24 @@ async fn list_tags(config: &Config) -> anyhow::Result<()> {
 }
 
 /// 删除指定标签（本地和远程）
-async fn delete_tag(tag: &str, config: &Config) -> anyhow::Result<()> {
+async fn delete_tag(tag_name: &str, config: &Config) -> anyhow::Result<()> {
     if config.debug {
-        println!("Attempting to delete tag: {}", tag);
+        println!("Attempting to delete tag: {}", tag_name);
     }
 
-    // 首先检查标签是否存在
-    let tag_exists = Command::new("git")
-        .args(["tag", "-l", tag])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
-
-    if tag_exists.stdout.is_empty() {
-        anyhow::bail!("Tag '{}' does not exist", tag);
+    if !tag::tag_exists(tag_name).await? {
+        anyhow::bail!("Tag '{}' does not exist", tag_name);
     }
 
-    // 删除本地标签
-    let status = Command::new("git")
-        .args(["tag", "-d", tag])
-        .status()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to delete local tag: {}", e))?;
+    tag::delete_tag_local(tag_name).await?;
+    println!("✓ Deleted local tag: {}", tag_name);
 
-    if !status.success() {
-        anyhow::bail!(
-            "Failed to delete local tag '{}' with exit code: {:?}",
-            tag,
-            status.code()
-        );
-    }
-
-    println!("✓ Deleted local tag: {}", tag);
-
-    // 尝试删除远程标签
-    let remote_delete_status = Command::new("git")
-        .args(["push", "origin", &format!(":refs/tags/{}", tag)])
-        .status()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to delete remote tag: {}", e))?;
-
-    if remote_delete_status.success() {
-        println!("✓ Deleted remote tag: {}", tag);
+    if tag::delete_tag_remote(tag_name).await? {
+        println!("✓ Deleted remote tag: {}", tag_name);
     } else if config.debug {
         println!(
             "⚠ Warning: Failed to delete remote tag '{}' (it might not exist on remote)",
-            tag
+            tag_name
         );
     }
 
@@ -135,62 +92,24 @@ async fn delete_tag(tag: &str, config: &Config) -> anyhow::Result<()> {
 }
 
 /// 显示标签详细信息
-async fn show_tag_info(tag: &str, config: &Config) -> anyhow::Result<()> {
+async fn show_tag_info(tag_name: &str, config: &Config) -> anyhow::Result<()> {
     if config.debug {
-        println!("Showing info for tag: {}", tag);
+        println!("Showing info for tag: {}", tag_name);
     }
 
-    // 检查标签是否存在
-    let tag_exists = Command::new("git")
-        .args(["tag", "-l", tag])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
-
-    if tag_exists.stdout.is_empty() {
-        anyhow::bail!("Tag '{}' does not exist", tag);
+    if !tag::tag_exists(tag_name).await? {
+        anyhow::bail!("Tag '{}' does not exist", tag_name);
     }
 
-    // 获取标签信息
-    let show_output = Command::new("git")
-        .args(["show", tag, "--no-patch", "--format=fuller"])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to show tag info: {}", e))?;
-
-    if !show_output.status.success() {
-        anyhow::bail!(
-            "Git show command failed with exit code: {:?}",
-            show_output.status.code()
-        );
-    }
-
-    println!("📌 Tag Information: {}", tag);
+    let info = tag::show_tag_info(tag_name).await?;
+    println!("📌 Tag Information: {}", tag_name);
     println!("{}", "─".repeat(50));
-    println!("{}", String::from_utf8_lossy(&show_output.stdout));
+    println!("{}", info);
 
-    // 获取标签的注释信息（如果是 annotated tag）
-    let tag_message_output = Command::new("git")
-        .args(["tag", "-l", "-n99", tag])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get tag message: {}", e))?;
-
-    if tag_message_output.status.success() {
-        let tag_message = String::from_utf8_lossy(&tag_message_output.stdout);
-        if !tag_message.trim().is_empty() {
-            println!("\n📝 Tag Message:");
-            println!("{}", "─".repeat(50));
-            // 跳过第一个单词（标签名）显示消息
-            let message = tag_message
-                .split_whitespace()
-                .skip(1)
-                .collect::<Vec<_>>()
-                .join(" ");
-            if !message.is_empty() {
-                println!("{}", message);
-            }
-        }
+    if let Ok(Some(message)) = tag::get_tag_message(tag_name).await {
+        println!("\n📝 Tag Message:");
+        println!("{}", "─".repeat(50));
+        println!("{}", message);
     }
 
     Ok(())
@@ -198,7 +117,6 @@ async fn show_tag_info(tag: &str, config: &Config) -> anyhow::Result<()> {
 
 /// 比较两个标签之间的差异
 async fn compare_tags(comparison: &str, config: &Config) -> anyhow::Result<()> {
-    // 解析比较格式: tag1..tag2
     let parts: Vec<&str> = comparison.split("..").collect();
     if parts.len() != 2 {
         anyhow::bail!("Invalid comparison format. Use: TAG1..TAG2");
@@ -212,15 +130,9 @@ async fn compare_tags(comparison: &str, config: &Config) -> anyhow::Result<()> {
     }
 
     // 检查两个标签是否都存在
-    for tag in [tag1, tag2] {
-        let tag_exists = Command::new("git")
-            .args(["tag", "-l", tag])
-            .output()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to check tag existence: {}", e))?;
-
-        if tag_exists.stdout.is_empty() {
-            anyhow::bail!("Tag '{}' does not exist", tag);
+    for t in [tag1, tag2] {
+        if !tag::tag_exists(t).await? {
+            anyhow::bail!("Tag '{}' does not exist", t);
         }
     }
 
@@ -228,38 +140,21 @@ async fn compare_tags(comparison: &str, config: &Config) -> anyhow::Result<()> {
     println!("{}", "─".repeat(60));
 
     // 显示提交差异统计
-    let stat_output = Command::new("git")
-        .args(["diff", "--stat", &format!("{}..{}", tag1, tag2)])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get diff stats: {}", e))?;
-
-    if stat_output.status.success() && !stat_output.stdout.is_empty() {
+    let stat_output = tag::compare_tags_stat(tag1, tag2).await?;
+    if !stat_output.trim().is_empty() {
         println!("📊 Changes Summary:");
-        println!("{}", String::from_utf8_lossy(&stat_output.stdout));
+        println!("{}", stat_output);
     }
 
     // 显示提交日志
-    let log_output = Command::new("git")
-        .args([
-            "log",
-            "--oneline",
-            "--graph",
-            "--decorate",
-            &format!("{}..{}", tag1, tag2),
-        ])
-        .output()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to get commit log: {}", e))?;
-
-    if log_output.status.success() && !log_output.stdout.is_empty() {
+    let log_output = tag::compare_tags_log(tag1, tag2).await?;
+    if !log_output.trim().is_empty() {
         println!("\n📝 Commits between {} and {}:", tag1, tag2);
-        println!("{}", String::from_utf8_lossy(&log_output.stdout));
+        println!("{}", log_output);
     } else {
         println!("No commits found between {} and {}", tag1, tag2);
     }
 
-    // 如果用户想要详细差异，可以提示如何查看
     println!("\n💡 To see detailed file changes, run:");
     println!("   git diff {}..{}", tag1, tag2);
 

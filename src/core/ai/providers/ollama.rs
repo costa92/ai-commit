@@ -1,22 +1,11 @@
+use crate::core::ai::http::shared_client;
 use crate::core::ai::provider::{AIProvider, ProviderConfig, StreamResponse};
+use crate::core::ai::stream::map_jsonl_stream;
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::StreamExt;
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio::io::{stdout, AsyncWriteExt};
-
-/// 全局 HTTP 客户端
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
-    Client::builder()
-        .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Duration::from_secs(30))
-        .timeout(Duration::from_secs(60))
-        .build()
-        .expect("Failed to create HTTP client")
-});
 
 /// Ollama 请求结构
 #[derive(Serialize)]
@@ -53,6 +42,13 @@ struct OllamaResponse {
     done: bool,
 }
 
+/// 从 Ollama JSONL 中提取内容
+fn extract_ollama_content(line: &str) -> Option<String> {
+    serde_json::from_str::<OllamaResponse>(line)
+        .ok()
+        .map(|r| r.response)
+}
+
 /// Ollama AI 提供商
 pub struct OllamaProvider {
     client: &'static Client,
@@ -68,7 +64,7 @@ impl OllamaProvider {
     /// 创建新的 Ollama 提供商
     pub fn new() -> Self {
         Self {
-            client: &HTTP_CLIENT,
+            client: shared_client(),
         }
     }
 
@@ -101,36 +97,6 @@ impl OllamaProvider {
 
         Ok(response)
     }
-
-    /// 处理流式响应
-    #[allow(dead_code)]
-    async fn handle_stream_response(response: reqwest::Response) -> Result<String> {
-        let mut message = String::with_capacity(2048);
-        let mut stdout_handle = stdout();
-        let mut stream = response.bytes_stream();
-
-        while let Some(item) = stream.next().await {
-            let chunk = item?;
-            let chunk_str = std::str::from_utf8(&chunk)?;
-
-            for line in chunk_str.lines() {
-                if let Ok(ollama_response) = serde_json::from_str::<OllamaResponse>(line) {
-                    stdout_handle
-                        .write_all(ollama_response.response.as_bytes())
-                        .await?;
-                    stdout_handle.flush().await?;
-                    message.push_str(&ollama_response.response);
-
-                    if ollama_response.done {
-                        break;
-                    }
-                }
-            }
-        }
-
-        stdout_handle.write_all(b"\n").await?;
-        Ok(message)
-    }
 }
 
 #[async_trait]
@@ -155,22 +121,7 @@ impl AIProvider for OllamaProvider {
 
         let response = self.send_request(prompt, &config).await?;
         let stream = response.bytes_stream();
-
-        let mapped_stream = stream.map(move |item| match item {
-            Ok(chunk) => {
-                let chunk_str = std::str::from_utf8(&chunk)
-                    .map_err(|e| anyhow::anyhow!("UTF-8 error: {}", e))?;
-
-                let mut result = String::new();
-                for line in chunk_str.lines() {
-                    if let Ok(response) = serde_json::from_str::<OllamaResponse>(line) {
-                        result.push_str(&response.response);
-                    }
-                }
-                Ok(result)
-            }
-            Err(e) => Err(anyhow::anyhow!("Stream error: {}", e)),
-        });
+        let mapped_stream = map_jsonl_stream(stream, extract_ollama_content);
 
         Ok(Box::pin(mapped_stream))
     }
@@ -217,5 +168,13 @@ mod tests {
 
         assert_eq!(response.response, "test response");
         assert!(response.done);
+    }
+
+    #[test]
+    fn test_extract_ollama_content() {
+        let json = r#"{"response": "hello", "done": false}"#;
+        assert_eq!(extract_ollama_content(json), Some("hello".to_string()));
+
+        assert_eq!(extract_ollama_content("invalid"), None);
     }
 }

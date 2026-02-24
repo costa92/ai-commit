@@ -5,7 +5,9 @@ pub struct GitCore;
 
 impl GitCore {
     /// 初始化新的 Git 仓库
-    pub async fn init_repository() -> anyhow::Result<()> {
+    pub async fn init_repository() -> anyhow::Result<Vec<String>> {
+        let mut messages = Vec::new();
+
         // 检查当前目录是否已经是 git 仓库
         if Self::is_git_repo().await {
             anyhow::bail!("Directory is already a Git repository");
@@ -21,7 +23,7 @@ impl GitCore {
             anyhow::bail!("Git init failed with exit code: {:?}", status.code());
         }
 
-        println!("✓ Initialized empty Git repository");
+        messages.push("✓ Initialized empty Git repository".to_string());
 
         // 设置默认分支为 main（如果 Git 版本支持）
         let config_status = Command::new("git")
@@ -31,7 +33,7 @@ impl GitCore {
 
         // 忽略配置错误，因为较老的 Git 版本可能不支持
         if config_status.is_ok() && config_status.unwrap().success() {
-            println!("✓ Set default branch to 'main'");
+            messages.push("✓ Set default branch to 'main'".to_string());
         }
 
         // 检查是否存在 main 分支，如果不存在则创建
@@ -42,7 +44,7 @@ impl GitCore {
                 tokio::fs::write("README.md", "# Project\n\nThis is a new project.\n")
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to create README.md: {}", e))?;
-                println!("✓ Created README.md");
+                messages.push("✓ Created README.md".to_string());
             }
 
             // 添加文件到暂存区
@@ -61,14 +63,15 @@ impl GitCore {
                     .map_err(|e| anyhow::anyhow!("Failed to create initial commit: {}", e))?;
 
                 if commit_status.success() {
-                    println!("✓ Created initial commit");
+                    messages.push("✓ Created initial commit".to_string());
                 } else {
-                    println!("⚠ Initial commit failed, but repository is initialized");
+                    messages
+                        .push("⚠ Initial commit failed, but repository is initialized".to_string());
                 }
             }
         }
 
-        Ok(())
+        Ok(messages)
     }
 
     /// 检查是否在 Git 仓库中
