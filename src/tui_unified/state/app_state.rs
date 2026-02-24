@@ -43,7 +43,7 @@ pub enum ViewType {
     QueryHistory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SidebarSection {
     Branches,
     Tags,

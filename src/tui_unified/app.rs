@@ -243,10 +243,7 @@ impl TuiUnifiedApp {
                             .split(layout.content);
 
                         let content_focused = self.focus_manager.current_panel == FocusPanel::Content;
-                        
-                        // 确保选中分支状态是最新的
-                        self.branches_view.update_selected_branch_in_state(&mut state);
-                        
+
                         // 渲染分支列表
                         self.branches_view.set_focus(content_focused);
                         self.branches_view.render(frame, chunks[0], &*state);
@@ -1718,6 +1715,7 @@ impl TuiUnifiedApp {
                                     config: crate::tui_unified::config::AppConfig::default(),
                                     loading_tasks: HashMap::new(),
                                     notifications: Vec::new(),
+                                    new_layout: Default::default(),
                                 }
                             });
                             self.commit_editor.render(frame, popup_area, &*DUMMY_STATE);
@@ -1998,6 +1996,7 @@ impl TuiUnifiedApp {
                                         config: crate::tui_unified::config::AppConfig::default(),
                                         loading_tasks: HashMap::new(),
                                         notifications: Vec::new(),
+                                        new_layout: Default::default(),
                                     }
                                 });
                                 let _result = self.commit_editor.handle_key_event(key, &mut dummy_state);
