@@ -606,30 +606,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_history_error_handling() {
-        // Test error handling in non-git environment
-        use std::env;
-        use std::path::Path;
+        // 验证 git 命令在非 git 目录下会失败
+        // 使用 Command::current_dir 代替 env::set_current_dir，避免干扰并行测试
+        let output = tokio::process::Command::new("git")
+            .args(["log", "--oneline", "-1"])
+            .current_dir("/tmp")
+            .output()
+            .await;
 
-        let original_dir = env::current_dir().unwrap();
-        
-        // Try to test in /tmp (not a git repo)
-        if Path::new("/tmp").exists() {
-            let _ = env::set_current_dir("/tmp");
-            
-            let result = GitHistory::show_contributors().await;
-            match result {
-                Ok(_) => println!("Contributors succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Contributors failed as expected in non-git dir: {}", e),
-            }
-
-            let result = GitHistory::search_commits("test", Some(5)).await;
-            match result {
-                Ok(_) => println!("Search succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Search failed as expected in non-git dir: {}", e),
-            }
-            
-            // Restore original directory
-            let _ = env::set_current_dir(original_dir);
+        match output {
+            Ok(o) => assert!(
+                !o.status.success(),
+                "git log should fail in non-git dir"
+            ),
+            Err(e) => println!("Command failed as expected: {}", e),
         }
     }
 

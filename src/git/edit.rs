@@ -504,22 +504,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_reword_commit_variations() {
-        // Test reword commit with different commits and messages
-        let test_cases = vec![
-            ("HEAD", "Updated commit message"),
-            ("HEAD~1", "fix(bug): resolve critical issue"),
-            ("main", "feat: add new feature implementation"),
-        ];
-
-        for (commit_hash, new_message) in test_cases {
-            println!("Testing reword commit: {} -> {}", commit_hash, new_message);
-            let result = GitEdit::reword_commit(commit_hash, new_message).await;
-            
-            match result {
-                Ok(_) => println!("  Reword commit succeeded: {}", commit_hash),
-                Err(e) => println!("  Reword commit failed: {} - {}", commit_hash, e),
-            }
-        }
+        // 验证 reword_commit 在无效提交上会返回错误
+        // 注意：不在真实仓库上调用 reword_commit，因为 filter-branch 会破坏工作树
+        let result = GitEdit::reword_commit("nonexistent_hash_abc123", "new message").await;
+        assert!(result.is_err(), "Should fail for non-existent commit");
     }
 
     #[tokio::test]
@@ -707,30 +695,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_edit_commands_in_non_git_environment() {
-        // Test edit commands in non-git environment
-        use std::env;
-        use std::path::Path;
+        // 验证 git 命令在非 git 目录下会失败
+        // 使用 Command::current_dir 代替 env::set_current_dir，避免干扰并行测试
+        let output = tokio::process::Command::new("git")
+            .args(["log", "--oneline", "-1"])
+            .current_dir("/tmp")
+            .output()
+            .await;
 
-        let original_dir = env::current_dir().unwrap();
-        
-        // Try to test in /tmp (not a git repo)
-        if Path::new("/tmp").exists() {
-            let _ = env::set_current_dir("/tmp");
-            
-            let result = GitEdit::check_rebase_status().await;
-            match result {
-                Ok(_) => println!("Rebase status succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Rebase status failed as expected in non-git dir: {}", e),
-            }
-
-            let result = GitEdit::show_editable_commits(Some(5)).await;
-            match result {
-                Ok(_) => println!("Show editable commits succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Show editable commits failed as expected in non-git dir: {}", e),
-            }
-            
-            // Restore original directory
-            let _ = env::set_current_dir(original_dir);
+        match output {
+            Ok(o) => assert!(
+                !o.status.success(),
+                "git log should fail in non-git dir"
+            ),
+            Err(e) => println!("Command failed as expected: {}", e),
         }
     }
 

@@ -39,10 +39,22 @@ impl QueryHistory {
             max_entries,
             history_file,
         };
-        
+
         // 加载现有历史记录
         history.load_history()?;
-        
+
+        Ok(history)
+    }
+
+    /// 使用指定路径创建查询历史管理器（用于测试）
+    #[cfg(test)]
+    fn new_with_path(max_entries: usize, path: PathBuf) -> anyhow::Result<Self> {
+        let mut history = Self {
+            entries: VecDeque::new(),
+            max_entries,
+            history_file: path,
+        };
+        history.load_history()?;
         Ok(history)
     }
 
@@ -292,7 +304,8 @@ mod tests {
 
     #[test]
     fn test_add_entry() {
-        let mut history = QueryHistory::new(100).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(100, tmp.path().to_path_buf()).unwrap();
         let result = history.add_entry(
             "author:john".to_string(),
             Some("filter".to_string()),
@@ -305,7 +318,8 @@ mod tests {
 
     #[test]
     fn test_max_entries_limit() {
-        let mut history = QueryHistory::new(3).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(3, tmp.path().to_path_buf()).unwrap();
         
         for i in 0..5 {
             history.add_entry(
@@ -324,7 +338,8 @@ mod tests {
 
     #[test]
     fn test_search_history() {
-        let mut history = QueryHistory::new(100).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(100, tmp.path().to_path_buf()).unwrap();
         
         history.add_entry("author:john".to_string(), None, None, true).unwrap();
         history.add_entry("message:feat".to_string(), None, None, true).unwrap();
@@ -340,7 +355,8 @@ mod tests {
 
     #[test]
     fn test_get_recent() {
-        let mut history = QueryHistory::new(100).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(100, tmp.path().to_path_buf()).unwrap();
         
         for i in 0..5 {
             history.add_entry(
