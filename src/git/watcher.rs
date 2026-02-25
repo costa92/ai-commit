@@ -640,33 +640,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_watcher_error_scenarios() {
-        // Test file count errors by testing in non-git directory
-        // This test may pass or fail depending on test environment
+        // 验证 git 命令在非 git 目录下会失败
+        // 使用 Command::current_dir 代替 env::set_current_dir，避免干扰并行测试
+        let output = tokio::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir("/tmp")
+            .output()
+            .await;
 
-        // Create a temporary directory that's not a git repo
-        use std::env;
-        use std::path::Path;
-
-        let original_dir = env::current_dir().unwrap();
-
-        // Try to test in /tmp (not a git repo)
-        if Path::new("/tmp").exists() {
-            let _ = env::set_current_dir("/tmp");
-
-            let result = GitWatcher::get_file_counts().await;
-            match result {
-                Ok(_) => println!("File counts succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("File counts failed as expected in non-git dir: {}", e),
-            }
-
-            let result = GitWatcher::get_repo_status().await;
-            match result {
-                Ok(_) => println!("Repo status succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Repo status failed as expected in non-git dir: {}", e),
-            }
-
-            // Restore original directory
-            let _ = env::set_current_dir(original_dir);
+        match output {
+            Ok(o) => assert!(
+                !o.status.success(),
+                "git status should fail in non-git dir"
+            ),
+            Err(e) => println!("Command failed as expected: {}", e),
         }
     }
 

@@ -8,7 +8,9 @@ pub fn list_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "generate_commit".to_string(),
-            description: "Generate a conventional commit message using AI based on staged git changes".to_string(),
+            description:
+                "Generate a conventional commit message using AI based on staged git changes"
+                    .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -101,10 +103,7 @@ pub async fn call_tool(params: ToolCallParams) -> ToolCallResult {
 }
 
 async fn tool_generate_commit(args: HashMap<String, Value>) -> ToolCallResult {
-    let emoji = args
-        .get("emoji")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let emoji = args.get("emoji").and_then(|v| v.as_bool()).unwrap_or(false);
 
     // 获取 diff
     let diff = match crate::git::get_git_diff().await {
@@ -183,9 +182,7 @@ async fn tool_get_status() -> ToolCallResult {
                 ToolCallResult::text(format!("Branch: {}\n\n{}", branch, status))
             }
         }
-        Ok(output) => {
-            ToolCallResult::error(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        Ok(output) => ToolCallResult::error(String::from_utf8_lossy(&output.stderr).to_string()),
         Err(e) => ToolCallResult::error(format!("Failed to run git status: {}", e)),
     }
 }
@@ -279,18 +276,13 @@ async fn tool_get_log(args: HashMap<String, Value>) -> ToolCallResult {
                 ToolCallResult::text(log)
             }
         }
-        Ok(output) => {
-            ToolCallResult::error(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        Ok(output) => ToolCallResult::error(String::from_utf8_lossy(&output.stderr).to_string()),
         Err(e) => ToolCallResult::error(format!("Failed to run git log: {}", e)),
     }
 }
 
 /// 使用 Agent 生成 commit message
-async fn generate_with_agent(
-    diff: &str,
-    config: &crate::config::Config,
-) -> anyhow::Result<String> {
+async fn generate_with_agent(diff: &str, config: &crate::config::Config) -> anyhow::Result<String> {
     use crate::core::ai::agents::{AgentConfig, AgentContext, AgentManager, AgentTask, TaskType};
     use crate::core::ai::memory::ProjectMemory;
 

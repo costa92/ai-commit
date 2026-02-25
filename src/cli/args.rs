@@ -1013,14 +1013,9 @@ mod tests {
 
     #[test]
     fn test_args_emoji_with_other_flags() {
-        let args = Args::try_parse_from([
-            "ai-commit",
-            "--emoji",
-            "--push",
-            "--provider",
-            "deepseek",
-        ])
-        .unwrap();
+        let args =
+            Args::try_parse_from(["ai-commit", "--emoji", "--push", "--provider", "deepseek"])
+                .unwrap();
 
         assert!(args.emoji);
         assert!(args.push);

@@ -4,11 +4,7 @@ use crate::tui_unified::{
         component::{Component, ViewComponent, ViewType},
         events::EventResult,
     },
-    state::{
-        app_state::NotificationLevel,
-        git_state::ChangeType,
-        AppState,
-    },
+    state::{app_state::NotificationLevel, git_state::ChangeType, AppState},
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -82,7 +78,11 @@ pub fn parse_hunks(diff: &str) -> Vec<DiffHunk> {
             in_hunk = true;
         } else if in_hunk {
             // 跳过 diff 头部行
-            if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("--- ") || line.starts_with("+++ ") {
+            if line.starts_with("diff ")
+                || line.starts_with("index ")
+                || line.starts_with("--- ")
+                || line.starts_with("+++ ")
+            {
                 continue;
             }
             if line.starts_with('+') {
@@ -841,14 +841,12 @@ index abc..def 100644
             additions: 0,
             deletions: 0,
             expanded: false,
-            hunks: vec![
-                DiffHunk {
-                    header: "@@ -1 +1 @@".to_string(),
-                    lines: vec![],
-                    additions: 1,
-                    deletions: 0,
-                },
-            ],
+            hunks: vec![DiffHunk {
+                header: "@@ -1 +1 @@".to_string(),
+                lines: vec![],
+                additions: 1,
+                deletions: 0,
+            }],
         });
         view.files.push(StagingEntry {
             path: PathBuf::from("bar.rs"),

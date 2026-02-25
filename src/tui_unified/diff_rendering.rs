@@ -88,7 +88,11 @@ impl super::app::TuiUnifiedApp {
     }
 
     /// 清除模态框背景，确保不会有底层内容泄露
-    pub(super) fn clear_modal_background(&self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
+    pub(super) fn clear_modal_background(
+        &self,
+        frame: &mut ratatui::Frame,
+        area: ratatui::layout::Rect,
+    ) {
         use ratatui::style::{Color, Style};
         use ratatui::widgets::Clear;
 

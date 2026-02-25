@@ -1,20 +1,19 @@
 /// Gitmoji 支持模块
 /// 将 Conventional Commits 类型映射到对应的 emoji
-
 /// 获取 commit type 对应的 gitmoji
 pub fn get_emoji(commit_type: &str) -> Option<&'static str> {
     match commit_type {
-        "feat" => Some("\u{2728}"),     // ✨
-        "fix" => Some("\u{1F41B}"),     // 🐛
-        "docs" => Some("\u{1F4DD}"),    // 📝
-        "style" => Some("\u{1F484}"),   // 💄
+        "feat" => Some("\u{2728}"),             // ✨
+        "fix" => Some("\u{1F41B}"),             // 🐛
+        "docs" => Some("\u{1F4DD}"),            // 📝
+        "style" => Some("\u{1F484}"),           // 💄
         "refactor" => Some("\u{267B}\u{FE0F}"), // ♻️
-        "test" => Some("\u{2705}"),     // ✅
-        "chore" => Some("\u{1F527}"),   // 🔧
-        "perf" => Some("\u{26A1}"),     // ⚡
-        "ci" => Some("\u{1F477}"),      // 👷
-        "build" => Some("\u{1F4E6}"),   // 📦
-        "revert" => Some("\u{23EA}"),   // ⏪
+        "test" => Some("\u{2705}"),             // ✅
+        "chore" => Some("\u{1F527}"),           // 🔧
+        "perf" => Some("\u{26A1}"),             // ⚡
+        "ci" => Some("\u{1F477}"),              // 👷
+        "build" => Some("\u{1F4E6}"),           // 📦
+        "revert" => Some("\u{23EA}"),           // ⏪
         _ => None,
     }
 }
@@ -39,7 +38,7 @@ pub fn add_emoji(message: &str) -> String {
 fn extract_commit_type(message: &str) -> Option<&str> {
     let trimmed = message.trim();
     // 查找第一个 '(' 或 ':'
-    let type_end = trimmed.find(|c: char| c == '(' || c == ':')?;
+    let type_end = trimmed.find(['(', ':'])?;
     let commit_type = &trimmed[..type_end];
 
     // 验证 type 是合法的

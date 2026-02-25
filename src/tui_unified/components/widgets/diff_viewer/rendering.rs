@@ -1,12 +1,12 @@
-use super::types::{DiffDisplayMode, DiffFile, DiffLine, DiffLineType, FileTreeNode, get_file_icon};
+use super::types::{
+    get_file_icon, DiffDisplayMode, DiffFile, DiffLine, DiffLineType, FileTreeNode,
+};
 use super::DiffViewerComponent;
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, List, ListItem, Scrollbar, ScrollbarOrientation, ScrollbarState,
-    },
+    widgets::{Block, Borders, List, ListItem, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
@@ -536,6 +536,7 @@ impl DiffViewerComponent {
     }
 
     /// 将文件插入目录树
+    #[allow(clippy::only_used_in_recursion)]
     pub(super) fn insert_file_into_tree(
         &self,
         tree: &mut std::collections::BTreeMap<String, FileTreeNode>,
@@ -598,9 +599,7 @@ impl DiffViewerComponent {
         let title = title_parts.join("");
 
         let visible_lines = match self.display_mode {
-            DiffDisplayMode::FileTree => {
-                self.generate_file_tree_view()
-            }
+            DiffDisplayMode::FileTree => self.generate_file_tree_view(),
             DiffDisplayMode::SideBySide => {
                 self.render_three_column_layout(frame, area, &title);
                 return;

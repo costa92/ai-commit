@@ -131,10 +131,10 @@ impl Clone for SelectionState {
                     .clone(),
             ),
             pending_staging_toggle: std::sync::Mutex::new(
-                self.pending_staging_toggle
+                *self
+                    .pending_staging_toggle
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone(),
+                    .unwrap_or_else(|e| e.into_inner()),
             ),
             pending_stage_all: std::sync::Mutex::new(
                 *self

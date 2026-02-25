@@ -77,11 +77,7 @@ impl ProjectMemory {
     }
 
     /// 记录一次用户修正
-    pub fn record_correction(
-        &mut self,
-        ai_generated: &str,
-        user_corrected: &str,
-    ) {
+    pub fn record_correction(&mut self, ai_generated: &str, user_corrected: &str) {
         if ai_generated == user_corrected {
             return; // 没有修正
         }
@@ -114,11 +110,7 @@ impl ProjectMemory {
                 .or_insert(0) += 1;
 
             if let Some(s) = scope {
-                *self
-                    .conventions
-                    .scope_distribution
-                    .entry(s)
-                    .or_insert(0) += 1;
+                *self.conventions.scope_distribution.entry(s).or_insert(0) += 1;
             }
 
             self.conventions.total_commits_analyzed += 1;
@@ -156,11 +148,7 @@ impl ProjectMemory {
                     .or_insert(0) += 1;
 
                 if let Some(s) = scope {
-                    *self
-                        .conventions
-                        .scope_distribution
-                        .entry(s)
-                        .or_insert(0) += 1;
+                    *self.conventions.scope_distribution.entry(s).or_insert(0) += 1;
                 }
 
                 self.conventions.total_commits_analyzed += 1;
@@ -303,7 +291,10 @@ fn parse_commit_parts(message: &str) -> Option<(String, Option<String>)> {
     let message = message.trim();
 
     // 匹配 type(scope): subject 或 type: subject
-    let re = regex::Regex::new(r"^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(?:\(([^)]+)\))?:\s+").ok()?;
+    let re = regex::Regex::new(
+        r"^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(?:\(([^)]+)\))?:\s+",
+    )
+    .ok()?;
 
     let caps = re.captures(message)?;
     let commit_type = caps.get(1)?.as_str().to_string();
@@ -384,13 +375,13 @@ mod tests {
     #[test]
     fn test_record_correction() {
         let mut memory = ProjectMemory::default();
-        memory.record_correction(
-            "feat(api): add endpoint",
-            "feat(auth): add login endpoint",
-        );
+        memory.record_correction("feat(api): add endpoint", "feat(auth): add login endpoint");
 
         assert_eq!(memory.corrections.len(), 1);
-        assert_eq!(memory.corrections[0].ai_generated, "feat(api): add endpoint");
+        assert_eq!(
+            memory.corrections[0].ai_generated,
+            "feat(api): add endpoint"
+        );
         assert_eq!(
             memory.corrections[0].user_corrected,
             "feat(auth): add login endpoint"
@@ -461,16 +452,10 @@ mod tests {
 
     #[test]
     fn test_detect_correction_type() {
-        let types = detect_correction_type(
-            "feat(api): add endpoint",
-            "fix(api): add endpoint",
-        );
+        let types = detect_correction_type("feat(api): add endpoint", "fix(api): add endpoint");
         assert!(types.contains(&"type".to_string()));
 
-        let types = detect_correction_type(
-            "feat(api): add endpoint",
-            "feat(auth): add endpoint",
-        );
+        let types = detect_correction_type("feat(api): add endpoint", "feat(auth): add endpoint");
         assert!(types.contains(&"scope".to_string()));
     }
 

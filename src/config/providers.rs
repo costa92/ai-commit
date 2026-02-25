@@ -274,7 +274,7 @@ fn get_default_providers() -> HashMap<String, ProviderInfo> {
 
 /// 全局提供商配置映射
 pub static PROVIDER_REGISTRY: Lazy<HashMap<String, ProviderInfo>> =
-    Lazy::new(|| load_providers_from_config());
+    Lazy::new(load_providers_from_config);
 
 impl ProviderInfo {
     /// 获取 API URL 环境变量名

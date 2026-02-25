@@ -49,8 +49,7 @@ pub async fn route_command(args: &Args, config: &Config) -> anyhow::Result<bool>
     // Memory 管理命令
     if args.memory_show {
         let working_dir = std::env::current_dir()?;
-        let memory = crate::core::ai::memory::ProjectMemory::load(&working_dir)
-            .unwrap_or_default();
+        let memory = crate::core::ai::memory::ProjectMemory::load(&working_dir).unwrap_or_default();
         println!("{}", memory.display_summary());
         return Ok(true);
     }

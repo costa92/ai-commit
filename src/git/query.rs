@@ -76,7 +76,7 @@ impl GitQuery {
     /// 检查过滤器是否为空
     fn is_filter_empty(filter: &QueryFilter) -> bool {
         fn is_empty(opt: &Option<String>) -> bool {
-            opt.as_ref().map_or(true, |s| s.trim().is_empty())
+            opt.as_ref().is_none_or(|s| s.trim().is_empty())
         }
         is_empty(&filter.author)
             && is_empty(&filter.message)

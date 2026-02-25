@@ -253,15 +253,17 @@ impl super::app::TuiUnifiedApp {
 
             if let Some(mut stdin) = child.stdin.take() {
                 use tokio::io::AsyncWriteExt;
-                stdin.write_all(patch.as_bytes()).await.map_err(|e| {
-                    anyhow::anyhow!("Failed to write patch to stdin: {}", e)
-                })?;
+                stdin
+                    .write_all(patch.as_bytes())
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to write patch to stdin: {}", e))?;
                 drop(stdin);
             }
 
-            let output = child.wait_with_output().await.map_err(|e| {
-                anyhow::anyhow!("Failed to wait for git apply: {}", e)
-            })?;
+            let output = child
+                .wait_with_output()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to wait for git apply: {}", e))?;
 
             let mut state = self.state.write().await;
             if output.status.success() {

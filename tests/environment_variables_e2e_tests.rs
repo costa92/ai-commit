@@ -161,10 +161,7 @@ fn test_e2e_environment_variable_override_defaults() {
 
     // 验证环境变量覆盖了默认值
     assert_eq!(override_config.provider, "ollama");
-    assert_eq!(
-        override_config.model, "qwen2",
-        "环境变量应该覆盖默认模型"
-    );
+    assert_eq!(override_config.model, "qwen2", "环境变量应该覆盖默认模型");
     assert_eq!(
         override_config.get_url(),
         "http://custom.ollama:11434/api/generate",
@@ -333,10 +330,7 @@ fn test_e2e_environment_variable_validation_integration() {
     assert_eq!(config.get_api_key(), Some("valid-kimi-key".to_string()));
 
     let validation_result = config.validate();
-    assert!(
-        validation_result.is_ok(),
-        "有效的环境变量配置应该验证通过"
-    );
+    assert!(validation_result.is_ok(), "有效的环境变量配置应该验证通过");
 
     println!("✅ 有效环境变量配置验证通过");
 

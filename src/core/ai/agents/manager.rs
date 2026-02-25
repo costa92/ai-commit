@@ -62,8 +62,6 @@ impl AgentManager {
 
     /// 获取或创建 Agent（简化接口）
     pub async fn get_or_create_agent(&mut self, agent_type: &str) -> Result<Arc<dyn Agent>> {
-        // 首先尝试获取已存在的 Agent
-        let agents = self.agents.read().unwrap();
         let agent_name = match agent_type {
             "commit" => "CommitAgent",
             "tag" => "TagAgent",
@@ -72,10 +70,13 @@ impl AgentManager {
             _ => agent_type,
         };
 
-        if let Some(agent) = agents.get(agent_name) {
-            return Ok(agent.clone());
+        // 首先尝试获取已存在的 Agent
+        {
+            let agents = self.agents.read().unwrap();
+            if let Some(agent) = agents.get(agent_name) {
+                return Ok(agent.clone());
+            }
         }
-        drop(agents); // 释放读锁
 
         // Agent 不存在，创建新的
         self.register_agent(agent_type).await?;

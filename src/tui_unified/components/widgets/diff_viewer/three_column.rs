@@ -10,7 +10,12 @@ use ratatui::{
 
 impl DiffViewerComponent {
     /// 渲染三列布局：文件列表、旧内容、新内容
-    pub(super) fn render_three_column_layout(&mut self, frame: &mut Frame, area: Rect, _title: &str) {
+    pub(super) fn render_three_column_layout(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        _title: &str,
+    ) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([

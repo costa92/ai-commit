@@ -78,7 +78,12 @@ impl CommitAgent {
     }
 
     /// 构建增强的提示词
-    fn build_enhanced_prompt(&self, diff: &str, analysis: &DiffAnalysis, memory_context: &str) -> Result<String> {
+    fn build_enhanced_prompt(
+        &self,
+        diff: &str,
+        analysis: &DiffAnalysis,
+        memory_context: &str,
+    ) -> Result<String> {
         let mut prompt = String::new();
 
         prompt.push_str("你必须严格按照 Conventional Commits 规范输出 Git 提交消息。\n\n");

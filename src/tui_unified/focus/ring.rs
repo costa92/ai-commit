@@ -57,6 +57,7 @@ impl FocusRing {
     }
 
     /// 移动到下一个焦点
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<FocusPanel> {
         if self.panels.is_empty() {
             return None;

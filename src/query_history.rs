@@ -323,7 +323,8 @@ mod tests {
 
     #[test]
     fn test_max_entries_limit() {
-        let mut history = QueryHistory::new(3).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(3, tmp.path().to_path_buf()).unwrap();
 
         for i in 0..5 {
             history
@@ -339,7 +340,8 @@ mod tests {
 
     #[test]
     fn test_search_history() {
-        let mut history = QueryHistory::new(100).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(100, tmp.path().to_path_buf()).unwrap();
 
         history
             .add_entry("author:john".to_string(), None, None, true)
@@ -361,7 +363,8 @@ mod tests {
 
     #[test]
     fn test_get_recent() {
-        let mut history = QueryHistory::new(100).unwrap();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut history = QueryHistory::new_with_path(100, tmp.path().to_path_buf()).unwrap();
 
         for i in 0..5 {
             history

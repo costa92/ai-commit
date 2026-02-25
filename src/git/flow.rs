@@ -839,30 +839,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_flow_commands_error_handling() {
-        // Test error handling in non-git or non-initialized git flow environment
-        use std::env;
-        use std::path::Path;
+        // 验证 git 命令在非 git 目录下会失败
+        // 使用 Command::current_dir 代替 env::set_current_dir，避免干扰并行测试
+        let output = tokio::process::Command::new("git")
+            .args(["branch", "--list"])
+            .current_dir("/tmp")
+            .output()
+            .await;
 
-        let original_dir = env::current_dir().unwrap();
-
-        // Try to test in /tmp (not a git repo)
-        if Path::new("/tmp").exists() {
-            let _ = env::set_current_dir("/tmp");
-
-            let result = GitFlow::get_branch_type().await;
-            match result {
-                Ok(_) => println!("Branch type succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("Branch type failed as expected in non-git dir: {}", e),
-            }
-
-            let result = GitFlow::list_flow_branches().await;
-            match result {
-                Ok(_) => println!("List branches succeeded unexpectedly in non-git dir"),
-                Err(e) => println!("List branches failed as expected in non-git dir: {}", e),
-            }
-
-            // Restore original directory
-            let _ = env::set_current_dir(original_dir);
+        match output {
+            Ok(o) => assert!(
+                !o.status.success(),
+                "git branch should fail in non-git dir"
+            ),
+            Err(e) => println!("Command failed as expected: {}", e),
         }
     }
 }

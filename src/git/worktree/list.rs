@@ -115,14 +115,14 @@ fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<V
             } else {
                 before_branch = trimmed;
             }
-        } else if trimmed.ends_with("(bare)") {
+        } else if let Some(stripped) = trimmed.strip_suffix("(bare)") {
             is_bare = true;
             branch = "bare".to_string();
-            before_branch = trimmed[..trimmed.len() - 6].trim_end();
-        } else if trimmed.ends_with("(detached HEAD)") {
+            before_branch = stripped.trim_end();
+        } else if let Some(stripped) = trimmed.strip_suffix("(detached HEAD)") {
             is_detached = true;
             branch = "detached".to_string();
-            before_branch = trimmed[..trimmed.len() - 15].trim_end();
+            before_branch = stripped.trim_end();
         } else {
             before_branch = trimmed;
         }
@@ -132,11 +132,7 @@ fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<V
             let hash_candidate = &before_branch[space_pos + 1..];
             let path_str = before_branch[..space_pos].trim_end();
 
-            if hash_candidate.len() >= 6
-                && hash_candidate
-                    .chars()
-                    .all(|c| c.is_ascii_hexdigit())
-            {
+            if hash_candidate.len() >= 6 && hash_candidate.chars().all(|c| c.is_ascii_hexdigit()) {
                 worktrees.push(WorktreeInfo::new(
                     PathBuf::from(path_str),
                     branch,
@@ -153,7 +149,13 @@ fn parse_worktree_list_verbose(output: &str, _verbose: bool) -> anyhow::Result<V
         if parts.len() >= 2 {
             let path = PathBuf::from(parts[0]);
             let commit = parts[1].to_string();
-            worktrees.push(WorktreeInfo::new(path, branch, commit, is_bare, is_detached));
+            worktrees.push(WorktreeInfo::new(
+                path,
+                branch,
+                commit,
+                is_bare,
+                is_detached,
+            ));
         } else if parts.len() == 1 {
             let path = PathBuf::from(parts[0]);
             worktrees.push(WorktreeInfo::new(

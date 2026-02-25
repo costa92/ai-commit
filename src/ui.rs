@@ -2,7 +2,6 @@ use std::io::{self, Write};
 
 /// 用户交互界面模块
 /// 处理命令行用户输入和确认操作
-
 /// 用户确认的结果
 #[derive(Debug, PartialEq)]
 pub enum ConfirmResult {

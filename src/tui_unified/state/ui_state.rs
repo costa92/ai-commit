@@ -165,8 +165,10 @@ impl Default for FocusRing {
 
 impl LayoutState {
     pub fn new(terminal_size: Rect) -> Self {
-        let mut state = Self::default();
-        state.terminal_size = terminal_size;
+        let mut state = Self {
+            terminal_size,
+            ..Self::default()
+        };
         state.calculate_panel_sizes();
         state
     }
@@ -240,6 +242,7 @@ impl LayoutState {
 }
 
 impl FocusRing {
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> FocusPanel {
         if self.panels.is_empty() {
             return FocusPanel::Sidebar;

@@ -16,6 +16,9 @@ use ratatui::{
 };
 
 /// 通用列表组件 - 可用于显示任意类型的列表数据
+type StyleFn<T> = Box<dyn Fn(&T, bool, bool) -> Style + Send>;
+type SearchFn<T> = Box<dyn Fn(&T, &str) -> bool + Send>;
+
 pub struct ListWidget<T> {
     focused: bool,
     items: Vec<T>,
@@ -26,8 +29,8 @@ pub struct ListWidget<T> {
     list_state: ListState,
     title: String,
     format_fn: Box<dyn Fn(&T) -> String + Send>,
-    style_fn: Box<dyn Fn(&T, bool, bool) -> Style + Send>,
-    search_fn: Box<dyn Fn(&T, &str) -> bool + Send>, // 搜索函数
+    style_fn: StyleFn<T>,
+    search_fn: SearchFn<T>, // 搜索函数
     current_search: Option<String>,
     show_search_results: bool,
 }
@@ -39,7 +42,7 @@ where
     pub fn new(
         title: String,
         format_fn: Box<dyn Fn(&T) -> String + Send>,
-        style_fn: Box<dyn Fn(&T, bool, bool) -> Style + Send>,
+        style_fn: StyleFn<T>,
     ) -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
@@ -65,7 +68,7 @@ where
         }
     }
 
-    pub fn with_search_fn(mut self, search_fn: Box<dyn Fn(&T, &str) -> bool + Send>) -> Self {
+    pub fn with_search_fn(mut self, search_fn: SearchFn<T>) -> Self {
         self.search_fn = search_fn;
         self
     }

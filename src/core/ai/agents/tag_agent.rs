@@ -36,7 +36,6 @@ impl TagAgent {
     fn analyze_commits(&self, commits: &str) -> VersionBump {
         let mut has_breaking = false;
         let mut has_feature = false;
-        let mut has_fix = false;
 
         for line in commits.lines() {
             let lower = line.to_lowercase();
@@ -49,20 +48,14 @@ impl TagAgent {
             else if lower.starts_with("feat") {
                 has_feature = true;
             }
-            // 检查修复
-            else if lower.starts_with("fix") {
-                has_fix = true;
-            }
         }
 
         if has_breaking {
             VersionBump::Major
         } else if has_feature {
             VersionBump::Minor
-        } else if has_fix {
-            VersionBump::Patch
         } else {
-            VersionBump::Patch // 默认补丁版本
+            VersionBump::Patch
         }
     }
 

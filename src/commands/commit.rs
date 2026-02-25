@@ -218,7 +218,11 @@ pub async fn handle_tag_creation_commit(
 }
 
 /// 使用 Agent 生成 commit message
-async fn generate_commit_message_with_agent(diff: &str, config: &Config, memory: &ProjectMemory) -> anyhow::Result<String> {
+async fn generate_commit_message_with_agent(
+    diff: &str,
+    config: &Config,
+    memory: &ProjectMemory,
+) -> anyhow::Result<String> {
     // 创建 Agent 管理器
     let mut agent_manager = AgentManager::with_default_context();
 

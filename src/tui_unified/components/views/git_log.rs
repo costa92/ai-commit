@@ -163,11 +163,7 @@ impl GitLogView {
         } else {
             Color::Blue
         };
-        let message_color = if is_selected {
-            Color::White
-        } else {
-            Color::White
-        };
+        let message_color = Color::White;
         let author_color = if is_selected {
             Color::LightGreen
         } else {

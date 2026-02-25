@@ -1,11 +1,11 @@
 // Diff查看器组件 - 显示Git差异和语法高亮
-mod types;
+mod navigation;
 mod parsing;
 mod rendering;
-mod navigation;
-mod word_diff;
-mod three_column;
 mod text_utils;
+mod three_column;
+mod types;
+mod word_diff;
 
 pub use types::{DiffDisplayMode, DiffFile, DiffLine, DiffLineType};
 
@@ -17,11 +17,7 @@ use crate::tui_unified::{
     state::AppState,
 };
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    layout::Rect,
-    widgets::ListState,
-    Frame,
-};
+use ratatui::{layout::Rect, widgets::ListState, Frame};
 /// Diff查看器组件
 pub struct DiffViewerComponent {
     pub(super) focused: bool,

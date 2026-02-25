@@ -351,8 +351,7 @@ mod tests {
 
         let resp = handle_request(req).await;
         assert!(resp.result.is_some());
-        let result: ToolCallResult =
-            serde_json::from_value(resp.result.unwrap()).unwrap();
+        let result: ToolCallResult = serde_json::from_value(resp.result.unwrap()).unwrap();
         assert_eq!(result.is_error, Some(true));
     }
 }
